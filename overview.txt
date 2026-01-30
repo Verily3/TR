@@ -1,0 +1,1770 @@
+Results Tracking System - Application Overview
+Executive Summary
+The Results Tracking System is a corporate transformation platform designed with an "executive-first" UX philosophy. It combines learning, coaching, assessments, goals, and KPI tracking across individual → team → organization levels with leader visibility and AI guidance.
+
+The platform follows the transformation flow: Clarity → Commitment → Execution → Measurement → Coaching → Results
+
+Core Design Philosophy
+1. Executive-First UX
+Premium, high-whitespace aesthetic with a "finance dashboard" feel (not a fitness app)
+Navy/charcoal color scheme with red accent color from the brand
+Clean typography, generous spacing, minimal visual clutter
+One-click clarity - each action is obvious and singular
+2. Dynamic Blocks & Journey Hub
+Content adapts based on user role (CEO, COO, CMO, etc.)
+Blocks change based on stage (onboarding, active program, execution)
+Progressive disclosure - show what matters now, hide the rest
+3. Strategic Cascade
+Everything flows from the top down:
+
+Scorecard (Strategic) → Annual Planning → Quarterly Execution → Goals → Programs → Coaching
+Navigation Architecture
+Main Navigation (Sidebar)
+The application uses a persistent left sidebar with 6 main sections:
+
+Dashboard - Executive hub with dynamic blocks
+Programs - Learning & leadership development catalog
+Scorecard - Executive performance dashboard (NEW)
+Goals - Planning & goal tracking system (NEW)
+Coaching - 1:1 coaching and team development
+Assessments - (Placeholder for future)
+3-Level LMS Hierarchy
+The Programs section follows proper LMS navigation patterns:
+
+Level 1: Programs Catalog (browse all programs)
+Level 2: Program Detail (overview, modules, progress)
+Level 3: Module View (lesson content, video, exercises)
+Example: Programs → LeaderShift → Module 3: Self-Leadership
+
+Page-by-Page Breakdown
+1. Dashboard (Executive Hub)
+Purpose: Central command center for executives
+
+Components:
+
+Onboarding Tracker (conditionally shown for new users)
+
+6-step checklist: Complete profile, schedule intro, set goals, etc.
+Progress bar showing completion
+Dismissible after onboarding is complete
+Journey Hub (Dynamic blocks that adapt to user context)
+
+LeaderShift Program Tracker: Shows current module (7 of 9), next session, engagement score
+Goals Summary: 6 active goals, 5 on track, 1 needs attention
+Coaching Check-in: Next session scheduled, action items due
+Team Performance: Direct reports overview with alerts
+Each block has ONE primary action button
+Leaderboard (Gamification for program engagement)
+
+Top 5 participants ranked by engagement score
+Shows points, modules completed, trend indicators
+Friendly competition to drive program completion
+My Schedule (Upcoming commitments)
+
+Coaching sessions, program modules, check-ins
+Date, time, type, participant info
+Quick "Join" or "Reschedule" actions
+Learning Queue (Curated learning items)
+
+Videos, articles, assessments assigned by coach
+Duration, priority, category
+Progress tracking
+User Flow: Dashboard → See what needs attention → Click one primary action → Complete task → Return
+
+2. Scorecard Page ⭐ NEW
+Purpose: Strategic anchor point - defines what "winning" looks like for the executive
+
+Structure:
+
+Role & Mission Section
+
+Role title (e.g., Chief Executive Officer)
+Mission statement (strategic mandate)
+Overall Scorecard score (87/100) with trend
+Key Accountabilities (8 areas)
+
+Strategic Direction & Vision
+Revenue & Profit Growth
+Operational Excellence
+Brand Expansion
+Talent & Culture
+Board & Investor Relations
+M&A/Strategic Partnerships
+Compliance & Risk Oversight
+Each shows: Description, Score, Status (On Track / At Risk / Needs Attention)
+
+KPI Dashboard (6 categories, 22 metrics total)
+
+Financial: EBITDA, Net Margin, Revenue Growth, ROIC
+Operational: Plant OEE, Yield %, Downtime, Throughput
+Market Growth: Market Share, Distribution Points, Customer Retention
+People & Culture: % A-Players, Engagement Score, Leadership Retention
+Compliance & Safety: Audit Score, Critical Violations, TRIR
+Brand Strength: Distribution Points, Brand Recall, NPS
+Each metric shows: Current value, Target, Trend (↑↓→), Change %
+
+A-Player Competencies Assessment
+
+9 CEO competencies (Visionary Leadership, Financial Acumen, etc.)
+Dual ratings: Self-assessment + Mentor assessment (1-5 scale)
+Visual block indicators for quick scanning
+Competency descriptions
+Direct Reports Performance Table
+
+5 direct reports with their scorecard scores
+Goals status, active programs, A-player rating
+Click to drill into their individual scorecards
+Organizational Health Score
+
+5 dimensions: Strategy, Execution, Culture, Learning, Innovation
+Scores with trend indicators
+Strategic Connection: The Scorecard is where everything originates. Goals are linked to accountabilities. Programs develop the competencies needed. Coaching addresses performance gaps.
+
+3. Planning & Goals Page ⭐ NEW
+Purpose: Tactical execution layer that cascades from Scorecard strategy
+
+4-Tab Structure:
+
+Tab 1: Annual Planning
+Components:
+
+2026 Annual Plan Overview
+
+Plan completion percentage (68%)
+Timeline indicator (8 of 12 months complete)
+Strategic Pillars (3 major pillars)
+
+Profitable Growth ($250M Revenue | 12% EBITDA)
+Operational Excellence (85% OEE | <2% Waste)
+Market Leadership (20% Market Share)
+Each pillar shows: Progress %, Initiative count, Status
+
+Annual Objectives (5 key objectives)
+
+Achieve $250M revenue
+Expand to 9,000+ distribution points
+Improve plant OEE to 85%
+Build 80% A-player leadership
+Launch 3 new product lines
+Each objective shows: Owner, Category, Progress, Active Quarters, Status
+
+Link to Scorecard: Each objective is tagged with which Scorecard accountability it supports
+
+Tab 2: Quarterly Planning
+Components:
+
+Quarter Selector (Q1-Q4 2026 dropdown)
+
+Quarter Overview
+
+Quarterly theme ("Foundation & Momentum")
+Priorities count (12 active)
+Action items (47 total, 32 complete)
+Completion percentage
+Q1 2026 Priorities (4 major priorities)
+
+Complete operational audit
+Launch marketing campaign
+Close acquisition deal
+Execute LeaderShift program
+Each priority shows: Category, Owner, Due date, Action items completion, Expandable action list
+
+This Week's Action Items (6 specific tasks)
+
+Interactive checkboxes to mark complete
+Shows owner, due date, task description
+Completed items are grayed out with strikethrough
+Bridge to Execution: Breaks annual plan into 90-day sprints with weekly action items
+
+Tab 3: Goals
+Components:
+
+Goals Summary Dashboard (4 metric cards)
+
+Total Goals: 18
+On Track: 12 (67%)
+At Risk: 4 (22%)
+Needs Attention: 2 (11%)
+Filter Tabs
+
+All Goals (18)
+My Goals (8)
+Team Goals (10)
+Company Goals (6)
+Goals List (6 detailed goal cards)
+
+Increase EBITDA to $24M
+Achieve 85% OEE
+Complete LeaderShift program
+Expand distribution to 9,000 points
+Launch 3 new products
+Achieve 80% A-player rating
+Each goal shows:
+
+Goal type (Company/Team/Personal)
+Category (Financial, Operational, etc.)
+Owner
+Progress bar with % complete
+Current state vs. Target (e.g., 82.3% → 85%)
+Due date
+Status (color-coded)
+Link to Scorecard/Annual Plan/Program ← KEY CONNECTION
+Strategic Link: Every goal explicitly shows which Scorecard accountability or Annual Plan pillar it supports
+
+Tab 4: Metrics & KPIs
+Components:
+
+KPI Performance Dashboard (same metrics as Scorecard, but grouped differently)
+
+Financial Performance (4 KPIs)
+Operational Efficiency (4 KPIs)
+People & Culture (3 KPIs)
+Market Growth (3 KPIs)
+Quarter Selector for historical comparison
+
+Purpose: Focused view of just the numbers, without the strategic context - for quick performance reviews
+
+4. New Goal Modal ⭐ NEW
+Purpose: Guided 3-step flow to create goals with AI assistance and strategic linking
+
+Step 1: Define Goal
+AI Goal Assistant (Smart suggestions based on Scorecard)
+
+Analyzes Scorecard for at-risk accountabilities
+Suggests 3 goals that would improve weak areas
+Example: "Improve Plant OEE from 82.3% to 85%" because "Operational Excellence accountability is at risk (78 score)"
+One-click to use a suggestion
+Goal Statement (Free text)
+
+Example: "Achieve 85% OEE across all manufacturing plants by end of Q2 2026"
+Goal Type (Dropdown)
+
+Company Goal / Team Goal / Personal Goal
+Category (Dropdown)
+
+Financial, Operational, Market Growth, People & Culture, Innovation, Compliance & Safety, Brand Strength
+Goal Owner (Dropdown)
+
+Populated with leadership team
+Timeline (Date pickers)
+
+Start date, Target date
+Active Quarters (Multi-select buttons)
+
+Q1 2026, Q2 2026, Q3 2026, Q4 2026
+Step 2: Set Targets
+Current State / Baseline
+
+Number + Unit (e.g., 82.3%)
+Target State / Goal
+
+Number + Unit (e.g., 85%)
+Progress Preview (Live calculation)
+
+Shows how progress will be calculated
+Example: "Current Progress: 0% | 82.3% → 85%"
+Visual progress bar
+Measurement Frequency (Dropdown)
+
+Weekly / Bi-weekly / Monthly / Quarterly
+Key Milestones (Optional, addable list)
+
+"Complete operational audit" - Feb 15, 2026
+"Implement improvements" - Mar 31, 2026
+Step 3: Link & Finalize
+Link to Scorecard (Selectable cards showing accountabilities)
+
+Shows each accountability with current score and status
+Click to select (highlights with accent border)
+Example: "Operational Excellence (78, At Risk)" ← SELECTED
+Link to Annual Plan (Dropdown)
+
+Profitable Growth Pillar
+Operational Excellence Pillar
+Market Leadership Pillar
+Link to Leadership Program (Dropdown)
+
+LeaderShift: Leading through Change
+Executive Excellence Program
+High-Performance Team Building
+Visibility & Collaboration (Checkboxes)
+
+✓ Visible to direct reports
+□ Add to Dashboard
+✓ Enable AI coaching suggestions
+Accountability Partner (Dropdown)
+
+Select a person who will receive progress updates
+Goal Summary (Review card)
+
+Shows all selections for final review before creating
+Result: Goal is created and appears in Goals tab with all connections intact
+
+5. Programs Page
+Purpose: Learning & leadership development catalog
+
+Structure:
+
+Programs Catalog Grid
+
+Program cards showing: Title, Description, Duration, Modules, Participants
+Status indicators (Not Started / In Progress / Completed)
+"View Program" button
+Featured Programs:
+
+LeaderShift: Leading through Change (9 modules, 12 weeks)
+Executive Excellence Program
+High-Performance Team Building
+Strategic Thinking Workshop
+Navigation: Click "View Program" → Goes to Program Detail Page
+
+6. Program Detail Page
+Purpose: Overview and module navigation for a specific program
+
+Example: LeaderShift Program
+
+Components:
+
+Program Header
+
+Title, Description, Overall progress
+Engagement score (92%)
+Cohort information (25 participants)
+9-Module Horizontal Progress Tracker
+
+Visual timeline showing all 9 modules
+Completed modules (green check)
+Current module (accent highlight)
+Locked future modules (gray)
+Click module to jump to it
+Module Cards (Detailed list view)
+
+Module 1: Self-Awareness (Completed ✓)
+Module 2: Emotional Intelligence (Completed ✓)
+Module 3: Self-Leadership (Current)
+Module 4-9: Locked
+Each card shows: Title, Description, Duration, Lessons, Status, "Start Module" / "Continue" / "Review" button
+
+Cohort Activity Feed
+
+Recent completions by other participants
+Discussion highlights
+Upcoming live sessions
+Navigation: Click "Start Module" → Goes to Module View (LMS)
+
+7. Module View (LMS)
+Purpose: Actual learning content delivery with video, exercises, and progression
+
+Example: Module 3 - Self-Leadership
+
+Components:
+
+Module Header
+
+Breadcrumb: Programs > LeaderShift > Module 3
+Module title and progress (Lesson 2 of 4)
+Back button to return to Program Detail
+Lesson Navigation Sidebar
+
+Lesson 1: Introduction to Self-Leadership (Completed ✓)
+Lesson 2: Leading from Within (Current, playing)
+Lesson 3: Personal Accountability (Locked 🔒)
+Lesson 4: Building Resilience (Locked 🔒)
+Video Player Section
+
+Full-width video embed
+Play/pause, progress bar, volume
+Closed captions toggle
+Video transcript below
+Lesson Content
+
+Overview text
+Key concepts with icons
+Learning objectives
+Reflection questions
+Interactive Exercises
+
+Exercise 1: Identify Your Leadership Values
+Text input fields
+"Save Response" button
+Exercise 2: Create Your Personal Leadership Statement
+Textarea
+Examples provided
+Exercise 3: Daily Self-Leadership Practices
+Checklist items
+Lesson Footer Actions
+
+"Mark as Complete" button
+"Next Lesson" button (unlocks after completion)
+"Download Resources" (PDF worksheet)
+Learning Flow:
+
+Watch video
+Read lesson content
+Complete exercises
+Mark as complete
+Next lesson unlocks
+Progress updates on Program Detail page and Dashboard
+8. Coaching Page
+Purpose: 1:1 coaching sessions and team development
+
+Components:
+
+Upcoming Sessions (Calendar view)
+
+Next session with coach
+Prep status (Not Started / In Progress / Ready)
+"Prepare for Session" button
+Session Prep View (Opens when preparing)
+
+Pre-session reflection questions
+Progress since last session
+Topics to discuss
+Action items from previous session
+Action Items Dashboard
+
+8 active action items
+Status: Not Started / In Progress / Complete / Blocked
+Due dates, owners, priority
+Interactive cards with expand/collapse
+Direct Reports (For managers)
+
+5 direct report cards
+Shows their coaching status, recent check-ins
+"Schedule 1:1" button
+Coaching History
+
+Past sessions with notes
+Action item completion trends
+Progress over time
+Data Flow & Connections
+How Everything Connects:
+SCORECARD (Strategic Level)
+  ↓
+  "Operational Excellence" Accountability (Score: 78, At Risk)
+  ↓
+ANNUAL PLANNING
+  ↓
+  "Operational Excellence Pillar" (58% progress, 6 initiatives)
+  ↓
+QUARTERLY PLANNING
+  ↓
+  "Complete operational audit" Priority (Q1 2026)
+  ↓
+GOALS
+  ↓
+  "Achieve 85% OEE across all plants" Goal
+  - Current: 82.3%
+  - Target: 85%
+  - Progress: 54%
+  - Status: At Risk
+  - Linked to: Scorecard → Operational Excellence
+  ↓
+PROGRAMS
+  ↓
+  LeaderShift Module 5: "Driving Operational Excellence"
+  - Develops competency needed
+  ↓
+COACHING
+  ↓
+  1:1 Session discussing OEE improvement strategies
+  - Action items to implement learnings
+Example User Journey:
+CEO logs in → Dashboard
+Journey Hub shows alert: "Operational Excellence at risk (78 score)"
+Clicks "View Scorecard" → Sees detailed KPIs
+Notices Plant OEE is 82.3% (target: 85%)
+Clicks "Goals" → Sees existing goal is at risk
+Clicks "New Goal" → AI suggests OEE improvement goal
+Creates new goal linked to Scorecard accountability
+Clicks "Quarterly Planning" → Adds "Complete audit" as Q1 priority
+Adds 3 weekly action items to the priority
+Checks "Programs" → Enrolls in Operational Excellence module
+Completes module → Applies learnings via coaching session
+Updates goal progress → 82.3% → 83.1% → 84.2%
+Dashboard updates → Scorecard accountability improves to 82
+Receives AI coaching tip: "You're on track! Keep momentum in Q2"
+Key Features
+1. AI Guidance
+Goal suggestions based on Scorecard weak points
+Coaching tips when goals are at risk
+Learning recommendations based on competency gaps
+Smart linking between Scorecard → Goals → Programs
+2. Progress Tracking
+Automatic calculation from baseline → target
+Visual progress bars everywhere
+Color-coded status (green/yellow/red)
+Trend indicators (↑↓→) on all metrics
+3. Strategic Alignment
+Every goal links to a Scorecard accountability
+Every program develops a required competency
+Every coaching session addresses a performance gap
+Everything flows from the top-level strategy
+4. Role-Based Views
+CEO sees company-wide scorecard
+COO sees operational metrics
+CMO sees brand/market metrics
+Each role gets relevant Journey Hub blocks
+5. Accountability
+Goals have owners
+Direct reports are visible
+Progress is transparent
+Accountability partners receive updates
+Technical Architecture
+Frontend Stack:
+React 18 with TypeScript
+Vite for build tooling
+Tailwind CSS v4 for styling
+shadcn/ui component library (60+ components)
+Lucide React for icons
+File Structure:
+/src
+  /app
+    App.tsx (Main router)
+    /components
+      /scorecard
+        ScorecardPage.tsx
+      /planning
+        PlanningGoalsPage.tsx
+        NewGoalModal.tsx
+      /programs
+        ProgramsPage.tsx
+        ProgramDetailPage.tsx
+        ModuleViewLMS.tsx
+      /coaching
+        CoachingPage.tsx
+        ActionItemCard.tsx
+        SessionPrepView.tsx
+      /ui (60+ reusable components)
+  /styles
+    theme.css (Design tokens)
+    tailwind.css
+    fonts.css
+State Management:
+Local component state with useState
+Navigation state in App.tsx
+No global state management (yet) - keeps it simple
+Styling System:
+CSS custom properties for design tokens
+Tailwind utility classes
+High whitespace, premium aesthetic
+Navy/charcoal + red accent color scheme
+Future Enhancements (Not Yet Implemented)
+Backend Integration (Supabase suggested)
+
+Real user authentication
+Persistent data storage
+Real-time collaboration
+Assessments Section
+
+360° feedback
+Personality assessments
+Competency evaluations
+Team Cascade
+
+Company goals → Department goals → Individual goals
+Rollup reporting
+Advanced Analytics
+
+Predictive insights
+Correlation analysis (e.g., LeaderShift completion vs. OEE improvement)
+Benchmarking across cohorts
+Mobile App
+
+Native iOS/Android apps
+Push notifications for action items
+Summary
+The Results Tracking System is a comprehensive executive transformation platform that combines strategic planning (Scorecard), tactical execution (Goals), leadership development (Programs), and performance coaching (Coaching) into one integrated experience.
+
+The key innovation is the strategic cascade - everything connects. Your Scorecard defines what matters. Your Annual Plan breaks it into pillars. Your Quarterly Plan creates 90-day sprints. Your Goals track specific metrics. Your Programs build the competencies needed. Your Coaching sessions accelerate execution.
+
+It's designed for busy executives who need clarity fast, not complexity. One click, one action, one clear path to results.
+
+
+
+1) Account Structure and Roles
+Agency Account → Client Subaccounts
+
+From the agency (parent) account, you can create client subaccounts.
+
+Each subaccount has user roles:
+
+Account Admin
+
+Account User
+
+Program-Level Roles (inside a specific program)
+
+A person’s role can change depending on the program they’re in:
+
+Facilitator (runs/delivers the program)
+
+Mentor (participant’s boss / manager)
+
+Participant (learner)
+
+Important rule you noted: the menu/actions available inside a program change based on this program role.
+
+2) Subaccount Navigation (Main Menu)
+
+In a client subaccount, the main menu is:
+
+Dashboard
+
+Programs
+
+Scorecard
+
+Goals
+
+Coaching
+
+Assessments
+
+Announcements
+
+Feed
+
+Members
+
+Resources
+
+Settings
+
+This implies a platform that supports: learning programs + performance tracking + coaching + assessments + comms/community + member management + account configuration.
+
+3) Assessments (180 + 360)
+Assessment Types
+
+360 Peer Assessment: Boss, peer, self, direct reports
+
+180 Assessment: Boss and self
+
+Key behavior you want
+
+Assessment results should inform goal creation.
+
+Example automation:
+
+If someone scores low on Collaboration, the system shows a prompt like:
+
+“Would you like to add Collaboration as a goal?”
+
+“What other goals would you like to add?”
+
+So assessments aren’t just reports—they drive next-step actions (goal suggestions + guidance).
+
+4) Program Creation (Admin Setup Fields)
+
+When creating a program, there are Program Settings including:
+
+Basic Details
+
+Program name
+
+Program internal name
+
+Program category (example: Live)
+
+Program timezone (example: UTC-05:00 America/New_York)
+
+Program language (example: English)
+
+Support + Ownership
+
+Support email
+
+Support telephone
+
+Program creator (example: Andrew Oxley)
+
+Branding Asset
+
+Program image upload
+
+Notes: 1 file, resized, best as square 200x200
+
+Program Type (community visibility)
+
+Cohort program: interaction + communication with other learners enabled
+
+Individual program: interaction disabled; other learners/content not visible
+
+Schedule Type
+
+Program start/end date (same for all members)
+
+Example dates provided: Start 10/26/2025, End 03/02/2026
+
+Individual start/end date (members can differ)
+
+Default access period (months): 12
+
+Reminders
+
+Auto reminder day before tasks due
+
+Auto reminder day after tasks overdue
+
+Other Settings
+
+Enable logotype in emails
+
+Allow members to access program without requiring an invitation
+
+Allow learners to invite their coach
+
+Completion + Diploma
+
+Completion criteria (managed)
+
+Program diploma (managed)
+
+Program Administrators
+
+Program admins are specific to the program and have full permission within it.
+
+5) Program Operations (Adding People + Running the Program)
+Add Program Participants
+
+If empty: “No members”
+
+Options:
+
+Add manually
+
+Import CSV
+
+Invitations
+
+If none: “No invitations”
+
+Options:
+
+Schedule invitations
+
+Invite now
+
+Manage templates
+
+Program Content/Structure Actions
+
+Add Program Goals
+
+Add Resources
+
+From global library OR upload to specific account
+
+Create Groups
+
+This describes how programs get populated, invited, resourced, and organized.
+
+6) Branding and Email Customization Requirements
+Subaccount Branding
+
+Subaccount admin should be able to brand their site with:
+
+Client logo
+
+Brand colors
+
+Emails (System + Program)
+
+Need to customize:
+
+System emails (platform-wide notifications)
+
+Program emails (program-specific reminders, invites, etc.)
+
+This suggests a template system with variables and role-based messaging.
+
+7) Reporting (Needed Feature)
+
+“Generating reports” is required.
+
+Likely report scopes implied by your model:
+
+Participant progress + goals + assessment deltas
+
+Program completion + engagement
+
+Manager/mentor view of direct reports
+
+Org/team rollups from scorecards/KPIs
+
+Agency Account: What it should have
+1) Client Subaccount Management
+
+Create / edit / deactivate client subaccounts
+
+Subaccount directory (search, filters, status)
+
+Quick links to “enter” a subaccount as an admin (impersonate/view-as for support)
+
+Subaccount health snapshot: active users, active programs, invitations pending, engagement level
+
+2) Global User + Role Controls
+
+Manage agency team members (who can access what)
+
+Permissions for agency staff like:
+
+Agency Owner
+
+Agency Admin
+
+Agency Support / Implementer
+
+Agency Read-only / Analyst
+
+Ability to set what roles exist at subaccount level (Account Admin/User) and enforce rules
+
+3) Templates and Global Libraries
+Global Program Templates
+
+Create and maintain reusable program templates:
+
+Program structure (cohort/individual)
+
+Default schedules
+
+Default reminders
+
+Default completion criteria + diplomas
+
+Recommended resources
+
+Suggested goals
+
+Global Resource Library
+
+Central library of resources that can be:
+
+Assigned into any subaccount/program
+
+Kept private to the agency or shared selectively
+
+Email Template Library (big one)
+
+Master templates for:
+
+Invitations
+
+Reminders (due tomorrow / overdue)
+
+Program announcements
+
+Coach/mentor invites
+
+Diplomas/completion
+
+Variables + placeholders (first name, program name, start date, etc.)
+
+Ability to:
+
+Lock parts of templates (compliance/legal)
+
+Let subaccounts customize allowed sections (branding + copy)
+
+4) Branding System (Multi-tenant White Label)
+
+Default agency theme (fallback)
+
+Per-subaccount branding controls:
+
+Logo
+
+Brand colors
+
+Email logotype setting
+
+Optional: subdomain / custom domain mapping (if that’s in scope)
+
+5) Cross-Account Reporting + Analytics
+
+This is where the agency account becomes really valuable.
+
+Portfolio-level dashboards:
+
+Programs running across clients
+
+Enrollments, invitation acceptance rates
+
+Completion rates
+
+Engagement metrics (logins, content consumption, goal updates)
+
+Assessment insights across clients:
+
+Average 180/360 scores by competency (collaboration, communication, etc.)
+
+Improvement deltas (baseline vs follow-up)
+
+Exporting:
+
+CSV/PDF exports
+
+Scheduled reports to email (optional)
+
+6) Assessment Framework Management (180/360)
+
+Create and maintain assessment “blueprints”:
+
+Competencies + scoring scales
+
+Question banks
+
+180 vs 360 configurations
+
+Rules that connect results → recommendations:
+
+If Collaboration score < X → suggest Collaboration goal
+
+Suggest goal templates + coaching prompts
+
+Ability to publish these frameworks to selected subaccounts
+
+7) Governance and Compliance Controls
+
+Global settings the agency can enforce:
+
+Invitation requirements vs open access
+
+Privacy + data retention
+
+Required email footers/disclaimers
+
+Audit logs:
+
+Who changed what, where, and when (especially for admin actions)
+
+8) Support + Implementation Tools
+
+“View as” / impersonation for troubleshooting
+
+Activity log per subaccount
+
+Basic ticket/notes system (optional but helpful)
+
+Bulk actions:
+
+Bulk upload resources to multiple accounts
+
+Bulk update email templates
+
+Bulk publish a program template update
+
+9) Billing / Plans (SaaS Monetization)
+
+Payment Gateway Integration
+
+Stripe integration (or similar payment processor)
+
+Secure payment handling
+
+Subscription management (create, update, cancel)
+
+Payment method storage (cards, ACH, etc.)
+
+Failed payment handling & retry logic
+
+Webhook handling for payment events
+
+Pricing Models
+
+Per-seat: Charge based on number of active users/participants
+
+Per-program: Charge based on number of active programs
+
+Tiered: Feature tiers (Basic, Pro, Enterprise) with different capabilities
+
+Hybrid: Combination of above (e.g., base tier + per-seat overage)
+
+Plan assignment per subaccount with limits (seats, programs, assessments)
+
+Usage tracking (users, invites, storage)
+
+Trial & Freemium Options
+
+Free trial period: Time-limited full access (e.g., 14 or 30 days)
+
+Freemium tier: Limited free access with paid upgrade path
+
+Trial-to-paid conversion tracking
+
+Trial expiration notifications and reminders
+
+Grace period handling for expired trials
+
+Invoice Customization
+
+Custom invoice branding (logo, colors)
+
+Configurable invoice fields
+
+Tax handling (VAT, sales tax by region)
+
+Multiple currency support
+
+Invoice delivery (email, PDF download)
+
+Payment terms customization (Net 30, etc.)
+
+Invoice history and statements
+
+Billing Administration (Agency Level)
+
+View/manage all subaccount subscriptions
+
+Override pricing for specific clients
+
+Apply discounts, credits, or promotional codes
+
+Revenue reporting and analytics
+
+Subscription lifecycle management (upgrade, downgrade, cancel, pause)
+
+Dunning management (failed payment follow-up)
+
+10) Security & Compliance (Critical for Enterprise)
+
+Authentication & Access
+
+SSO/SAML integration (Okta, Azure AD, Google Workspace, OneLogin)
+
+2FA/MFA support (authenticator apps, SMS, email)
+
+Password policies (complexity, expiration, history)
+
+Session management (timeout, concurrent session limits)
+
+IP whitelisting (optional, for high-security clients)
+
+Magic link / passwordless login option
+
+Data Protection & Privacy
+
+GDPR compliance tools:
+- Data export (user can download their data)
+- Right to deletion (right to be forgotten)
+- Consent management
+- Data processing agreements
+
+Data encryption (at rest and in transit)
+
+PII handling and masking
+
+Data retention policies (configurable per subaccount)
+
+Audit & Compliance
+
+Comprehensive audit logs (who did what, when, where)
+
+Admin action logging
+
+Login/logout tracking
+
+Data access logging
+
+Exportable audit reports for compliance
+
+SOC 2 Type II compliance considerations
+
+11) Integrations
+
+Calendar Integrations
+
+Google Calendar sync
+
+Microsoft Outlook / Office 365 sync
+
+Apple Calendar (iCal) support
+
+Two-way sync for coaching sessions, program events, deadlines
+
+Calendar invites with video conferencing links
+
+Video Conferencing
+
+Zoom integration (create/join meetings)
+
+Microsoft Teams integration
+
+Google Meet integration
+
+Native video call option (optional)
+
+Auto-generate meeting links for coaching sessions
+
+HRIS / HR Systems
+
+Workday integration
+
+BambooHR integration
+
+SAP SuccessFactors
+
+ADP
+
+User provisioning and deprovisioning sync
+
+Org chart / reporting structure sync
+
+Communication Tools
+
+Slack integration:
+- Notifications and reminders
+- Slash commands for quick actions
+- Channel updates for program announcements
+
+Microsoft Teams integration:
+- Bot for notifications
+- Tab integration for dashboard access
+
+API & Developer Tools
+
+RESTful API for third-party integrations
+
+Webhook support (events: goal updated, assessment completed, etc.)
+
+API key management
+
+Rate limiting and usage tracking
+
+API documentation (OpenAPI/Swagger)
+
+No-Code Automation
+
+Zapier integration
+
+Make (Integromat) integration
+
+Pre-built templates for common workflows
+
+12) Notifications System
+
+In-App Notifications
+
+Notification center (bell icon with unread count)
+
+Real-time updates
+
+Mark as read / mark all as read
+
+Notification categories:
+- Programs (new content, due dates)
+- Coaching (session reminders, action items)
+- Goals (updates, at-risk alerts)
+- Assessments (invitations, results ready)
+- System (announcements, account updates)
+
+Push Notifications
+
+Web push notifications (browser)
+
+Mobile push notifications (iOS/Android)
+
+Rich notifications with actions
+
+Notification Preferences
+
+Per-user notification settings
+
+Channel preferences (in-app, email, push, SMS)
+
+Frequency settings (immediate, daily digest, weekly digest)
+
+Quiet hours / do not disturb
+
+Email Notifications
+
+Transactional emails (invites, password reset)
+
+Reminder emails (due dates, overdue items)
+
+Digest emails (daily/weekly summaries)
+
+Unsubscribe management
+
+SMS Notifications (Optional)
+
+Critical alerts via SMS
+
+Session reminders
+
+Two-factor authentication codes
+
+13) Mobile Experience
+
+Mobile App (iOS & Android)
+
+Native mobile applications
+
+Core features available on mobile:
+- Dashboard overview
+- Program content (video, reading)
+- Goal tracking and updates
+- Coaching session prep
+- Notifications
+
+Offline mode for downloaded content
+
+Touch ID / Face ID authentication
+
+Progressive Web App (PWA)
+
+Installable web app experience
+
+Works offline for key features
+
+Home screen shortcut
+
+Push notification support
+
+Mobile-Specific Features
+
+Responsive design for all screen sizes
+
+Touch-optimized interactions
+
+Mobile-friendly video player
+
+Quick actions (update goal, mark complete)
+
+14) Content & Learning Features
+
+Content Formats
+
+SCORM 1.2 and SCORM 2004 support
+
+xAPI (Tin Can) support
+
+Native video hosting with progress tracking
+
+PDF documents with tracking
+
+Interactive quizzes and assessments
+
+Embedded content (YouTube, Vimeo, etc.)
+
+Audio content / podcasts
+
+Video Features
+
+Native video player with:
+- Progress tracking
+- Playback speed control
+- Closed captions / subtitles
+- Quality selection
+- Resume from last position
+
+Video analytics (watch time, completion, drop-off points)
+
+Content Management
+
+Content versioning and history
+
+Draft / published states
+
+Scheduled publishing
+
+Content tagging and categorization
+
+Content search and filtering
+
+Certificates & Credentials
+
+Customizable certificate templates
+
+Auto-generated on program completion
+
+Unique certificate IDs for verification
+
+LinkedIn sharing integration
+
+Certificate verification page (public URL)
+
+15) Search & Discovery
+
+Global Search
+
+Search across all content types:
+- Programs and modules
+- Resources and documents
+- Members and participants
+- Goals and KPIs
+- Announcements and feed posts
+
+Real-time search suggestions
+
+Recent searches history
+
+Search Filters
+
+Filter by content type
+
+Filter by date range
+
+Filter by status
+
+Filter by category/tag
+
+Saved search queries
+
+Search Analytics
+
+Track what users search for
+
+Identify content gaps
+
+Popular search terms dashboard
+
+16) Collaboration Features
+
+Discussion Forums
+
+Program-level discussion boards
+
+Module-level discussions
+
+Threaded replies
+
+Rich text formatting
+
+File attachments
+
+Moderation tools (pin, lock, delete)
+
+Direct Messaging
+
+One-on-one messaging between users
+
+Participant ↔ Mentor messaging
+
+Message history
+
+File sharing in messages
+
+Read receipts (optional)
+
+Comments & Annotations
+
+Comments on goals
+
+Comments on assessment results
+
+Comments on learning content
+
+@mentions to notify users
+
+Comment threading
+
+File Sharing
+
+Upload files to programs/resources
+
+Share files in messages
+
+File type restrictions (configurable)
+
+Storage limits per subaccount
+
+17) Localization & Internationalization (i18n)
+
+Multi-Language Support
+
+Platform UI available in multiple languages
+
+Language selector in user settings
+
+Default language per subaccount
+
+Content translation management
+
+Supported languages (initial):
+- English
+- Spanish
+- French
+- German
+- Portuguese
+- (expandable)
+
+Regional Formatting
+
+Date formats (MM/DD/YYYY, DD/MM/YYYY, etc.)
+
+Time formats (12-hour, 24-hour)
+
+Number formats (decimal separators)
+
+Currency formatting
+
+Timezone handling (per user, per program)
+
+RTL Support
+
+Right-to-left language support (Arabic, Hebrew)
+
+Mirrored UI layouts
+
+RTL-compatible components
+
+18) Accessibility (a11y)
+
+WCAG 2.1 AA Compliance
+
+Semantic HTML structure
+
+ARIA labels and roles
+
+Color contrast ratios (4.5:1 minimum)
+
+Focus indicators
+
+Alt text for images
+
+Keyboard Navigation
+
+Full keyboard accessibility
+
+Logical tab order
+
+Skip navigation links
+
+Keyboard shortcuts for common actions
+
+Screen Reader Support
+
+Compatible with major screen readers (JAWS, NVDA, VoiceOver)
+
+Descriptive labels and announcements
+
+Live region updates
+
+Visual Accommodations
+
+High contrast mode
+
+Resizable text (up to 200%)
+
+Reduced motion option
+
+Dyslexia-friendly font option (optional)
+
+19) AI Features (Expanded)
+
+AI Coaching Assistant
+
+On-demand AI chatbot for guidance between coaching sessions
+
+Contextual suggestions based on goals and progress
+
+Answers questions about program content
+
+Escalation to human coach when needed
+
+Personalized Learning
+
+AI-recommended content based on:
+- Assessment results
+- Goal progress
+- Learning history
+- Role and competency gaps
+
+Adaptive learning paths
+
+Content difficulty adjustment
+
+Analytics & Predictions
+
+At-risk participant detection
+
+Predicted goal completion likelihood
+
+Engagement trend analysis
+
+Churn prediction for subscription management
+
+Content Intelligence
+
+Sentiment analysis on reflections and feedback
+
+Automatic content tagging
+
+Summary generation for long content
+
+Translation assistance
+
+20) Help & Support Features
+
+In-App Help
+
+Help center / knowledge base integration
+
+Contextual help tooltips
+
+Searchable FAQ
+
+Video tutorials library
+
+Onboarding & Guidance
+
+Interactive onboarding tours
+
+Feature walkthroughs for new features
+
+Checklist-based onboarding (already in Dashboard)
+
+Contextual tips based on user actions
+
+Support Channels
+
+In-app chat widget (Intercom, Zendesk, etc.)
+
+Support ticket submission
+
+Email support
+
+Phone support (for enterprise plans)
+
+Admin Support Tools
+
+System status page
+
+Maintenance notifications
+
+Release notes / changelog
+
+Feature request submission
+
+21) Recommended Technology Stack
+
+Infrastructure Decisions (Confirmed)
+
+Database: PostgreSQL
+Cloud Provider: Google Cloud Platform (GCP)
+Email/SMS: Twilio (SendGrid + Messaging + Verify)
+
+Recommended Development Stack
+
+Frontend:
+- Framework: Next.js 14 (App Router)
+- Language: TypeScript
+- Styling: Tailwind CSS v4
+- UI Components: Radix UI + shadcn/ui (already in use)
+- State Management: React Context + React Query
+- Validation: Zod
+
+Backend API:
+- Runtime: Node.js
+- Framework: Hono (lightweight, fast, Cloud Run optimized)
+- Language: TypeScript
+- ORM: Drizzle (PostgreSQL-native, type-safe, performant)
+- Validation: Zod (shared with frontend)
+
+Authentication:
+- Provider: Firebase Auth + Auth.js (NextAuth)
+- Features: SSO/SAML support, social logins
+- 2FA: Twilio Verify
+
+Monorepo Structure:
+- Tool: Turborepo
+- Package manager: pnpm
+
+Project Structure:
+/
+├── apps/
+│   ├── web/                 # Next.js frontend
+│   │   ├── app/
+│   │   │   ├── (auth)/      # Login, signup pages
+│   │   │   ├── (dashboard)/ # Protected app routes
+│   │   │   └── api/         # API routes (optional)
+│   │   └── components/
+│   │
+│   └── api/                 # Hono API (Cloud Run)
+│       ├── src/
+│       │   ├── routes/
+│       │   ├── services/
+│       │   ├── middleware/
+│       │   └── db/          # Drizzle schema & queries
+│       └── Dockerfile
+│
+├── packages/
+│   ├── db/                  # Shared Drizzle schema
+│   ├── types/               # Shared TypeScript types
+│   └── validators/          # Shared Zod schemas
+│
+└── turbo.json               # Monorepo configuration
+
+Google Cloud Architecture:
+
+Cloud CDN (static assets, video delivery)
+    │
+    ├── Firebase Hosting (Next.js frontend)
+    │
+    ├── Cloud Run (Hono API - auto-scaling containers)
+    │
+    └── Cloud Storage (files, resources, videos)
+            │
+            ├── Cloud SQL PostgreSQL (primary database)
+            │
+            ├── Memorystore Redis (caching, sessions)
+            │
+            └── Firebase Auth (authentication)
+                    │
+                    ├── Twilio SendGrid (email)
+                    │
+                    ├── Twilio SMS (text messages)
+                    │
+                    └── Twilio Verify (2FA codes)
+
+Why This Stack:
+
+Drizzle over Prisma:
+- Better PostgreSQL feature support (RLS, JSON, arrays)
+- Faster queries, smaller bundle
+- Closer to raw SQL, more control
+- No Prisma Client bloat
+
+Hono over Express/Fastify:
+- Modern, built for TypeScript
+- Works on Cloud Run, edge, Node
+- Tiny bundle size
+- Excellent performance
+
+Next.js benefits:
+- Server Components for faster page loads
+- Built-in API routes option
+- Middleware for auth/tenant checks
+- Image optimization
+- Great developer experience
+
+TypeScript everywhere:
+- One language across entire stack
+- Share types between frontend/backend
+- Catch errors at compile time
+- Better IDE support and refactoring
+
+22) Cost Estimates
+
+Free Services (Open Source):
+
+Turborepo - Monorepo tool
+Next.js - Frontend framework
+Hono - API framework
+Drizzle - ORM
+Zod - Validation
+React - UI library
+TypeScript - Language
+Tailwind CSS - Styling
+
+Google Cloud Services:
+
+Cloud SQL (PostgreSQL):
+- Development: db-f1-micro ~$9/month
+- Production: db-g1-small ~$25-50/month
+- Scale: db-custom ~$75-300+/month
+- High Availability: $300-500+/month
+
+Cloud Run (API hosting):
+- Free tier: 2M requests/month, 360K vCPU-seconds
+- After free tier: ~$50-200/month at scale
+
+Firebase Hosting (Frontend):
+- Free tier: 10GB storage, 360MB/day transfer
+- Paid: Per GB after limits (typically low cost)
+
+Firebase Auth:
+- Free tier: 50,000 MAU (monthly active users)
+- Paid: $0.0055/MAU after free tier
+
+Cloud Storage (Files):
+- Free tier: 5GB
+- Paid: $0.020/GB/month (~$20/TB)
+
+Memorystore (Redis):
+- No free tier
+- Basic: ~$30-50/month minimum
+
+Cloud CDN:
+- Per GB served: ~$0.08-0.12/GB
+
+Twilio Services:
+
+SendGrid (Email):
+- Free tier: 100 emails/day
+- Essentials: $20/month for 50K emails
+- Pro: $90/month for 100K emails
+
+Twilio SMS:
+- Per message: $0.0079/SMS (US)
+- International rates vary
+
+Twilio Verify (2FA):
+- Per verification: $0.05
+
+Monthly Cost by Stage:
+
+MVP / Development:
+- Cloud SQL (micro): $9
+- Cloud Run: Free tier
+- Firebase Auth: Free tier
+- Firebase Hosting: Free tier
+- Cloud Storage: Free tier
+- SendGrid: Free tier
+- Total: ~$10-15/month
+
+Early Production (100 users):
+- Cloud SQL (small): $25-50
+- Cloud Run: ~$10-20
+- Firebase Auth: Free
+- Firebase Hosting: Free
+- Cloud Storage: ~$5
+- SendGrid (Essentials): $20
+- Twilio SMS (500 msgs): ~$5
+- Total: ~$65-100/month
+
+Growth Stage (1,000 users):
+- Cloud SQL (custom): $75-150
+- Cloud Run: ~$50-100
+- Firebase Auth: Free
+- Memorystore (Redis): $30-50
+- Cloud Storage: ~$20
+- Cloud CDN: ~$20
+- SendGrid (Pro): $90
+- Twilio SMS (5K msgs): ~$40
+- Total: ~$350-500/month
+
+Scale (10,000+ users):
+- Cloud SQL (HA): $300-500+
+- Cloud Run: $200-400
+- Firebase Auth: ~$50
+- Memorystore: $100+
+- Cloud Storage: $50-100
+- Cloud CDN: $50-100
+- SendGrid: $200+
+- Twilio SMS: $200+
+- Total: ~$1,200-2,000+/month
+
+Cost Optimization Tips:
+
+1. Use Cloud SQL db-f1-micro for dev/staging (save ~$50/mo)
+2. Committed use discounts (1-3 year) save 20-50% on Cloud SQL
+3. Set Cloud Run min instances to 0 for dev environments
+4. Use Cloud Storage Coldline for archived files (80% cheaper)
+5. Batch SMS notifications into digests to reduce volume
+6. Prefer email over SMS when possible (much cheaper)
+7. Cache aggressively with Redis to reduce database load
+8. Use connection pooling to reduce Cloud SQL connections
+
+One-Time Costs:
+
+Apple Developer Account: $99/year (if building iOS app)
+Google Play Developer: $25 one-time (if building Android app)
+Domain name: $12-50/year
+
+The core idea
+
+Subaccounts run programs. The agency account runs the system.
+So the agency account should own: creation, governance, reusable assets, analytics, and support.
+
