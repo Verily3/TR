@@ -1,0 +1,107 @@
+"use client";
+
+import { Video, BookOpen, FileText, ArrowRight } from "lucide-react";
+
+interface LearningItem {
+  id: string;
+  title: string;
+  type: "video" | "article" | "template";
+  duration?: string;
+  description: string;
+  linkedTo: string;
+  action: string;
+  onClick?: () => void;
+}
+
+const defaultItems: LearningItem[] = [
+  {
+    id: "1",
+    title: "Communicating Vision Under Pressure",
+    type: "video",
+    duration: "12 min",
+    description: "Recommended based on your Team Engagement KPI",
+    linkedTo: "Team Engagement Score",
+    action: "Start Learning",
+  },
+  {
+    id: "2",
+    title: "The Science of Goal Achievement",
+    type: "article",
+    duration: "8 min read",
+    description: "Align with your Q1 strategic objectives",
+    linkedTo: "Goal Achievement",
+    action: "Start Learning",
+  },
+  {
+    id: "3",
+    title: "1:1 Coaching Conversation Framework",
+    type: "template",
+    description: "Prepare for your upcoming coaching session",
+    linkedTo: "1:1 Completion Rate",
+    action: "Download",
+  },
+];
+
+const iconMap = {
+  video: Video,
+  article: BookOpen,
+  template: FileText,
+};
+
+interface LearningQueueProps {
+  items?: LearningItem[];
+}
+
+export function LearningQueue({ items = defaultItems }: LearningQueueProps) {
+  return (
+    <div>
+      {/* Section Header */}
+      <div className="mb-6">
+        <h2 className="text-sidebar-foreground">Learning Queue</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Personalized content to accelerate your growth
+        </p>
+      </div>
+
+      {/* Learning Items */}
+      <div className="space-y-3">
+        {items.map((item) => {
+          const Icon = iconMap[item.type];
+          return (
+            <div
+              key={item.id}
+              onClick={item.onClick}
+              className="bg-card border border-border rounded-lg p-4 hover:border-accent/30 transition-all cursor-pointer group"
+            >
+              <div className="flex items-start gap-4">
+                <div className="p-2 rounded-lg bg-muted">
+                  <Icon className="w-5 h-5 text-accent" />
+                </div>
+
+                <div className="flex-1">
+                  <div className="flex items-start justify-between mb-1">
+                    <h4 className="text-sm">{item.title}</h4>
+                    {item.duration && (
+                      <span className="text-xs text-muted-foreground">{item.duration}</span>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-muted-foreground mb-2">{item.description}</p>
+
+                  <div className="inline-flex items-center gap-1 px-2 py-1 bg-accent/10 text-accent rounded text-xs mb-3">
+                    Linked to: {item.linkedTo}
+                  </div>
+
+                  <button className="text-xs text-accent flex items-center gap-1 group-hover:gap-2 transition-all mt-2">
+                    {item.action}
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

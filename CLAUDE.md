@@ -4,7 +4,7 @@ This file provides context for AI assistants working on the Transformation OS pr
 
 ## Project Overview
 
-**Transformation OS** is a multi-tenant B2B SaaS platform for corporate transformation and executive leadership development. It combines LMS, scorecard management, goal tracking, coaching, and 360 assessments.
+**Transformation OS** is a multi-tenant B2B SaaS platform for corporate transformation and executive leadership development. It combines LMS, scorecard management, goal tracking, mentoring, and assessments.
 
 ## Repository Structure
 
@@ -13,7 +13,7 @@ TR/
 ├── packages/
 │   ├── api/              # Hono API server
 │   │   ├── src/
-│   │   │   ├── routes/   # API route handlers (auth, programs, goals, coaching, etc.)
+│   │   │   ├── routes/   # API route handlers (auth, programs, goals, mentoring, etc.)
 │   │   │   ├── middleware/  # Auth, logging, etc.
 │   │   │   └── index.ts  # Server entry point
 │   │   └── .env          # API environment variables
@@ -30,7 +30,7 @@ TR/
 │       │   ├── app/      # App Router pages
 │       │   │   ├── (dashboard)/  # Authenticated routes
 │       │   │   │   ├── agency/   # Agency portal pages
-│       │   │   │   ├── coaching/ # Coaching dashboard and sessions
+│       │   │   │   ├── mentoring/ # Mentoring dashboard and sessions
 │       │   │   │   ├── goals/    # Goals pages
 │       │   │   │   ├── programs/ # Programs pages
 │       │   │   │   └── dashboard/ # Tenant dashboard
@@ -40,18 +40,37 @@ TR/
 │       │   │   ├── layout/       # Sidebar, header, etc.
 │       │   │   ├── goals/        # Goal-related components
 │       │   │   ├── programs/     # Program-related components
-│       │   │   └── coaching/     # Coaching-related components
+│       │   │   └── coaching/     # Mentoring-related components
 │       │   ├── hooks/
-│       │   │   └── api/          # React Query hooks (usePrograms, useGoals, useCoaching, etc.)
+│       │   │   └── api/          # React Query hooks (usePrograms, useGoals, useMentoring, etc.)
 │       │   ├── lib/              # Utilities, API client
 │       │   ├── providers/        # React Query, Auth, Theme
 │       │   └── stores/           # Zustand stores
 │       └── .env.local            # Web environment variables
 │
-├── Corporate Transformation OS/  # Prototype reference
-│   └── src/                      # Prototype components
+├── components/                   # UI Prototype (Vite + React)
+│   ├── src/                      # Main app entry
+│   ├── dashboard/                # Dashboard components
+│   ├── scorecard/                # Scorecard components
+│   ├── planning/                 # Planning & Goals components
+│   ├── programs/                 # Programs & LMS components
+│   ├── program-builder/          # Program Builder components
+│   ├── coaching/                 # Mentoring components
+│   ├── assessments/              # Assessments components
+│   ├── people/                   # People management components
+│   ├── analytics/                # Analytics components
+│   ├── settings/                 # Settings components
+│   ├── agency/                   # Agency portal components
+│   ├── notifications/            # Notifications components
+│   ├── onboarding/               # Onboarding wizard components
+│   ├── help/                     # Help & Support components
+│   ├── search/                   # Search & Command Palette components
+│   └── ui/                       # Shared UI components (Card, etc.)
 │
-├── ROADMAP.md                    # Development status & task tracking
+├── Corporate Transformation OS/  # Legacy prototype reference
+│   └── src/                      # Legacy prototype components
+│
+├── SPECS/                        # Detailed specifications
 ├── ANALYSIS_NOTES.md             # Full requirements spec
 ├── overview.txt                  # Detailed PRD document
 └── turbo.json                    # Monorepo config
@@ -70,10 +89,22 @@ Users can switch between Agency view and Tenant view using the context switcher 
 
 ### Authentication
 
-- **Production**: Firebase Auth with JWT tokens
-- **Development**: Mock auth system (`mock-token::uid::email` format)
+- **JWT-based**: Login via `POST /api/auth/login` with `{email, password}` (argon2 hashing)
+- Access tokens (15 min) + Refresh tokens (7 day)
+- Tokens stored in `localStorage` as `accessToken` / `refreshToken`
+- Auth middleware at `packages/api/src/middleware/auth.ts` verifies JWT
+- Impersonation uses `X-Impersonation-Token` header + `sessionStorage`
 
-The API middleware at `packages/api/src/middleware/auth.ts` handles both modes.
+### Impersonation
+
+Agency admins can "Login As" any tenant user to see their experience:
+- **Header dropdown** → "Login As User" → search modal with real-time cross-tenant search
+- API: `POST /api/admin/impersonate` starts session, `POST /api/admin/impersonate/end` ends it
+- `GET /api/agencies/me/users/search?search=` searches users across all agency tenants
+- Impersonation token stored in `sessionStorage`, injected via `X-Impersonation-Token` header
+- Amber `ImpersonationBanner` shows at top with "Switch Back" button
+- All sessions logged for audit (reason, duration, admin, target)
+- Requires `AGENCY_IMPERSONATE` permission (agency_owner role)
 
 ### Program Roles
 
@@ -84,15 +115,15 @@ Users enrolled in programs have one of three roles:
 
 Mentor-Learner relationships are tracked in the `enrollment_mentorships` table, supporting many-to-many assignments within a program.
 
-### Coaching Module
+### Mentoring Module
 
-The coaching module supports ongoing 1:1 coaching and mentoring relationships outside of programs:
+The mentoring module supports ongoing 1:1 mentoring relationships outside of programs:
 
-**Coaching Relationships**: Coach ↔ Coachee pairings with relationship types (mentor, coach, manager) and meeting preferences.
+**Mentoring Relationships**: Mentor ↔ Mentee pairings with relationship types (mentor, coach, manager) and meeting preferences.
 
-**Coaching Sessions**: Scheduled meetings with:
-- Session types: coaching, one_on_one, check_in, review, planning
-- Session prep: Pre-session reflection by coachee (wins, challenges, topics to discuss)
+**Mentoring Sessions**: Scheduled meetings with:
+- Session types: mentoring, one_on_one, check_in, review, planning
+- Session prep: Pre-session reflection by mentee (wins, challenges, topics to discuss)
 - Session notes: Public or private notes during/after sessions
 - Action items: Follow-up tasks with owner, due date, priority, and completion tracking
 
@@ -129,7 +160,41 @@ The coaching module supports ongoing 1:1 coaching and mentoring relationships ou
 3. **Active nav**: `bg-accent text-accent-foreground`
 4. **Action links**: `text-accent` with `ArrowRight` icon, hover animation
 5. **Progress bars**: `bg-accent` for high values
-6. **Page layout**: `max-w-[1400px] mx-auto p-8`
+6. **Page layout**: `max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8` (responsive padding)
+
+### Responsive Breakpoints
+
+The UI follows Tailwind's default breakpoints:
+- **Mobile first**: Default styles apply to mobile
+- **sm (640px+)**: Small tablets and larger phones in landscape
+- **lg (1024px+)**: Desktop and larger tablets
+
+Common responsive patterns:
+```css
+/* Padding */
+p-4 sm:p-6 lg:p-8
+
+/* Grid columns */
+grid-cols-1 sm:grid-cols-2 lg:grid-cols-3
+
+/* Text sizing */
+text-xl sm:text-2xl
+
+/* Visibility */
+hidden sm:block  /* Hide on mobile */
+sm:hidden        /* Show only on mobile */
+
+/* Sidebar */
+-translate-x-full lg:translate-x-0  /* Collapsible on mobile */
+```
+
+### Mobile Navigation
+
+The sidebar uses a drawer pattern on mobile:
+- Hidden by default on mobile (`-translate-x-full`)
+- Triggered by hamburger menu in mobile header
+- Full-screen overlay backdrop when open
+- Auto-closes on navigation
 
 ### Component Library
 
@@ -144,11 +209,51 @@ Located in `packages/web/src/components/ui/`:
 
 Located in `packages/web/src/components/programs/`:
 - `AddParticipantModal` - Add new or existing users to programs with role selection
+- `CreateProgramWizard` - 6-step wizard for program creation (Basic Info → Objectives → Schedule → Communication → Audience → Review)
+- `wizard-types.ts` - Type definitions for wizard form data (WizardStep, WizardFormData, etc.)
+- `wizard-data.ts` - Constants (learning tracks, timezones, email/reminder defaults)
+- `BulkInviteModal` - Spreadsheet-based bulk enrollment
+- `CurriculumBuilder` - Module/lesson management sidebar
+- `LessonEditorPanel` - Comprehensive lesson editing with tabs
+- `LessonViewer` - Content rendering for learners
+- `LearnerSidebar` - Navigation sidebar for learners
+- `CreateModuleModal`, `CreateLessonModal` - Creation modals
+- `ModuleEditorSheet` - Module editing interface
+- `DripSettings` - Content drip scheduling configuration
+- `ProgramSettings` - Program-level settings editor
 
-### Coaching Components
+### Programs Module Architecture
+
+**Content Types** (9 types in `content_type` enum):
+- `lesson` - Rich content with video + text
+- `sub_module` - Container for nested content
+- `quiz` - Scored questions
+- `assignment` - Work submission
+- `mentor_meeting` - Scheduled 1:1 meeting
+- `text_form` - Multi-line text input
+- `goal` - Goal setting with review workflow
+- `mentor_approval` - Learner submits, mentor/facilitator approves
+- `facilitator_approval` - Simple completion flag
+
+**Drip Scheduling**:
+- Module-level: `immediate`, `days_after_enrollment`, `days_after_previous`, `on_date`
+- Lesson-level: `immediate`, `sequential`, `days_after_module_start`, `on_date`
+
+**Sub-Module Support**: 2-level nesting (depth 0 = top-level, depth 1 = sub-module)
+
+**Goal Responses** (for `goal` content type):
+- Statement, success metrics, action steps, target date
+- Review frequency (weekly, biweekly, monthly, quarterly)
+- Periodic reviews with progress tracking
+
+**Approval Workflow** (for `mentor_approval` content type):
+- Learner submits description
+- Mentor or facilitator reviews and approves/rejects with feedback
+
+### Mentoring Components
 
 Located in `packages/web/src/components/coaching/`:
-- `NewSessionModal` - Schedule new coaching sessions with relationship selection
+- `NewSessionModal` - Schedule new mentoring sessions with relationship selection
 
 ### Template Components
 
@@ -214,6 +319,7 @@ pnpm --filter @tr/db db:studio     # Open Drizzle Studio
 |---------|------|-------|
 | API     | 3002 | Hono server (`packages/api`) |
 | Web     | 3003 | Next.js frontend (`packages/web`) |
+| UI Prototype | 5173 | Vite dev server (`components/`) |
 
 ## Environment Variables
 
@@ -237,21 +343,20 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
 ## Current Implementation Status
 
 ### Completed
-- Agency portal (10 pages): Overview, Clients, Team, Templates, Assessments, Analytics, Billing, Branding, Governance, Settings
+- Agency portal (6 tabs): Overview, Clients, People, Templates, Branding, Billing
 - Context switcher for Agency/Tenant views
-- Mock authentication for development
+- JWT authentication with password login (argon2), access/refresh tokens
 - Design system matching prototype
-- React Query hooks for data fetching (tenants, programs, goals, coaching, assessments, templates)
+- React Query hooks for data fetching (tenants, programs, goals, mentoring, assessments, templates)
 - Dashboard page connected to real API data
-- Header with user menu and logout
+- **Header with user dropdown menu** (avatar, name, Settings, Login As User, Sign out)
 - Database seeded with test data
-- Programs list and detail pages
 - Goals list, detail, and create modal
 - Program enrollment with role selection (Facilitator, Mentor, Learner)
 - Mentor-Learner relationship management
 - Add Participant modal (new user or existing member)
-- Coaching API routes (relationships, sessions, prep, notes, action items, stats)
-- Coaching dashboard page (stats, sessions list, relationships tabs)
+- Mentoring API routes (relationships, sessions, prep, notes, action items, stats)
+- Mentoring dashboard page (stats, sessions list, relationships tabs)
 - Session detail page (prep, notes, action items, participants)
 - New Session modal, Add Note modal, Add Action Item modal
 - Agency template API routes (CRUD, duplicate, stats)
@@ -259,25 +364,117 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
 - Template builder UI (competencies, questions, scale settings)
 - Create template modal
 - Template editor with toast notifications, keyboard shortcuts (Ctrl+S), unsaved changes protection
+- **Programs Learner UI (matching PROGRAMS_SECTION_COMPLETE_SPECS.md):**
+  - Programs Page (`/programs`) - Catalog with stats bar, filter tabs, program cards
+    - Status-based styling (blue=in-progress, green=completed, muted=not-started)
+    - ProgramCard with expandable curriculum and Phase Progress Tracker
+    - Agency user tenant selection support
+  - Program Detail Page (`/programs/[programId]`) - Learner overview
+    - Header with icon box, title, meta info, status badge
+    - Stats grid (Total Points, Progress, Time Remaining, Linked Goals)
+    - Module Progress Tracker with horizontal nodes
+    - Program Overview (What You'll Learn + Program Structure)
+    - Linked Goals section with progress
+  - Module View LMS (`/programs/[programId]/learn`) - Full learning interface
+    - Left sidebar (w-80) with course outline, expandable modules/lessons
+    - 6 lesson types: reading, video, meeting, submission, assignment, goal
+    - Top navigation bar (breadcrumb, points badge, completed badge)
+    - Bottom navigation bar (Previous/Next, lesson counter)
+    - Completion modal for marking lessons done
+- **Program Builder Features:**
+  - 9 content types (lesson, quiz, goal, mentor_approval, etc.)
+  - Sub-module support (2-level nesting)
+  - Drip scheduling (module and lesson level)
+  - Goal responses and reviews API
+  - Approval workflow API (mentor/facilitator can approve)
+  - Progress tracking with completion marking
+  - Module/lesson CRUD, reorder, duplicate
+  - 27+ React Query hooks for programs
+- **Impersonation System (full stack):**
+  - API: POST /api/admin/impersonate, POST /end, GET /status, GET /history
+  - API: GET /api/agencies/me/users/search (cross-tenant user search for impersonation)
+  - Header dropdown → "Login As User" → search modal with real-time filtering
+  - ImpersonationSearchModal: search users across tenants, grouped results, confirmation flow
+  - ImpersonationBanner: amber bar showing "Viewing as [name]" + "Switch Back" button
+  - API client injects X-Impersonation-Token header from sessionStorage
+  - Audit logging of all impersonation sessions
+- **Dashboard Pages (10 pages built):**
+  - Scorecard (`/scorecard`) - Role/Mission, KPIs, Competencies
+  - Planning & Goals (`/planning`) - Quarterly planning, goal management
+  - Mentoring (`/mentoring`) - Sessions, relationships, action items
+  - Assessments (`/assessments`) - 180 and 360 assessment types with filter tabs, type badges, detail view
+  - People (`/people`) - User directory with grid/list views
+  - Analytics (`/analytics`) - Charts and metrics dashboard
+  - Settings (`/settings`) - Profile (connected to real API), Notifications, Security, Integrations, Account
+  - Notifications (`/notifications`) - Notification center with filters
+  - Help & Support (`/help`) - Knowledge base, FAQs, tickets
+  - Program Builder (`/program-builder`) - Connected to real programs API
+- **Program Builder connected to real API:**
+  - Agency users: useAgencyPrograms() → GET /api/agencies/me/programs
+  - Tenant users: usePrograms(tenantId) with search/filter/pagination
+  - Real Create, Duplicate, Delete actions via mutations
+  - 6-step Create Program Wizard matching prototype design
+  - Program Builder Editor (`/program-builder/[programId]`) with 6 tabs: Curriculum, Participants, Info, Goals, Resources, Reports
+  - Curriculum tab: content type picker dropdown (9 types), inline lesson editors per type
+  - Wizard stores objectives, email settings, reminders, audience in program `config` JSONB
+- **Settings Profile connected to real API:**
+  - useMyProfile() → GET /api/users/me (full profile with phone, timezone, metadata)
+  - Save via useUpdateUser(tenantId, userId) for tenant users
+  - Loads real firstName, lastName, email, title, department, phone, timezone, bio
+- **UI Prototype (components/):**
+  - Dashboard with Journey Hub, Leaderboard, Schedule, Learning Queue
+  - Scorecard with Role/Mission, KPIs, Competencies, Org Health
+  - Planning & Goals with quarterly planning and goal management
+  - Programs with list, detail, and LMS learning views
+  - Program Builder with curriculum editor
+  - Mentoring with sessions and relationships
+  - Assessments with list and detail views
+  - People management with grid/list views and filters
+  - Analytics dashboard
+  - Settings page
+  - Agency portal with all tabs (Overview, Clients, Team, Templates, etc.)
+  - Notifications system (page, dropdown, preferences)
+  - Onboarding wizard (multi-step with profile, goals, team setup)
+  - Help & Support (knowledge base, FAQs, ticket system)
+  - Search (command palette Cmd+K + full search page)
+  - **Responsive/Mobile layouts** for all pages
 
 ### In Progress
-- Tenant assessment UI pages
+- Connect tenant assessment UI to real API (pages built with mock data)
+- Specialized content type editors (quiz builder, form builder)
+- Connect Programs UI to real enrollment/progress data (currently using mock data)
+
+### Pages Using Mock Data (No API Routes Yet)
+- Scorecard - no API routes, no DB schema
+- Planning & Goals - DB schema exists (planning/), no API routes
+- Mentoring - DB schema exists (mentoring/), no API routes
+- Assessments (tenant-level) - DB schema exists (assessments/), no API routes
+- Analytics - no API routes, no DB schema
+- Notifications - no API routes, no DB schema
+- Help & Support - static content, no API needed
 
 ### Not Yet Implemented
-- Program creation wizard UI
+- API routes for: Mentoring, Assessments (tenant), Planning, Scorecard, Analytics, Notifications
 - Session prep form (edit mode)
-- Coaching relationship management UI
+- Mentoring relationship management UI
 - Assessment response collection UI (public rater form)
 - Results visualization charts
 - Goal suggestion generation from assessments
 - Real Firebase integration
-- Notifications
+- Program templates and duplication
+- Certificate/diploma generation
+- Rich content editor (WYSIWYG)
+- Lesson resources/attachments UI
+- Programs admin view: settings and advanced features (basic editor built)
 
 ### Test Accounts (after running `pnpm --filter @tr/db db:seed`)
-- `admin@acme.com` - Agency Owner + Tenant Admin
-- `john.doe@acme.com` - Tenant User
-- `jane.smith@acme.com` - Tenant User
-- `coach@acme.com` - Tenant Admin (facilitator)
+- `admin@acme.com` - Agency Owner (has agencyId, no tenantId) - password: `password123`
+- `admin@techcorp.com` - Tenant Admin (tenantId, no enrollments)
+- `coach@techcorp.com` - Facilitator
+- `mentor@techcorp.com` - Mentor
+- `john.doe@techcorp.com` - Learner (enrolled in "Leadership Essentials")
+- `jane.smith@techcorp.com` - Learner
+- `alex.wilson@techcorp.com` - Learner
 
 ## Code Style Guidelines
 
@@ -287,22 +484,66 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
 4. **Imports**: Absolute imports using `@/` alias
 5. **State**: Zustand for global state, React Query for server state
 6. **API calls**: Use the API client from `@/lib/api.ts`
-7. **Hooks**: Use hooks from `@/hooks/api/` for data fetching (usePrograms, useGoals, useTenants, useCoachingSessions, useActionItems, useTemplates, useAssessments, etc.)
+7. **Hooks**: Use hooks from `@/hooks/api/` for data fetching (usePrograms, useGoals, useTenants, useMentoringSessions, useActionItems, useTemplates, useAssessments, useAgencyPrograms, useAgencyUserSearch, useMyProfile, useImpersonate, etc.)
+
+## UI Prototype (components/)
+
+The `components/` folder contains a standalone Vite + React prototype app for rapid UI development.
+
+### Running the Prototype
+
+```bash
+cd components
+npm install
+npm run dev
+# Opens at http://localhost:5173
+```
+
+### Prototype Structure
+
+Each module follows a consistent pattern:
+- `types.ts` - TypeScript interfaces and types
+- `data.ts` - Mock data and helper functions
+- `*Page.tsx` - Main page component
+- `*Card.tsx`, `*Modal.tsx` - Supporting components
+- `index.ts` - Barrel exports
+
+### Key Features
+
+| Module | Components | Features |
+|--------|------------|----------|
+| Dashboard | JourneyHub, Leaderboard, MySchedule, LearningQueue | Progress tracking, gamification |
+| Scorecard | RoleMission, KPIs, Competencies, OrgHealth | Performance metrics |
+| Programs | ProgramsPage, ProgramDetail, ModuleViewLMS | Learning experience |
+| Mentoring | SessionCard, RelationshipCard, NewSessionModal | Session management |
+| Notifications | NotificationDropdown, NotificationCard, Preferences | Real-time alerts |
+| Search | SearchCommand (Cmd+K), SearchPage | Global search with categories |
+| Onboarding | OnboardingWizard (7 steps) | New user setup |
+| Help | HelpPage, FAQSection, SupportTicketModal | Self-service support |
+
+### Mobile/Responsive
+
+All components are mobile-responsive with:
+- Collapsible sidebar drawer on mobile
+- Mobile header with hamburger menu
+- Responsive grids (1→2→3 columns)
+- Touch-friendly tap targets
+- Adaptive text sizing
 
 ## Reference Documents
 
-- **Roadmap**: `ROADMAP.md` (development status & task tracking)
 - **Requirements**: `ANALYSIS_NOTES.md` (full spec & development phases)
 - **PRD**: `overview.txt` (detailed product requirements)
-- **Prototype**: `Corporate Transformation OS/src/` (Vite + React app)
-- **Design reference**: Run the prototype with `cd "Corporate Transformation OS" && npm run dev`
+- **Specifications**: `SPECS/` folder (detailed module specs)
+- **UI Prototype**: `components/` (Vite + React app at localhost:5173)
+- **Legacy Prototype**: `Corporate Transformation OS/src/` (original reference)
 
 ## Common Tasks
 
 ### Adding a new page
 1. Create page at `packages/web/src/app/(dashboard)/[route]/page.tsx`
 2. Use `"use client"` if needed
-3. Follow the layout pattern: `max-w-[1400px] mx-auto p-8`
+3. Follow the layout pattern: `max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8`
 4. Add navigation item in `packages/web/src/components/layout/sidebar.tsx`
 
 ### Adding an API route
@@ -315,3 +556,14 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
 2. Export from `packages/db/src/schema/index.ts`
 3. Run `pnpm --filter @tr/db db:generate`
 4. Run `pnpm --filter @tr/db db:migrate`
+
+### Adding a UI Prototype Module
+1. Create folder at `components/[module-name]/`
+2. Create files following the pattern:
+   - `types.ts` - Define interfaces
+   - `data.ts` - Add mock data
+   - `[Module]Page.tsx` - Main page component
+   - `index.ts` - Export all components
+3. Add content path to `components/tailwind.config.js`
+4. Import and wire up in `components/src/App.tsx`
+5. Add navigation item to `navItems` array

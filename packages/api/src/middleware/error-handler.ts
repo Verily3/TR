@@ -1,86 +1,53 @@
-import { HTTPException } from "hono/http-exception";
-import { ZodError } from "zod";
-import type { ErrorHandler } from "hono";
-import type { AppVariables } from "../types";
+import type { ErrorHandler } from 'hono';
+import { HTTPException } from 'hono/http-exception';
+import { AppError } from '../lib/errors.js';
 
-export const errorHandler: ErrorHandler<{ Variables: AppVariables }> = (
-  err,
-  c
-) => {
-  const requestId = c.get("requestId") || "unknown";
+/**
+ * Global error handler using Hono's app.onError() pattern
+ */
+export const errorHandler: ErrorHandler = (error, c) => {
+  console.error('Error:', error);
 
-  // Zod validation errors
-  if (err instanceof ZodError) {
+  // Handle our custom AppError
+  if (error instanceof AppError) {
     return c.json(
       {
-        success: false,
         error: {
-          code: "VALIDATION_ERROR",
-          message: "Validation failed",
-          details: err.errors.map((e) => ({
-            path: e.path.join("."),
-            message: e.message,
-          })),
+          code: error.code,
+          message: error.message,
+          details: error.details,
         },
-        requestId,
       },
-      400
+      error.statusCode as 400 | 401 | 403 | 404 | 409 | 500
     );
   }
 
-  // HTTP exceptions (from our middleware)
-  if (err instanceof HTTPException) {
+  // Handle Hono HTTPException
+  if (error instanceof HTTPException) {
     return c.json(
       {
-        success: false,
         error: {
-          code: getErrorCode(err.status),
-          message: err.message,
+          code: 'HTTP_ERROR',
+          message: error.message,
         },
-        requestId,
       },
-      err.status
+      error.status
     );
   }
 
-  // Unknown errors
-  console.error(`[${requestId}] Unhandled error:`, err);
+  // Handle unknown errors
+  const message =
+    process.env.NODE_ENV === 'development' && error instanceof Error
+      ? error.message
+      : 'An unexpected error occurred';
 
   return c.json(
     {
-      success: false,
       error: {
-        code: "INTERNAL_ERROR",
-        message:
-          process.env.NODE_ENV === "production"
-            ? "An unexpected error occurred"
-            : err instanceof Error
-              ? err.message
-              : "Unknown error",
+        code: 'INTERNAL_ERROR',
+        message,
       },
-      requestId,
     },
     500
   );
 };
-
-function getErrorCode(status: number): string {
-  switch (status) {
-    case 400:
-      return "BAD_REQUEST";
-    case 401:
-      return "UNAUTHORIZED";
-    case 403:
-      return "FORBIDDEN";
-    case 404:
-      return "NOT_FOUND";
-    case 409:
-      return "CONFLICT";
-    case 422:
-      return "UNPROCESSABLE_ENTITY";
-    case 429:
-      return "TOO_MANY_REQUESTS";
-    default:
-      return "ERROR";
-  }
-}

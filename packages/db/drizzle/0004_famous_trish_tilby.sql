@@ -1,0 +1,2 @@
+CREATE TYPE "public"."approval_required" AS ENUM('none', 'mentor', 'facilitator', 'both');--> statement-breakpoint
+ALTER TABLE "lessons" ADD COLUMN "approval_required" "approval_required" DEFAULT 'none' NOT NULL;

@@ -1,350 +1,946 @@
-import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
-import { HTTPException } from "hono/http-exception";
-import {
-  db,
-  eq,
-  and,
-  sql,
+import { Hono } from 'hono';
+import { zValidator } from '@hono/zod-validator';
+import { z } from 'zod';
+import { eq, and, isNull, desc, sql, asc, or, arrayContains } from 'drizzle-orm';
+import { db, schema } from '@tr/db';
+import { requireTenantAccess, requirePermission } from '../middleware/permissions.js';
+import { NotFoundError, BadRequestError, ForbiddenError } from '../lib/errors.js';
+import { PERMISSIONS } from '@tr/shared';
+import type { Variables } from '../types/context.js';
+import type { PaginationMeta } from '@tr/shared';
+
+const {
   programs,
   modules,
   lessons,
   enrollments,
-  lessonProgress,
   enrollmentMentorships,
-  users,
-  tenantMembers,
-} from "@tr/db";
-import { success, paginated, noContent } from "../lib/response";
-import { listQuerySchema } from "../lib/validation";
-import {
-  authMiddleware,
-  tenantMiddleware,
-  requireTenantAdmin,
-} from "../middleware";
-import type { AppVariables } from "../types";
+  lessonProgress,
+  goalResponses,
+  approvalSubmissions,
+} = schema;
 
-const programsRouter = new Hono<{ Variables: AppVariables }>();
+export const programsRoutes = new Hono<{ Variables: Variables }>();
 
-// ============================================================================
-// SCHEMAS
-// ============================================================================
+// Validation schemas
+const listQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  status: z.enum(['draft', 'active', 'archived']).optional(),
+  type: z.enum(['cohort', 'self_paced']).optional(),
+});
 
 const createProgramSchema = z.object({
   name: z.string().min(1).max(255),
+  internalName: z.string().max(255).optional(),
   description: z.string().optional(),
-  type: z.enum(["self_paced", "cohort", "blended"]).default("self_paced"),
-  thumbnailUrl: z.string().url().optional(),
-  scheduleType: z.enum(["open", "scheduled", "drip"]).default("open"),
-  settings: z.record(z.unknown()).optional(),
+  type: z.enum(['cohort', 'self_paced']).default('cohort'),
+  coverImage: z.string().optional(),
+  startDate: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional(),
+  timezone: z.string().max(50).optional(),
+  config: z
+    .object({
+      sequentialAccess: z.boolean().optional(),
+      trackInScorecard: z.boolean().optional(),
+      autoEnrollment: z.boolean().optional(),
+      requireManagerApproval: z.boolean().optional(),
+      allowSelfEnrollment: z.boolean().optional(),
+      maxCapacity: z.number().optional(),
+      waitlistEnabled: z.boolean().optional(),
+      issueCertificate: z.boolean().optional(),
+      linkToGoals: z.boolean().optional(),
+    })
+    .passthrough()
+    .optional(),
 });
 
-const updateProgramSchema = createProgramSchema.partial();
+const updateProgramSchema = createProgramSchema.partial().extend({
+  status: z.enum(['draft', 'active', 'archived']).optional(),
+  allowedTenantIds: z.array(z.string().uuid()).optional(),
+});
 
+// Module schemas
 const createModuleSchema = z.object({
-  name: z.string().min(1).max(255),
-  description: z.string().optional(),
-  orderIndex: z.number().int().min(0).optional(),
-});
-
-const createLessonSchema = z.object({
   title: z.string().min(1).max(255),
   description: z.string().optional(),
-  type: z.enum(["video", "text", "quiz", "assignment", "resource", "live_session"]),
-  content: z.record(z.unknown()).optional(),
-  duration: z.number().int().min(0).optional(),
-  orderIndex: z.number().int().min(0).optional(),
+  parentModuleId: z.string().uuid().optional(),
+  order: z.number().int().optional(),
+  dripType: z
+    .enum(['immediate', 'days_after_enrollment', 'days_after_previous', 'on_date'])
+    .default('immediate'),
+  dripValue: z.number().int().optional(),
+  dripDate: z.string().datetime().optional(),
 });
 
-const enrollUserSchema = z
-  .object({
-    // Option A: Add existing user by ID
-    userId: z.string().uuid().optional(),
+const updateModuleSchema = createModuleSchema.partial();
 
-    // Option B: Create new user (if userId not provided)
-    email: z.string().email().optional(),
-    firstName: z.string().optional(),
-    lastName: z.string().optional(),
-    phone: z.string().optional(),
-    title: z.string().optional(),
-    organization: z.string().optional(),
-    notes: z.string().optional(),
+// Lesson schemas
+const createLessonSchema = z.object({
+  title: z.string().min(1).max(255),
+  contentType: z
+    .enum([
+      'lesson',
+      'sub_module',
+      'quiz',
+      'assignment',
+      'mentor_meeting',
+      'text_form',
+      'goal',
+      'mentor_approval',
+      'facilitator_approval',
+    ])
+    .default('lesson'),
+  content: z.record(z.unknown()).optional(),
+  order: z.number().int().optional(),
+  durationMinutes: z.number().int().optional(),
+  points: z.number().int().default(0),
+  dripType: z
+    .enum(['immediate', 'sequential', 'days_after_module_start', 'on_date'])
+    .default('immediate'),
+  dripValue: z.number().int().optional(),
+  dripDate: z.string().datetime().optional(),
+  visibleTo: z
+    .object({
+      learner: z.boolean().default(true),
+      mentor: z.boolean().default(true),
+      facilitator: z.boolean().default(true),
+    })
+    .optional(),
+  approvalRequired: z.enum(['none', 'mentor', 'facilitator', 'both']).default('none'),
+});
 
-    // Role in the program
-    role: z.enum(["learner", "facilitator", "mentor"]).default("learner"),
+const updateLessonSchema = createLessonSchema.partial();
 
-    // Mentor/Learner assignments
-    mentorEnrollmentIds: z.array(z.string().uuid()).optional(),
-    learnerEnrollmentIds: z.array(z.string().uuid()).optional(),
-  })
-  .refine((data) => data.userId || data.email, {
-    message: "Either userId or email must be provided",
-  });
-
-// ============================================================================
-// PROGRAMS CRUD
-// ============================================================================
+const reorderSchema = z.object({
+  items: z.array(
+    z.object({
+      id: z.string().uuid(),
+      order: z.number().int(),
+    })
+  ),
+});
 
 /**
- * GET /tenants/:tenantId/programs
- * List programs in tenant
+ * GET /api/tenants/:tenantId/programs
+ * List programs available to a tenant
+ *
+ * Programs are visible if:
+ * 1. Program's tenantId matches this tenant, OR
+ * 2. This tenant is in program's allowedTenantIds, OR
+ * 3. Program belongs to the tenant's agency and is open to all agency tenants
  */
-programsRouter.get(
-  "/",
-  authMiddleware,
-  tenantMiddleware,
-  zValidator("query", listQuerySchema),
+programsRoutes.get(
+  '/',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_VIEW),
+  zValidator('query', listQuerySchema),
   async (c) => {
-    const tenantCtx = c.get("tenant")!;
-    const query = c.req.valid("query");
+    const tenant = c.get('tenant')!;
+    const { page, limit, status, type } = c.req.valid('query');
 
-    const programList = await db.query.programs.findMany({
-      where: eq(programs.tenantId, tenantCtx.id),
-      limit: query.perPage,
-      offset: (query.page - 1) * query.perPage,
-      orderBy: (programs, { desc }) => [desc(programs.createdAt)],
-    });
+    // Build access conditions for agency-owned program model
+    // A tenant can see programs where:
+    // - tenantId = this tenant (tenant-specific program), OR
+    // - this tenant is in allowedTenantIds (multi-tenant program), OR
+    // - agencyId matches and program is not restricted (tenantId is null)
+    const accessConditions = [
+      eq(programs.tenantId, tenant.id),
+      sql`${tenant.id} = ANY(${programs.allowedTenantIds})`,
+    ];
 
+    // Only include agency-wide programs if tenant belongs to an agency
+    if (tenant.agencyId) {
+      accessConditions.push(
+        and(
+          eq(programs.agencyId, tenant.agencyId),
+          isNull(programs.tenantId)
+        )!
+      );
+    }
+
+    const accessCondition = or(...accessConditions);
+
+    const conditions = [accessCondition, isNull(programs.deletedAt)];
+
+    if (status) {
+      conditions.push(eq(programs.status, status));
+    }
+
+    if (type) {
+      conditions.push(eq(programs.type, type));
+    }
+
+    // Get total count
     const [{ count }] = await db
       .select({ count: sql<number>`count(*)` })
       .from(programs)
-      .where(eq(programs.tenantId, tenantCtx.id));
+      .where(and(...conditions));
 
-    return paginated(
-      c,
-      programList.map((p) => ({
-        id: p.id,
-        name: p.name,
-        description: p.description,
-        type: p.type,
-        thumbnailUrl: p.thumbnailUrl,
-        status: p.status,
-        enrollmentCount: p.enrollmentCount,
-        createdAt: p.createdAt,
-      })),
-      {
-        page: query.page,
-        perPage: query.perPage,
-        total: Number(count),
-      }
-    );
+    // Get paginated results with enrollment count + current user's enrollment
+    const user = c.get('user');
+    const results = await db
+      .select({
+        id: programs.id,
+        name: programs.name,
+        internalName: programs.internalName,
+        description: programs.description,
+        type: programs.type,
+        status: programs.status,
+        coverImage: programs.coverImage,
+        startDate: programs.startDate,
+        endDate: programs.endDate,
+        agencyId: programs.agencyId,
+        tenantId: programs.tenantId,
+        config: programs.config,
+        createdAt: programs.createdAt,
+        updatedAt: programs.updatedAt,
+        enrollmentCount: sql<number>`(
+          SELECT count(*) FROM "enrollments" e
+          WHERE e."program_id" = "programs"."id"
+        )`,
+        learnerCount: sql<number>`(
+          SELECT count(*) FROM "enrollments" e
+          WHERE e."program_id" = "programs"."id"
+          AND e."role" = 'learner'
+        )`,
+        moduleCount: sql<number>`(
+          SELECT count(*) FROM "modules" m
+          WHERE m."program_id" = "programs"."id"
+        )`,
+        lessonCount: sql<number>`(
+          SELECT count(*) FROM "lessons" l
+          INNER JOIN "modules" m ON l."module_id" = m."id"
+          WHERE m."program_id" = "programs"."id"
+        )`,
+        totalPoints: sql<number>`(
+          SELECT COALESCE(SUM(l."points"), 0) FROM "lessons" l
+          INNER JOIN "modules" m ON l."module_id" = m."id"
+          WHERE m."program_id" = "programs"."id"
+        )`,
+        avgProgress: sql<number>`(
+          SELECT COALESCE(ROUND(AVG(e."progress")), 0) FROM "enrollments" e
+          WHERE e."program_id" = "programs"."id"
+          AND e."role" = 'learner'
+        )`,
+        createdByName: sql<string | null>`(
+          SELECT CONCAT(u."first_name", ' ', u."last_name") FROM "users" u
+          WHERE u."id" = "programs"."created_by"
+          LIMIT 1
+        )`,
+        myTenantEnrollmentCount: sql<number>`(
+          SELECT count(*) FROM "enrollments" e
+          WHERE e."program_id" = "programs"."id"
+          AND e."tenant_id" = ${tenant.id}
+        )`,
+        // Current user's enrollment data
+        myEnrollmentId: sql<string | null>`(
+          SELECT e."id" FROM "enrollments" e
+          WHERE e."program_id" = "programs"."id"
+          AND e."user_id" = ${user.id}
+          LIMIT 1
+        )`,
+        myRole: sql<string | null>`(
+          SELECT e."role"::text FROM "enrollments" e
+          WHERE e."program_id" = "programs"."id"
+          AND e."user_id" = ${user.id}
+          LIMIT 1
+        )`,
+        myProgress: sql<number | null>`(
+          SELECT e."progress" FROM "enrollments" e
+          WHERE e."program_id" = "programs"."id"
+          AND e."user_id" = ${user.id}
+          LIMIT 1
+        )`,
+        myPointsEarned: sql<number | null>`(
+          SELECT e."points_earned" FROM "enrollments" e
+          WHERE e."program_id" = "programs"."id"
+          AND e."user_id" = ${user.id}
+          LIMIT 1
+        )`,
+        myEnrollmentStatus: sql<string | null>`(
+          SELECT e."status"::text FROM "enrollments" e
+          WHERE e."program_id" = "programs"."id"
+          AND e."user_id" = ${user.id}
+          LIMIT 1
+        )`,
+      })
+      .from(programs)
+      .where(and(...conditions))
+      .orderBy(desc(programs.createdAt))
+      .limit(limit)
+      .offset((page - 1) * limit);
+
+    const pagination: PaginationMeta = {
+      page,
+      limit,
+      total: Number(count),
+      totalPages: Math.ceil(Number(count) / limit),
+      hasNext: page * limit < Number(count),
+      hasPrev: page > 1,
+    };
+
+    return c.json({ data: results, meta: { pagination } });
   }
 );
 
 /**
- * POST /tenants/:tenantId/programs
- * Create a new program (admin only)
+ * POST /api/tenants/:tenantId/programs
+ * Create a new program (tenant-scoped)
+ *
+ * Note: Programs are owned by agencies. When a tenant creates a program,
+ * it's created with agencyId from the tenant and tenantId set to restrict
+ * access to this tenant only. Agency admins can later expand access.
+ *
+ * Requires: Tenant must have programs:create permission (granted by agency)
  */
-programsRouter.post(
-  "/",
-  authMiddleware,
-  tenantMiddleware,
-  requireTenantAdmin,
-  zValidator("json", createProgramSchema),
+programsRoutes.post(
+  '/',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_CREATE),
+  zValidator('json', createProgramSchema),
   async (c) => {
-    const tenantCtx = c.get("tenant")!;
-    const user = c.get("user");
-    const body = c.req.valid("json");
+    const tenant = c.get('tenant')!;
+    const user = c.get('user');
+    const body = c.req.valid('json');
+
+    // Validate dates
+    if (body.startDate && body.endDate) {
+      if (new Date(body.startDate) >= new Date(body.endDate)) {
+        throw new BadRequestError('End date must be after start date');
+      }
+    }
+
+    // Tenant must belong to an agency
+    if (!tenant.agencyId) {
+      throw new ForbiddenError('Tenant must belong to an agency to create programs');
+    }
 
     const [program] = await db
       .insert(programs)
       .values({
-        tenantId: tenantCtx.id,
-        createdById: user.id,
-        ...body,
+        // Agency owns the program
+        agencyId: tenant.agencyId,
+        // Restrict to this tenant only (agency can expand later)
+        tenantId: tenant.id,
+        allowedTenantIds: [],
+        name: body.name,
+        internalName: body.internalName,
+        description: body.description,
+        type: body.type,
+        coverImage: body.coverImage,
+        startDate: body.startDate ? new Date(body.startDate) : null,
+        endDate: body.endDate ? new Date(body.endDate) : null,
+        timezone: body.timezone,
+        config: body.config || {},
+        createdBy: user.id,
       })
       .returning();
 
-    return success(c, program, 201);
+    return c.json({ data: program }, 201);
   }
 );
 
 /**
- * GET /tenants/:tenantId/programs/:programId
- * Get program details with modules
+ * GET /api/tenants/:tenantId/programs/:programId
+ * Get a program with its modules and lessons
  */
-programsRouter.get(
-  "/:programId",
-  authMiddleware,
-  tenantMiddleware,
+programsRoutes.get(
+  '/:programId',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_VIEW),
   async (c) => {
-    const tenantCtx = c.get("tenant")!;
-    const programId = c.req.param("programId");
+    const tenant = c.get('tenant')!;
+    const { programId } = c.req.param();
 
-    const program = await db.query.programs.findFirst({
-      where: and(
-        eq(programs.id, programId),
-        eq(programs.tenantId, tenantCtx.id)
-      ),
-      with: {
-        modules: {
-          with: {
-            lessons: true,
-          },
-          orderBy: (modules, { asc }) => [asc(modules.orderIndex)],
+    // Access condition: tenant can view if they have access to the program
+    const accessConditions = [
+      eq(programs.tenantId, tenant.id),
+      sql`${tenant.id} = ANY(${programs.allowedTenantIds})`,
+    ];
+
+    if (tenant.agencyId) {
+      accessConditions.push(
+        and(
+          eq(programs.agencyId, tenant.agencyId),
+          isNull(programs.tenantId)
+        )!
+      );
+    }
+
+    const accessCondition = or(...accessConditions);
+
+    const [program] = await db
+      .select()
+      .from(programs)
+      .where(
+        and(
+          eq(programs.id, programId),
+          accessCondition,
+          isNull(programs.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!program) {
+      throw new NotFoundError('Program', programId);
+    }
+
+    // Get modules with lessons
+    const programModules = await db
+      .select()
+      .from(modules)
+      .where(eq(modules.programId, programId))
+      .orderBy(asc(modules.order));
+
+    const moduleLessons = await db
+      .select()
+      .from(lessons)
+      .where(
+        sql`${lessons.moduleId} IN (SELECT id FROM ${modules} WHERE ${modules.programId} = ${programId})`
+      )
+      .orderBy(asc(lessons.order));
+
+    // Get enrollment stats
+    const [{ learnerCount, mentorCount, facilitatorCount }] = await db
+      .select({
+        learnerCount: sql<number>`count(*) filter (where ${enrollments.role} = 'learner')`,
+        mentorCount: sql<number>`count(*) filter (where ${enrollments.role} = 'mentor')`,
+        facilitatorCount: sql<number>`count(*) filter (where ${enrollments.role} = 'facilitator')`,
+      })
+      .from(enrollments)
+      .where(eq(enrollments.programId, programId));
+
+    // Organize lessons by module
+    const modulesWithLessons = programModules.map((mod) => ({
+      ...mod,
+      lessons: moduleLessons.filter((l) => l.moduleId === mod.id),
+    }));
+
+    return c.json({
+      data: {
+        ...program,
+        modules: modulesWithLessons,
+        stats: {
+          learnerCount: Number(learnerCount),
+          mentorCount: Number(mentorCount),
+          facilitatorCount: Number(facilitatorCount),
         },
       },
     });
-
-    if (!program) {
-      throw new HTTPException(404, { message: "Program not found" });
-    }
-
-    return success(c, program);
   }
 );
 
 /**
- * PATCH /tenants/:tenantId/programs/:programId
- * Update program (admin only)
+ * PUT /api/tenants/:tenantId/programs/:programId
+ * Update a program
+ *
+ * Note: Only programs where tenantId matches can be updated by tenant.
+ * Agency-wide programs can only be updated at agency level.
  */
-programsRouter.patch(
-  "/:programId",
-  authMiddleware,
-  tenantMiddleware,
-  requireTenantAdmin,
-  zValidator("json", updateProgramSchema),
+programsRoutes.put(
+  '/:programId',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', updateProgramSchema),
   async (c) => {
-    const tenantCtx = c.get("tenant")!;
-    const programId = c.req.param("programId");
-    const body = c.req.valid("json");
+    const tenant = c.get('tenant')!;
+    const { programId } = c.req.param();
+    const body = c.req.valid('json');
+
+    // Tenants can only update programs specifically assigned to them
+    const [existing] = await db
+      .select()
+      .from(programs)
+      .where(
+        and(
+          eq(programs.id, programId),
+          eq(programs.tenantId, tenant.id),
+          isNull(programs.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundError('Program', programId);
+    }
+
+    // Validate dates if provided
+    const startDate = body.startDate ? new Date(body.startDate) : existing.startDate;
+    const endDate = body.endDate ? new Date(body.endDate) : existing.endDate;
+    if (startDate && endDate && startDate >= endDate) {
+      throw new BadRequestError('End date must be after start date');
+    }
 
     const [updated] = await db
       .update(programs)
       .set({
         ...body,
+        startDate: body.startDate ? new Date(body.startDate) : undefined,
+        endDate: body.endDate ? new Date(body.endDate) : undefined,
         updatedAt: new Date(),
       })
-      .where(
-        and(eq(programs.id, programId), eq(programs.tenantId, tenantCtx.id))
-      )
+      .where(eq(programs.id, programId))
       .returning();
 
-    if (!updated) {
-      throw new HTTPException(404, { message: "Program not found" });
+    return c.json({ data: updated });
+  }
+);
+
+/**
+ * DELETE /api/tenants/:tenantId/programs/:programId
+ * Soft delete a program
+ *
+ * Note: Only programs where tenantId matches can be deleted by tenant.
+ * Agency-wide programs can only be deleted at agency level.
+ */
+programsRoutes.delete(
+  '/:programId',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  async (c) => {
+    const tenant = c.get('tenant')!;
+    const { programId } = c.req.param();
+
+    // Tenants can only delete programs specifically assigned to them
+    const [existing] = await db
+      .select()
+      .from(programs)
+      .where(
+        and(
+          eq(programs.id, programId),
+          eq(programs.tenantId, tenant.id),
+          isNull(programs.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundError('Program', programId);
     }
 
-    return success(c, updated);
+    await db
+      .update(programs)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(eq(programs.id, programId));
+
+    return c.json({ data: { success: true } });
   }
 );
 
 /**
- * DELETE /tenants/:tenantId/programs/:programId
- * Delete program (admin only)
+ * POST /api/tenants/:tenantId/programs/:programId/publish
+ * Publish a program (change status to active)
+ *
+ * Note: Only programs where tenantId matches can be published by tenant.
  */
-programsRouter.delete(
-  "/:programId",
-  authMiddleware,
-  tenantMiddleware,
-  requireTenantAdmin,
+programsRoutes.post(
+  '/:programId/publish',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
   async (c) => {
-    const tenantCtx = c.get("tenant")!;
-    const programId = c.req.param("programId");
+    const tenant = c.get('tenant')!;
+    const { programId } = c.req.param();
 
-    const result = await db
-      .delete(programs)
+    // Tenants can only publish programs specifically assigned to them
+    const [existing] = await db
+      .select()
+      .from(programs)
       .where(
-        and(eq(programs.id, programId), eq(programs.tenantId, tenantCtx.id))
-      );
+        and(
+          eq(programs.id, programId),
+          eq(programs.tenantId, tenant.id),
+          isNull(programs.deletedAt)
+        )
+      )
+      .limit(1);
 
-    return noContent(c);
+    if (!existing) {
+      throw new NotFoundError('Program', programId);
+    }
+
+    if (existing.status === 'active') {
+      throw new BadRequestError('Program is already published');
+    }
+
+    const [updated] = await db
+      .update(programs)
+      .set({ status: 'active', updatedAt: new Date() })
+      .where(eq(programs.id, programId))
+      .returning();
+
+    return c.json({ data: updated });
   }
 );
 
-// ============================================================================
-// MODULES
-// ============================================================================
+/**
+ * POST /api/tenants/:tenantId/programs/:programId/duplicate
+ * Duplicate a program
+ *
+ * Note: Can duplicate any program the tenant has access to.
+ * The new program will be owned by this tenant.
+ */
+programsRoutes.post(
+  '/:programId/duplicate',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_CREATE),
+  async (c) => {
+    const tenant = c.get('tenant')!;
+    const user = c.get('user');
+    const { programId } = c.req.param();
+
+    // Access condition: can duplicate any program the tenant can view
+    const accessConditions = [
+      eq(programs.tenantId, tenant.id),
+      sql`${tenant.id} = ANY(${programs.allowedTenantIds})`,
+    ];
+
+    if (tenant.agencyId) {
+      accessConditions.push(
+        and(
+          eq(programs.agencyId, tenant.agencyId),
+          isNull(programs.tenantId)
+        )!
+      );
+    }
+
+    const accessCondition = or(...accessConditions);
+
+    const [existing] = await db
+      .select()
+      .from(programs)
+      .where(
+        and(
+          eq(programs.id, programId),
+          accessCondition,
+          isNull(programs.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundError('Program', programId);
+    }
+
+    // Tenant must belong to an agency to duplicate programs
+    if (!tenant.agencyId) {
+      throw new ForbiddenError('Tenant must belong to an agency to duplicate programs');
+    }
+
+    // Create new program - owned by this tenant
+    const [newProgram] = await db
+      .insert(programs)
+      .values({
+        agencyId: tenant.agencyId,
+        tenantId: tenant.id, // New program is tenant-specific
+        allowedTenantIds: [],
+        name: `${existing.name} (Copy)`,
+        internalName: existing.internalName
+          ? `${existing.internalName} (Copy)`
+          : null,
+        description: existing.description,
+        type: existing.type,
+        coverImage: existing.coverImage,
+        timezone: existing.timezone,
+        config: existing.config,
+        status: 'draft',
+        createdBy: user.id,
+      })
+      .returning();
+
+    // Copy modules
+    const originalModules = await db
+      .select()
+      .from(modules)
+      .where(eq(modules.programId, programId))
+      .orderBy(asc(modules.order));
+
+    const moduleIdMap = new Map<string, string>();
+
+    for (const mod of originalModules) {
+      const [newModule] = await db
+        .insert(modules)
+        .values({
+          programId: newProgram.id,
+          parentModuleId: mod.parentModuleId
+            ? moduleIdMap.get(mod.parentModuleId)
+            : null,
+          title: mod.title,
+          description: mod.description,
+          order: mod.order,
+          depth: mod.depth,
+          dripType: mod.dripType,
+          dripValue: mod.dripValue,
+          dripDate: mod.dripDate,
+          status: 'draft',
+        })
+        .returning();
+
+      moduleIdMap.set(mod.id, newModule.id);
+
+      // Copy lessons for this module
+      const moduleLessons = await db
+        .select()
+        .from(lessons)
+        .where(eq(lessons.moduleId, mod.id))
+        .orderBy(asc(lessons.order));
+
+      for (const lesson of moduleLessons) {
+        await db.insert(lessons).values({
+          moduleId: newModule.id,
+          title: lesson.title,
+          contentType: lesson.contentType,
+          content: lesson.content,
+          order: lesson.order,
+          durationMinutes: lesson.durationMinutes,
+          points: lesson.points,
+          dripType: lesson.dripType,
+          dripValue: lesson.dripValue,
+          dripDate: lesson.dripDate,
+          visibleTo: lesson.visibleTo,
+          status: 'draft',
+        });
+      }
+    }
+
+    return c.json({ data: newProgram }, 201);
+  }
+);
+
+// ============================================
+// MODULE ROUTES
+// ============================================
 
 /**
- * POST /tenants/:tenantId/programs/:programId/modules
+ * POST /api/tenants/:tenantId/programs/:programId/modules
  * Create a module
+ *
+ * Note: Only programs where tenantId matches can have modules created by tenant.
  */
-programsRouter.post(
-  "/:programId/modules",
-  authMiddleware,
-  tenantMiddleware,
-  requireTenantAdmin,
-  zValidator("json", createModuleSchema),
+programsRoutes.post(
+  '/:programId/modules',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', createModuleSchema),
   async (c) => {
-    const tenantCtx = c.get("tenant")!;
-    const programId = c.req.param("programId");
-    const body = c.req.valid("json");
+    const tenant = c.get('tenant')!;
+    const { programId } = c.req.param();
+    const body = c.req.valid('json');
 
-    // Verify program exists
-    const program = await db.query.programs.findFirst({
-      where: and(
-        eq(programs.id, programId),
-        eq(programs.tenantId, tenantCtx.id)
-      ),
-    });
+    // Verify program exists and is owned by this tenant
+    const [program] = await db
+      .select()
+      .from(programs)
+      .where(
+        and(
+          eq(programs.id, programId),
+          eq(programs.tenantId, tenant.id),
+          isNull(programs.deletedAt)
+        )
+      )
+      .limit(1);
 
     if (!program) {
-      throw new HTTPException(404, { message: "Program not found" });
+      throw new NotFoundError('Program', programId);
     }
 
-    // Get next order index if not provided
-    let orderIndex = body.orderIndex;
-    if (orderIndex === undefined) {
+    // Get max order if not provided
+    let order = body.order;
+    if (order === undefined) {
       const [{ maxOrder }] = await db
-        .select({ maxOrder: sql<number>`COALESCE(MAX(order_index), -1)` })
+        .select({ maxOrder: sql<number>`coalesce(max(${modules.order}), -1)` })
         .from(modules)
         .where(eq(modules.programId, programId));
-      orderIndex = Number(maxOrder) + 1;
+      order = Number(maxOrder) + 1;
+    }
+
+    // Determine depth
+    let depth = 0;
+    if (body.parentModuleId) {
+      const [parent] = await db
+        .select()
+        .from(modules)
+        .where(eq(modules.id, body.parentModuleId))
+        .limit(1);
+      if (!parent) {
+        throw new NotFoundError('Parent module', body.parentModuleId);
+      }
+      depth = parent.depth + 1;
+      if (depth > 1) {
+        throw new BadRequestError('Maximum nesting depth is 2 levels');
+      }
     }
 
     const [module] = await db
       .insert(modules)
       .values({
         programId,
-        name: body.name,
+        parentModuleId: body.parentModuleId,
+        title: body.title,
         description: body.description,
-        orderIndex,
+        order,
+        depth,
+        dripType: body.dripType,
+        dripValue: body.dripValue,
+        dripDate: body.dripDate ? new Date(body.dripDate) : null,
       })
       .returning();
 
-    return success(c, module, 201);
+    return c.json({ data: module }, 201);
   }
 );
 
-// ============================================================================
-// LESSONS
-// ============================================================================
-
 /**
- * POST /tenants/:tenantId/programs/:programId/modules/:moduleId/lessons
- * Create a lesson
+ * PUT /api/tenants/:tenantId/programs/:programId/modules/:moduleId
+ * Update a module
  */
-programsRouter.post(
-  "/:programId/modules/:moduleId/lessons",
-  authMiddleware,
-  tenantMiddleware,
-  requireTenantAdmin,
-  zValidator("json", createLessonSchema),
+programsRoutes.put(
+  '/:programId/modules/:moduleId',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', updateModuleSchema),
   async (c) => {
-    const tenantCtx = c.get("tenant")!;
-    const programId = c.req.param("programId");
-    const moduleId = c.req.param("moduleId");
-    const body = c.req.valid("json");
+    const tenant = c.get('tenant')!;
+    const { programId, moduleId } = c.req.param();
+    const body = c.req.valid('json');
 
     // Verify module exists and belongs to program
-    const module = await db.query.modules.findFirst({
-      where: eq(modules.id, moduleId),
-      with: { program: true },
-    });
+    const [existing] = await db
+      .select()
+      .from(modules)
+      .innerJoin(programs, eq(modules.programId, programs.id))
+      .where(
+        and(
+          eq(modules.id, moduleId),
+          eq(modules.programId, programId),
+          eq(programs.tenantId, tenant.id)
+        )
+      )
+      .limit(1);
 
-    if (!module || module.program.tenantId !== tenantCtx.id) {
-      throw new HTTPException(404, { message: "Module not found" });
+    if (!existing) {
+      throw new NotFoundError('Module', moduleId);
     }
 
-    // Get next order index if not provided
-    let orderIndex = body.orderIndex;
-    if (orderIndex === undefined) {
+    const [updated] = await db
+      .update(modules)
+      .set({
+        ...body,
+        dripDate: body.dripDate ? new Date(body.dripDate) : undefined,
+        updatedAt: new Date(),
+      })
+      .where(eq(modules.id, moduleId))
+      .returning();
+
+    return c.json({ data: updated });
+  }
+);
+
+/**
+ * DELETE /api/tenants/:tenantId/programs/:programId/modules/:moduleId
+ * Delete a module and its lessons
+ */
+programsRoutes.delete(
+  '/:programId/modules/:moduleId',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  async (c) => {
+    const tenant = c.get('tenant')!;
+    const { programId, moduleId } = c.req.param();
+
+    // Verify module exists
+    const [existing] = await db
+      .select()
+      .from(modules)
+      .innerJoin(programs, eq(modules.programId, programs.id))
+      .where(
+        and(
+          eq(modules.id, moduleId),
+          eq(modules.programId, programId),
+          eq(programs.tenantId, tenant.id)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundError('Module', moduleId);
+    }
+
+    // Delete module (lessons cascade due to FK)
+    await db.delete(modules).where(eq(modules.id, moduleId));
+
+    return c.json({ data: { success: true } });
+  }
+);
+
+/**
+ * PUT /api/tenants/:tenantId/programs/:programId/modules/reorder
+ * Reorder modules
+ */
+programsRoutes.put(
+  '/:programId/modules/reorder',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', reorderSchema),
+  async (c) => {
+    const { programId } = c.req.param();
+    const { items } = c.req.valid('json');
+
+    for (const item of items) {
+      await db
+        .update(modules)
+        .set({ order: item.order, updatedAt: new Date() })
+        .where(and(eq(modules.id, item.id), eq(modules.programId, programId)));
+    }
+
+    return c.json({ data: { success: true } });
+  }
+);
+
+// ============================================
+// LESSON ROUTES
+// ============================================
+
+/**
+ * POST /api/tenants/:tenantId/programs/:programId/modules/:moduleId/lessons
+ * Create a lesson
+ */
+programsRoutes.post(
+  '/:programId/modules/:moduleId/lessons',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', createLessonSchema),
+  async (c) => {
+    const tenant = c.get('tenant')!;
+    const { programId, moduleId } = c.req.param();
+    const body = c.req.valid('json');
+
+    // Verify module exists
+    const [existing] = await db
+      .select()
+      .from(modules)
+      .innerJoin(programs, eq(modules.programId, programs.id))
+      .where(
+        and(
+          eq(modules.id, moduleId),
+          eq(modules.programId, programId),
+          eq(programs.tenantId, tenant.id)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundError('Module', moduleId);
+    }
+
+    // Get max order if not provided
+    let order = body.order;
+    if (order === undefined) {
       const [{ maxOrder }] = await db
-        .select({ maxOrder: sql<number>`COALESCE(MAX(order_index), -1)` })
+        .select({ maxOrder: sql<number>`coalesce(max(${lessons.order}), -1)` })
         .from(lessons)
         .where(eq(lessons.moduleId, moduleId));
-      orderIndex = Number(maxOrder) + 1;
+      order = Number(maxOrder) + 1;
     }
 
     const [lesson] = await db
@@ -352,423 +948,127 @@ programsRouter.post(
       .values({
         moduleId,
         title: body.title,
-        description: body.description,
-        type: body.type,
+        contentType: body.contentType,
         content: body.content || {},
-        duration: body.duration,
-        orderIndex,
+        order,
+        durationMinutes: body.durationMinutes,
+        points: body.points,
+        dripType: body.dripType,
+        dripValue: body.dripValue,
+        dripDate: body.dripDate ? new Date(body.dripDate) : null,
+        visibleTo: body.visibleTo || { learner: true, mentor: true, facilitator: true },
+        approvalRequired: body.approvalRequired,
       })
       .returning();
 
-    return success(c, lesson, 201);
-  }
-);
-
-// ============================================================================
-// ENROLLMENTS
-// ============================================================================
-
-/**
- * GET /tenants/:tenantId/programs/:programId/enrollments
- * List program enrollments
- */
-programsRouter.get(
-  "/:programId/enrollments",
-  authMiddleware,
-  tenantMiddleware,
-  zValidator("query", listQuerySchema),
-  async (c) => {
-    const tenantCtx = c.get("tenant")!;
-    const programId = c.req.param("programId");
-    const query = c.req.valid("query");
-
-    const enrollmentList = await db.query.enrollments.findMany({
-      where: eq(enrollments.programId, programId),
-      with: {
-        user: true,
-      },
-      limit: query.perPage,
-      offset: (query.page - 1) * query.perPage,
-    });
-
-    const [{ count }] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(enrollments)
-      .where(eq(enrollments.programId, programId));
-
-    return paginated(
-      c,
-      enrollmentList.map((e) => ({
-        id: e.id,
-        userId: e.userId,
-        email: e.user.email,
-        firstName: e.user.firstName,
-        lastName: e.user.lastName,
-        avatarUrl: e.user.avatarUrl,
-        organization: e.user.organization,
-        title: e.user.title,
-        role: e.role,
-        status: e.status,
-        progress: e.progress,
-        enrolledAt: e.enrolledAt,
-      })),
-      {
-        page: query.page,
-        perPage: query.perPage,
-        total: Number(count),
-      }
-    );
+    return c.json({ data: lesson }, 201);
   }
 );
 
 /**
- * GET /tenants/:tenantId/programs/:programId/enrollments/mentors
- * List all mentors in the program
+ * PUT /api/tenants/:tenantId/programs/:programId/modules/:moduleId/lessons/:lessonId
+ * Update a lesson
  */
-programsRouter.get(
-  "/:programId/enrollments/mentors",
-  authMiddleware,
-  tenantMiddleware,
+programsRoutes.put(
+  '/:programId/modules/:moduleId/lessons/:lessonId',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', updateLessonSchema),
   async (c) => {
-    const programId = c.req.param("programId");
+    const tenant = c.get('tenant')!;
+    const { programId, moduleId, lessonId } = c.req.param();
+    const body = c.req.valid('json');
 
-    const mentors = await db.query.enrollments.findMany({
-      where: and(
-        eq(enrollments.programId, programId),
-        eq(enrollments.role, "mentor")
-      ),
-      with: {
-        user: true,
-      },
-    });
-
-    return success(
-      c,
-      mentors.map((e) => ({
-        id: e.id,
-        enrollmentId: e.id,
-        userId: e.userId,
-        email: e.user.email,
-        firstName: e.user.firstName,
-        lastName: e.user.lastName,
-        avatarUrl: e.user.avatarUrl,
-      }))
-    );
-  }
-);
-
-/**
- * GET /tenants/:tenantId/programs/:programId/enrollments/learners
- * List all learners in the program
- */
-programsRouter.get(
-  "/:programId/enrollments/learners",
-  authMiddleware,
-  tenantMiddleware,
-  async (c) => {
-    const programId = c.req.param("programId");
-
-    const learners = await db.query.enrollments.findMany({
-      where: and(
-        eq(enrollments.programId, programId),
-        eq(enrollments.role, "learner")
-      ),
-      with: {
-        user: true,
-      },
-    });
-
-    return success(
-      c,
-      learners.map((e) => ({
-        id: e.id,
-        enrollmentId: e.id,
-        userId: e.userId,
-        email: e.user.email,
-        firstName: e.user.firstName,
-        lastName: e.user.lastName,
-        avatarUrl: e.user.avatarUrl,
-        progress: e.progress,
-      }))
-    );
-  }
-);
-
-/**
- * POST /tenants/:tenantId/programs/:programId/enrollments/:enrollmentId/mentorships
- * Add mentor-learner relationships for an enrollment
- */
-programsRouter.post(
-  "/:programId/enrollments/:enrollmentId/mentorships",
-  authMiddleware,
-  tenantMiddleware,
-  requireTenantAdmin,
-  zValidator(
-    "json",
-    z.object({
-      mentorEnrollmentIds: z.array(z.string().uuid()).optional(),
-      learnerEnrollmentIds: z.array(z.string().uuid()).optional(),
-    })
-  ),
-  async (c) => {
-    const enrollmentId = c.req.param("enrollmentId");
-    const body = c.req.valid("json");
-
-    const enrollment = await db.query.enrollments.findFirst({
-      where: eq(enrollments.id, enrollmentId),
-    });
-
-    if (!enrollment) {
-      throw new HTTPException(404, { message: "Enrollment not found" });
-    }
-
-    const created = [];
-
-    // If this is a learner, add mentors
-    if (enrollment.role === "learner" && body.mentorEnrollmentIds?.length) {
-      const mentorships = await db
-        .insert(enrollmentMentorships)
-        .values(
-          body.mentorEnrollmentIds.map((mentorEnrollmentId) => ({
-            learnerEnrollmentId: enrollmentId,
-            mentorEnrollmentId,
-          }))
+    // Verify lesson exists
+    const [existing] = await db
+      .select()
+      .from(lessons)
+      .innerJoin(modules, eq(lessons.moduleId, modules.id))
+      .innerJoin(programs, eq(modules.programId, programs.id))
+      .where(
+        and(
+          eq(lessons.id, lessonId),
+          eq(lessons.moduleId, moduleId),
+          eq(programs.tenantId, tenant.id)
         )
-        .returning();
-      created.push(...mentorships);
+      )
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundError('Lesson', lessonId);
     }
 
-    // If this is a mentor, add learners
-    if (enrollment.role === "mentor" && body.learnerEnrollmentIds?.length) {
-      const mentorships = await db
-        .insert(enrollmentMentorships)
-        .values(
-          body.learnerEnrollmentIds.map((learnerEnrollmentId) => ({
-            learnerEnrollmentId,
-            mentorEnrollmentId: enrollmentId,
-          }))
-        )
-        .returning();
-      created.push(...mentorships);
-    }
-
-    return success(c, created, 201);
-  }
-);
-
-/**
- * DELETE /tenants/:tenantId/programs/:programId/enrollments/:enrollmentId/mentorships/:mentorshipId
- * Remove a mentor-learner relationship
- */
-programsRouter.delete(
-  "/:programId/enrollments/:enrollmentId/mentorships/:mentorshipId",
-  authMiddleware,
-  tenantMiddleware,
-  requireTenantAdmin,
-  async (c) => {
-    const mentorshipId = c.req.param("mentorshipId");
-
-    await db
-      .delete(enrollmentMentorships)
-      .where(eq(enrollmentMentorships.id, mentorshipId));
-
-    return noContent(c);
-  }
-);
-
-/**
- * POST /tenants/:tenantId/programs/:programId/enrollments
- * Enroll a user in program (admin only)
- * Supports both existing users (by userId) and new users (by email + details)
- */
-programsRouter.post(
-  "/:programId/enrollments",
-  authMiddleware,
-  tenantMiddleware,
-  requireTenantAdmin,
-  zValidator("json", enrollUserSchema),
-  async (c) => {
-    const tenantCtx = c.get("tenant")!;
-    const programId = c.req.param("programId");
-    const body = c.req.valid("json");
-
-    let userId = body.userId;
-
-    // If no userId provided, create or find user by email
-    if (!userId && body.email) {
-      // Check if user exists
-      let user = await db.query.users.findFirst({
-        where: eq(users.email, body.email),
-      });
-
-      if (user) {
-        userId = user.id;
-        // Update user info if provided
-        if (body.firstName || body.lastName || body.phone || body.title || body.organization || body.notes) {
-          await db
-            .update(users)
-            .set({
-              ...(body.firstName && { firstName: body.firstName }),
-              ...(body.lastName && { lastName: body.lastName }),
-              ...(body.phone && { phone: body.phone }),
-              ...(body.title && { title: body.title }),
-              ...(body.organization && { organization: body.organization }),
-              ...(body.notes && { notes: body.notes }),
-              updatedAt: new Date(),
-            })
-            .where(eq(users.id, user.id));
-        }
-      } else {
-        // Create new user
-        const [newUser] = await db
-          .insert(users)
-          .values({
-            email: body.email,
-            firstName: body.firstName || "",
-            lastName: body.lastName || "",
-            phone: body.phone,
-            title: body.title,
-            organization: body.organization,
-            notes: body.notes,
-          })
-          .returning();
-        userId = newUser.id;
-
-        // Add user as tenant member
-        await db.insert(tenantMembers).values({
-          tenantId: tenantCtx.id,
-          userId: newUser.id,
-          role: "user",
-        });
-      }
-    }
-
-    if (!userId) {
-      throw new HTTPException(400, {
-        message: "Either userId or email must be provided",
-      });
-    }
-
-    // Check if already enrolled
-    const existing = await db.query.enrollments.findFirst({
-      where: and(
-        eq(enrollments.programId, programId),
-        eq(enrollments.userId, userId)
-      ),
-    });
-
-    if (existing) {
-      throw new HTTPException(409, {
-        message: "User is already enrolled in this program",
-      });
-    }
-
-    // Create enrollment
-    const [enrollment] = await db
-      .insert(enrollments)
-      .values({
-        programId,
-        userId,
-        role: body.role,
-        status: "active",
-      })
-      .returning();
-
-    // Handle mentor/learner assignments
-    if (body.role === "learner" && body.mentorEnrollmentIds?.length) {
-      // Assign mentors to this learner
-      await db.insert(enrollmentMentorships).values(
-        body.mentorEnrollmentIds.map((mentorEnrollmentId) => ({
-          learnerEnrollmentId: enrollment.id,
-          mentorEnrollmentId,
-        }))
-      );
-    }
-
-    if (body.role === "mentor" && body.learnerEnrollmentIds?.length) {
-      // Assign this mentor to learners
-      await db.insert(enrollmentMentorships).values(
-        body.learnerEnrollmentIds.map((learnerEnrollmentId) => ({
-          learnerEnrollmentId,
-          mentorEnrollmentId: enrollment.id,
-        }))
-      );
-    }
-
-    // Update program enrollment count
-    await db
-      .update(programs)
+    const [updated] = await db
+      .update(lessons)
       .set({
-        enrollmentCount: sql`enrollment_count + 1`,
+        ...body,
+        dripDate: body.dripDate ? new Date(body.dripDate) : undefined,
+        updatedAt: new Date(),
       })
-      .where(eq(programs.id, programId));
+      .where(eq(lessons.id, lessonId))
+      .returning();
 
-    // Return enrollment with user info
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, userId),
-    });
-
-    return success(
-      c,
-      {
-        ...enrollment,
-        email: user?.email,
-        firstName: user?.firstName,
-        lastName: user?.lastName,
-      },
-      201
-    );
+    return c.json({ data: updated });
   }
 );
 
 /**
- * POST /tenants/:tenantId/programs/:programId/lessons/:lessonId/complete
- * Mark lesson as complete (for enrolled user)
+ * DELETE /api/tenants/:tenantId/programs/:programId/modules/:moduleId/lessons/:lessonId
+ * Delete a lesson
  */
-programsRouter.post(
-  "/:programId/lessons/:lessonId/complete",
-  authMiddleware,
-  tenantMiddleware,
+programsRoutes.delete(
+  '/:programId/modules/:moduleId/lessons/:lessonId',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
   async (c) => {
-    const user = c.get("user");
-    const programId = c.req.param("programId");
-    const lessonId = c.req.param("lessonId");
+    const tenant = c.get('tenant')!;
+    const { programId, moduleId, lessonId } = c.req.param();
 
-    // Verify enrollment
-    const enrollment = await db.query.enrollments.findFirst({
-      where: and(
-        eq(enrollments.programId, programId),
-        eq(enrollments.userId, user.id)
-      ),
-    });
+    // Verify lesson exists
+    const [existing] = await db
+      .select()
+      .from(lessons)
+      .innerJoin(modules, eq(lessons.moduleId, modules.id))
+      .innerJoin(programs, eq(modules.programId, programs.id))
+      .where(
+        and(
+          eq(lessons.id, lessonId),
+          eq(lessons.moduleId, moduleId),
+          eq(programs.tenantId, tenant.id)
+        )
+      )
+      .limit(1);
 
-    if (!enrollment) {
-      throw new HTTPException(403, {
-        message: "You are not enrolled in this program",
-      });
+    if (!existing) {
+      throw new NotFoundError('Lesson', lessonId);
     }
 
-    // Update or create progress
-    const [progress] = await db
-      .insert(lessonProgress)
-      .values({
-        enrollmentId: enrollment.id,
-        lessonId,
-        status: "completed",
-        completedAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: [lessonProgress.enrollmentId, lessonProgress.lessonId],
-        set: {
-          status: "completed",
-          completedAt: new Date(),
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
+    await db.delete(lessons).where(eq(lessons.id, lessonId));
 
-    return success(c, progress);
+    return c.json({ data: { success: true } });
   }
 );
 
-export { programsRouter };
+/**
+ * PUT /api/tenants/:tenantId/programs/:programId/modules/:moduleId/lessons/reorder
+ * Reorder lessons within a module
+ */
+programsRoutes.put(
+  '/:programId/modules/:moduleId/lessons/reorder',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', reorderSchema),
+  async (c) => {
+    const { moduleId } = c.req.param();
+    const { items } = c.req.valid('json');
+
+    for (const item of items) {
+      await db
+        .update(lessons)
+        .set({ order: item.order, updatedAt: new Date() })
+        .where(and(eq(lessons.id, item.id), eq(lessons.moduleId, moduleId)));
+    }
+
+    return c.json({ data: { success: true } });
+  }
+);

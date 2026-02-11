@@ -1,190 +1,117 @@
-import { createMiddleware } from "hono/factory";
-import { HTTPException } from "hono/http-exception";
-import { getFirebaseAuth } from "../lib/firebase";
-import { db, eq, users } from "@tr/db";
-import type { AppVariables, AuthUser, CurrentUser } from "../types";
-import { env } from "../lib/env";
+import { createMiddleware } from 'hono/factory';
+import { eq, and, isNull, gt } from 'drizzle-orm';
+import crypto from 'node:crypto';
+import { jwtService } from '../lib/jwt.js';
+import { UnauthorizedError } from '../lib/errors.js';
+import { db, schema } from '@tr/db';
+import type { Variables } from '../types/context.js';
+
+const { users, userRoles, impersonationSessions } = schema;
 
 /**
- * Check if token is a mock token and parse it
- * Mock tokens have format: mock-token::uid::email
+ * Auth middleware - verifies JWT access token and sets user context.
+ * When an X-Impersonation-Token header is present and valid,
+ * swaps the user context to the target user.
  */
-function parseMockToken(token: string): { uid: string; email: string } | null {
-  if (!token.startsWith("mock-token::")) return null;
-  const parts = token.split("::");
-  if (parts.length !== 3) return null;
-  return { uid: parts[1], email: parts[2] };
-}
+export function authMiddleware() {
+  return createMiddleware<{ Variables: Variables }>(async (c, next) => {
+    // Get token from Authorization header
+    const authHeader = c.req.header('Authorization');
 
-/**
- * Authentication middleware - verifies Firebase token or mock token
- * Sets authUser and user in context
- */
-export const authMiddleware = createMiddleware<{ Variables: AppVariables }>(
-  async (c, next) => {
-    const authHeader = c.req.header("Authorization");
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      throw new HTTPException(401, {
-        message: "Missing or invalid authorization header",
-      });
+    if (!authHeader?.startsWith('Bearer ')) {
+      throw new UnauthorizedError('Missing authorization header');
     }
 
-    const token = authHeader.substring(7);
+    const token = authHeader.slice(7);
 
-    try {
-      // Check for mock token (only in development)
-      const mockData = parseMockToken(token);
+    // Verify token
+    const payload = await jwtService.verifyAccessToken(token);
 
-      if (mockData && env.NODE_ENV === "development") {
-        // Handle mock authentication
-        const authUser: AuthUser = {
-          uid: mockData.uid,
-          email: mockData.email,
-          emailVerified: true,
-        };
+    if (!payload) {
+      throw new UnauthorizedError('Invalid or expired token');
+    }
 
-        c.set("authUser", authUser);
+    // Check for impersonation token
+    const impersonationToken = c.req.header('X-Impersonation-Token');
 
-        // For mock auth, look up user by email instead of authProviderId
-        let dbUser = await db.query.users.findFirst({
-          where: eq(users.email, mockData.email),
-        });
+    if (impersonationToken) {
+      const tokenHash = crypto
+        .createHash('sha256')
+        .update(impersonationToken)
+        .digest('hex');
 
-        // If no user found by email, try by authProviderId (for seeded users)
-        if (!dbUser) {
-          dbUser = await db.query.users.findFirst({
-            where: eq(users.authProviderId, mockData.uid),
+      // Find active impersonation session
+      const [session] = await db
+        .select({
+          targetUserId: impersonationSessions.targetUserId,
+          adminUserId: impersonationSessions.adminUserId,
+        })
+        .from(impersonationSessions)
+        .where(
+          and(
+            eq(impersonationSessions.tokenHash, tokenHash),
+            eq(impersonationSessions.adminUserId, payload.sub),
+            isNull(impersonationSessions.endedAt),
+            gt(impersonationSessions.expiresAt, new Date())
+          )
+        )
+        .limit(1);
+
+      if (session) {
+        // Load target user's full context
+        const [targetUser] = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, session.targetUserId))
+          .limit(1);
+
+        if (targetUser) {
+          // Get target user's role
+          const [role] = await db
+            .select({
+              slug: userRoles.slug,
+              level: userRoles.level,
+            })
+            .from(userRoles)
+            .where(eq(userRoles.id, targetUser.roleId))
+            .limit(1);
+
+          c.set('user', {
+            id: targetUser.id,
+            sessionId: payload.sid,
+            agencyId: targetUser.agencyId ?? undefined,
+            tenantId: targetUser.tenantId ?? undefined,
+            email: targetUser.email,
+            roleSlug: role?.slug ?? 'learner',
+            roleLevel: role?.level ?? 10,
+            permissions: payload.permissions, // Keep admin permissions for safety
+            isImpersonating: true,
+            impersonatedBy: {
+              userId: session.adminUserId,
+              sessionId: payload.sid,
+            },
           });
+
+          await next();
+          return;
         }
-
-        if (!dbUser) {
-          throw new HTTPException(401, {
-            message: "User not found in database. Try logging in with a seeded user email (e.g., admin@acme.com)",
-          });
-        }
-
-        if (!dbUser.isActive) {
-          throw new HTTPException(403, {
-            message: "User account is deactivated",
-          });
-        }
-
-        const currentUser: CurrentUser = {
-          id: dbUser.id,
-          authProviderId: dbUser.authProviderId,
-          email: dbUser.email,
-          firstName: dbUser.firstName,
-          lastName: dbUser.lastName,
-          avatarUrl: dbUser.avatarUrl,
-        };
-
-        c.set("user", currentUser);
-        await next();
-        return;
       }
-
-      // Real Firebase authentication
-      const auth = getFirebaseAuth();
-      const decodedToken = await auth.verifyIdToken(token);
-
-      const authUser: AuthUser = {
-        uid: decodedToken.uid,
-        email: decodedToken.email || "",
-        emailVerified: decodedToken.email_verified || false,
-      };
-
-      c.set("authUser", authUser);
-
-      // Fetch user from database
-      const dbUser = await db.query.users.findFirst({
-        where: eq(users.authProviderId, decodedToken.uid),
-      });
-
-      if (!dbUser) {
-        throw new HTTPException(401, {
-          message: "User not found in database",
-        });
-      }
-
-      if (!dbUser.isActive) {
-        throw new HTTPException(403, {
-          message: "User account is deactivated",
-        });
-      }
-
-      const currentUser: CurrentUser = {
-        id: dbUser.id,
-        authProviderId: dbUser.authProviderId,
-        email: dbUser.email,
-        firstName: dbUser.firstName,
-        lastName: dbUser.lastName,
-        avatarUrl: dbUser.avatarUrl,
-      };
-
-      c.set("user", currentUser);
-
-      await next();
-    } catch (error) {
-      if (error instanceof HTTPException) {
-        throw error;
-      }
-
-      console.error("Auth error:", error);
-      throw new HTTPException(401, {
-        message: "Invalid or expired token",
-      });
-    }
-  }
-);
-
-/**
- * Optional auth middleware - doesn't fail if no token
- * Useful for public endpoints that behave differently for authenticated users
- */
-export const optionalAuthMiddleware = createMiddleware<{ Variables: AppVariables }>(
-  async (c, next) => {
-    const authHeader = c.req.header("Authorization");
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      await next();
-      return;
     }
 
-    const token = authHeader.substring(7);
-
-    try {
-      const auth = getFirebaseAuth();
-      const decodedToken = await auth.verifyIdToken(token);
-
-      const authUser: AuthUser = {
-        uid: decodedToken.uid,
-        email: decodedToken.email || "",
-        emailVerified: decodedToken.email_verified || false,
-      };
-
-      c.set("authUser", authUser);
-
-      const dbUser = await db.query.users.findFirst({
-        where: eq(users.authProviderId, decodedToken.uid),
-      });
-
-      if (dbUser && dbUser.isActive) {
-        const currentUser: CurrentUser = {
-          id: dbUser.id,
-          authProviderId: dbUser.authProviderId,
-          email: dbUser.email,
-          firstName: dbUser.firstName,
-          lastName: dbUser.lastName,
-          avatarUrl: dbUser.avatarUrl,
-        };
-
-        c.set("user", currentUser);
-      }
-    } catch {
-      // Silently ignore auth errors for optional auth
-    }
+    // Default: use admin's own context
+    c.set('user', {
+      id: payload.sub,
+      sessionId: payload.sid,
+      agencyId: payload.agencyId,
+      tenantId: payload.tenantId,
+      email: payload.email,
+      roleSlug: payload.roleSlug,
+      roleLevel: payload.roleLevel,
+      permissions: payload.permissions,
+      isImpersonating: !!payload.impersonatedBy,
+      impersonatedBy: payload.impersonatedBy,
+    });
 
     await next();
-  }
-);
+  });
+}

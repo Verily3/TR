@@ -1,792 +1,877 @@
-import { db } from "./client";
-import {
-  agencies,
-  tenants,
-  users,
-  agencyMembers,
-  tenantMembers,
-  programs,
-  modules,
-  lessons,
-  enrollments,
-  goals,
-  goalMilestones,
-  scorecards,
-  kpis,
-  coachingRelationships,
-  announcements,
-  pricingPlans,
-  assessmentTemplates,
-} from "./schema";
+/**
+ * Database seed script
+ * Creates initial data for development and testing
+ */
+import { drizzle } from 'drizzle-orm/postgres-js';
+import { eq } from 'drizzle-orm';
+import postgres from 'postgres';
+import { hash } from 'argon2';
+import * as schema from './schema/index.js';
+import { SYSTEM_ROLES, type SystemRoleDefinition } from '@tr/shared';
+
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  throw new Error('DATABASE_URL environment variable is required');
+}
+
+const client = postgres(connectionString);
+const db = drizzle(client, { schema });
 
 async function seed() {
-  console.log("🌱 Starting database seed...\n");
+  console.log('🌱 Starting database seed...\n');
 
-  // ============================================================================
-  // 0. CLEANUP EXISTING DATA
-  // ============================================================================
-  console.log("Cleaning up existing data...");
-  await db.delete(assessmentTemplates);
-  await db.delete(announcements);
-  await db.delete(coachingRelationships);
-  await db.delete(goalMilestones);
-  await db.delete(goals);
-  await db.delete(kpis);
-  await db.delete(scorecards);
-  await db.delete(enrollments);
-  await db.delete(lessons);
-  await db.delete(modules);
-  await db.delete(programs);
-  await db.delete(tenantMembers);
-  await db.delete(agencyMembers);
-  await db.delete(users);
-  await db.delete(tenants);
-  await db.delete(pricingPlans);
-  await db.delete(agencies);
-  console.log("✓ Cleanup complete\n");
+  // Clear existing data (in reverse order of dependencies)
+  console.log('Clearing existing data...');
+  await db.delete(schema.enrollmentMentorships);
+  await db.delete(schema.lessonProgress);
+  await db.delete(schema.goalReviews);
+  await db.delete(schema.goalResponses);
+  await db.delete(schema.approvalSubmissions);
+  await db.delete(schema.enrollments);
+  await db.delete(schema.lessons);
+  await db.delete(schema.modules);
+  await db.delete(schema.programs);
+  await db.delete(schema.impersonationSessions);
+  await db.delete(schema.sessions);
+  await db.delete(schema.userRoles);
+  await db.delete(schema.roles);
+  await db.delete(schema.users);
+  await db.delete(schema.tenants);
+  await db.delete(schema.agencies);
+  console.log('  ✓ Cleared existing data\n');
 
-  // ============================================================================
-  // 1. CREATE AGENCY
-  // ============================================================================
-  console.log("Creating agency...");
+  // Hash password for all test users
+  const passwordHash = await hash('password123');
+
+  // 1. Create Agency
+  console.log('Creating agency...');
   const [agency] = await db
-    .insert(agencies)
+    .insert(schema.agencies)
     .values({
-      name: "Transformation Partners",
-      slug: "transformation-partners",
-      domain: "transformationpartners.com",
+      name: 'Acme Consulting',
+      slug: 'acme',
+      domain: 'acme.com',
+      subscriptionTier: 'professional',
+      subscriptionStatus: 'active',
       settings: {
-        allowCustomBranding: true,
-        maxTenants: 100,
+        allowClientProgramCreation: false,
+        maxClients: 50,
+        maxUsersPerClient: 100,
+        features: {
+          programs: true,
+          assessments: true,
+          mentoring: true,
+          goals: true,
+          analytics: true,
+        },
       },
     })
     .returning();
-  console.log(`✓ Agency created: ${agency.name} (${agency.id})\n`);
+  console.log(`  ✓ Agency created: ${agency.name} (${agency.id})`);
 
-  // ============================================================================
-  // 2. CREATE PRICING PLANS
-  // ============================================================================
-  console.log("Creating pricing plans...");
-  const [starterPlan] = await db
-    .insert(pricingPlans)
+  // 2. Create System Roles for Agency
+  console.log('\nCreating agency roles...');
+  const agencyRoles: Record<string, typeof schema.roles.$inferSelect> = {};
+
+  for (const [key, roleDef] of Object.entries(SYSTEM_ROLES) as [string, SystemRoleDefinition][]) {
+    if (roleDef.isAgencyRole) {
+      const [role] = await db
+        .insert(schema.roles)
+        .values({
+          agencyId: agency.id,
+          name: roleDef.name,
+          slug: roleDef.slug,
+          description: roleDef.description,
+          level: roleDef.level,
+          isSystem: true,
+          permissions: roleDef.permissions,
+        })
+        .returning();
+      agencyRoles[key] = role;
+      console.log(`  ✓ Role created: ${role.name}`);
+    }
+  }
+
+  // 3. Create Agency Admin User
+  console.log('\nCreating agency admin user...');
+  const [agencyAdmin] = await db
+    .insert(schema.users)
     .values({
       agencyId: agency.id,
-      name: "Starter",
-      description: "Perfect for small teams getting started",
-      basePrice: "49.00",
-      billingInterval: "monthly",
-      includedSeats: 10,
-      pricePerSeat: "5.00",
-      maxUsers: 25,
-      maxPrograms: 5,
-      features: [
-        { name: "Programs", limit: 5 },
-        { name: "Storage", limit: "5GB" },
-        { name: "Support", type: "email" },
-      ],
-      trialDays: 14,
-      displayOrder: 1,
-    })
-    .returning();
-
-  const [proPlan] = await db
-    .insert(pricingPlans)
-    .values({
-      agencyId: agency.id,
-      name: "Professional",
-      description: "For growing organizations",
-      basePrice: "149.00",
-      billingInterval: "monthly",
-      includedSeats: 50,
-      pricePerSeat: "3.00",
-      maxUsers: 200,
-      maxPrograms: 25,
-      features: [
-        { name: "Programs", limit: 25 },
-        { name: "Storage", limit: "50GB" },
-        { name: "Support", type: "priority" },
-        { name: "Custom Branding", included: true },
-        { name: "API Access", included: true },
-      ],
-      trialDays: 14,
-      displayOrder: 2,
-    })
-    .returning();
-  console.log(`✓ Pricing plans created: ${starterPlan.name}, ${proPlan.name}\n`);
-
-  // ============================================================================
-  // 3. CREATE TENANT
-  // ============================================================================
-  console.log("Creating tenant...");
-  const [tenant] = await db
-    .insert(tenants)
-    .values({
-      agencyId: agency.id,
-      name: "Acme Corporation",
-      slug: "acme-corp",
-      settings: {
-        timezone: "America/New_York",
-        dateFormat: "MM/DD/YYYY",
-      },
-    })
-    .returning();
-  console.log(`✓ Tenant created: ${tenant.name} (${tenant.id})\n`);
-
-  // ============================================================================
-  // 4. CREATE USERS
-  // ============================================================================
-  console.log("Creating users...");
-
-  // Admin user
-  const [adminUser] = await db
-    .insert(users)
-    .values({
-      firebaseUid: "admin-firebase-uid-placeholder",
-      email: "admin@acme.com",
-      firstName: "Sarah",
-      lastName: "Johnson",
+      email: 'admin@acme.com',
+      passwordHash,
+      firstName: 'Agency',
+      lastName: 'Admin',
+      title: 'Managing Director',
+      status: 'active',
       emailVerified: true,
-      timezone: "America/New_York",
     })
     .returning();
+  console.log(`  ✓ User created: ${agencyAdmin.email}`);
 
-  // Regular users
-  const [user1] = await db
-    .insert(users)
-    .values({
-      firebaseUid: "user1-firebase-uid-placeholder",
-      email: "john.doe@acme.com",
-      firstName: "John",
-      lastName: "Doe",
-      emailVerified: true,
-      timezone: "America/New_York",
-    })
-    .returning();
-
-  const [user2] = await db
-    .insert(users)
-    .values({
-      firebaseUid: "user2-firebase-uid-placeholder",
-      email: "jane.smith@acme.com",
-      firstName: "Jane",
-      lastName: "Smith",
-      emailVerified: true,
-      timezone: "America/New_York",
-    })
-    .returning();
-
-  const [coach] = await db
-    .insert(users)
-    .values({
-      firebaseUid: "coach-firebase-uid-placeholder",
-      email: "coach@acme.com",
-      firstName: "Michael",
-      lastName: "Chen",
-      emailVerified: true,
-      timezone: "America/New_York",
-    })
-    .returning();
-
-  console.log(`✓ Users created: ${adminUser.email}, ${user1.email}, ${user2.email}, ${coach.email}\n`);
-
-  // ============================================================================
-  // 5. CREATE MEMBERSHIPS
-  // ============================================================================
-  console.log("Creating memberships...");
-
-  // Agency membership (admin)
-  await db.insert(agencyMembers).values({
-    agencyId: agency.id,
-    userId: adminUser.id,
-    role: "owner",
+  // Assign agency owner role
+  await db.insert(schema.userRoles).values({
+    userId: agencyAdmin.id,
+    roleId: agencyRoles.AGENCY_OWNER.id,
   });
+  console.log(`  ✓ Assigned role: Agency Owner`);
 
-  // Tenant memberships
-  await db.insert(tenantMembers).values([
-    { tenantId: tenant.id, userId: adminUser.id, role: "admin" },
-    { tenantId: tenant.id, userId: user1.id, role: "user" },
-    { tenantId: tenant.id, userId: user2.id, role: "user" },
-    { tenantId: tenant.id, userId: coach.id, role: "admin" },
-  ]);
-  console.log("✓ Memberships created\n");
+  // 4. Create Tenant (Client)
+  console.log('\nCreating tenant...');
+  const [tenant] = await db
+    .insert(schema.tenants)
+    .values({
+      agencyId: agency.id,
+      name: 'TechCorp Industries',
+      slug: 'techcorp',
+      domain: 'techcorp.com',
+      industry: 'Technology',
+      status: 'active',
+      usersLimit: 100,
+      settings: {
+        timezone: 'America/New_York',
+        canCreatePrograms: false,
+        features: {
+          programs: true,
+          assessments: true,
+          mentoring: true,
+          goals: true,
+          analytics: true,
+          scorecard: true,
+          planning: true,
+        },
+      },
+    })
+    .returning();
+  console.log(`  ✓ Tenant created: ${tenant.name} (${tenant.id})`);
 
-  // ============================================================================
-  // 6. CREATE PROGRAM
-  // ============================================================================
-  console.log("Creating program...");
-  const [program] = await db
-    .insert(programs)
+  // 5. Create Tenant Roles
+  console.log('\nCreating tenant roles...');
+  const tenantRoles: Record<string, typeof schema.roles.$inferSelect> = {};
+
+  for (const [key, roleDef] of Object.entries(SYSTEM_ROLES) as [string, SystemRoleDefinition][]) {
+    if (!roleDef.isAgencyRole) {
+      const [role] = await db
+        .insert(schema.roles)
+        .values({
+          tenantId: tenant.id,
+          name: roleDef.name,
+          slug: roleDef.slug,
+          description: roleDef.description,
+          level: roleDef.level,
+          isSystem: true,
+          permissions: roleDef.permissions,
+        })
+        .returning();
+      tenantRoles[key] = role;
+      console.log(`  ✓ Role created: ${role.name}`);
+    }
+  }
+
+  // 6. Create Tenant Admin
+  console.log('\nCreating tenant admin...');
+  const [tenantAdmin] = await db
+    .insert(schema.users)
     .values({
       tenantId: tenant.id,
-      name: "Leadership Excellence Program",
-      description: "A comprehensive 12-week program designed to develop essential leadership skills for emerging leaders.",
-      type: "cohort",
-      status: "published",
-      scheduleType: "fixed",
-      createdById: adminUser.id,
-      settings: {
-        allowSelfEnrollment: false,
-        requireApproval: true,
-      },
+      email: 'admin@techcorp.com',
+      passwordHash,
+      firstName: 'Sarah',
+      lastName: 'Johnson',
+      title: 'HR Director',
+      department: 'Human Resources',
+      status: 'active',
+      emailVerified: true,
     })
     .returning();
-  console.log(`✓ Program created: ${program.name}\n`);
+  console.log(`  ✓ User created: ${tenantAdmin.email}`);
 
-  // ============================================================================
-  // 7. CREATE MODULES AND LESSONS
-  // ============================================================================
-  console.log("Creating modules and lessons...");
+  await db.insert(schema.userRoles).values({
+    userId: tenantAdmin.id,
+    roleId: tenantRoles.TENANT_ADMIN.id,
+  });
+  console.log(`  ✓ Assigned role: Client Admin`);
 
-  // Module 1
-  const [module1] = await db
-    .insert(modules)
+  // 7. Create Facilitator
+  console.log('\nCreating facilitator...');
+  const [facilitator] = await db
+    .insert(schema.users)
     .values({
-      programId: program.id,
-      name: "Foundations of Leadership",
-      description: "Understanding what makes an effective leader",
-      orderIndex: 0,
+      tenantId: tenant.id,
+      email: 'coach@techcorp.com',
+      passwordHash,
+      firstName: 'Michael',
+      lastName: 'Chen',
+      title: 'Leadership Coach',
+      department: 'Learning & Development',
+      status: 'active',
+      emailVerified: true,
+    })
+    .returning();
+  console.log(`  ✓ User created: ${facilitator.email}`);
+
+  await db.insert(schema.userRoles).values({
+    userId: facilitator.id,
+    roleId: tenantRoles.FACILITATOR.id,
+  });
+  console.log(`  ✓ Assigned role: Facilitator`);
+
+  // 8. Create Mentor
+  console.log('\nCreating mentor...');
+  const [mentor] = await db
+    .insert(schema.users)
+    .values({
+      tenantId: tenant.id,
+      email: 'mentor@techcorp.com',
+      passwordHash,
+      firstName: 'Emily',
+      lastName: 'Rodriguez',
+      title: 'Senior Manager',
+      department: 'Operations',
+      status: 'active',
+      emailVerified: true,
+    })
+    .returning();
+  console.log(`  ✓ User created: ${mentor.email}`);
+
+  await db.insert(schema.userRoles).values({
+    userId: mentor.id,
+    roleId: tenantRoles.MENTOR.id,
+  });
+  console.log(`  ✓ Assigned role: Mentor`);
+
+  // 9. Create Learners
+  console.log('\nCreating learners...');
+  const learnerData = [
+    { firstName: 'John', lastName: 'Doe', email: 'john.doe@techcorp.com' },
+    { firstName: 'Jane', lastName: 'Smith', email: 'jane.smith@techcorp.com' },
+    { firstName: 'Alex', lastName: 'Wilson', email: 'alex.wilson@techcorp.com' },
+  ];
+
+  const learners: (typeof schema.users.$inferSelect)[] = [];
+  for (const data of learnerData) {
+    const [learner] = await db
+      .insert(schema.users)
+      .values({
+        tenantId: tenant.id,
+        email: data.email,
+        passwordHash,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        title: 'Team Lead',
+        department: 'Engineering',
+        managerId: mentor.id,
+        status: 'active',
+        emailVerified: true,
+      })
+      .returning();
+    learners.push(learner);
+    console.log(`  ✓ User created: ${learner.email}`);
+
+    await db.insert(schema.userRoles).values({
+      userId: learner.id,
+      roleId: tenantRoles.LEARNER.id,
+    });
+    console.log(`  ✓ Assigned role: Learner`);
+  }
+
+  // 10. Create Programs
+  console.log('\nCreating programs...');
+
+  // Program 1: Leadership Essentials (Cohort)
+  const [program1] = await db
+    .insert(schema.programs)
+    .values({
+      tenantId: tenant.id,
+      agencyId: agency.id,
+      name: 'Leadership Essentials',
+      internalName: 'LE-2026-Q1',
+      description: 'A comprehensive leadership development program designed to build core leadership competencies.',
+      type: 'cohort',
+      status: 'active',
+      startDate: new Date('2026-02-01'),
+      endDate: new Date('2026-04-30'),
+      timezone: 'America/New_York',
+      config: {
+        sequentialAccess: true,
+        trackInScorecard: true,
+        issueCertificate: true,
+      },
+      createdBy: facilitator.id,
+    })
+    .returning();
+  console.log(`  ✓ Program created: ${program1.name}`);
+
+  // Create modules for Program 1
+  const [module1_1] = await db
+    .insert(schema.modules)
+    .values({
+      programId: program1.id,
+      title: 'Module 1: Self-Awareness',
+      description: 'Understand your leadership style and strengths',
+      order: 0,
+      depth: 0,
+      dripType: 'immediate',
+      status: 'active',
     })
     .returning();
 
-  await db.insert(lessons).values([
+  const [module1_2] = await db
+    .insert(schema.modules)
+    .values({
+      programId: program1.id,
+      title: 'Module 2: Communication',
+      description: 'Master effective communication techniques',
+      order: 1,
+      depth: 0,
+      dripType: 'days_after_previous',
+      dripValue: 7,
+      status: 'active',
+    })
+    .returning();
+
+  const [module1_3] = await db
+    .insert(schema.modules)
+    .values({
+      programId: program1.id,
+      title: 'Module 3: Team Building',
+      description: 'Build and lead high-performing teams',
+      order: 2,
+      depth: 0,
+      dripType: 'days_after_previous',
+      dripValue: 7,
+      status: 'active',
+    })
+    .returning();
+  console.log(`  ✓ Created 3 modules for ${program1.name}`);
+
+  // Create lessons for Module 1
+  const module1Lessons = await db.insert(schema.lessons).values([
     {
-      moduleId: module1.id,
-      name: "What is Leadership?",
-      description: "Explore the core concepts and definitions of leadership",
-      type: "reading",
+      moduleId: module1_1.id,
+      title: 'Introduction to Leadership',
+      contentType: 'lesson',
+      order: 0,
+      durationMinutes: 30,
+      points: 10,
       content: {
-        body: "Leadership is the ability to guide, inspire, and influence others toward achieving a common goal...",
+        introduction: 'Welcome to Leadership Essentials!',
+        mainContent: '<p>In this lesson, we explore what it means to be an effective leader...</p>',
+        keyTakeaway: 'Leadership is about influence, not authority.',
       },
-      estimatedMinutes: 15,
-      orderIndex: 0,
+      dripType: 'immediate',
+      status: 'active',
     },
     {
-      moduleId: module1.id,
-      name: "Leadership Styles",
-      description: "Learn about different leadership styles and when to apply them",
-      type: "video",
+      moduleId: module1_1.id,
+      title: 'Leadership Style Assessment',
+      contentType: 'assignment',
+      order: 1,
+      durationMinutes: 45,
+      points: 20,
       content: {
-        videoUrl: "https://example.com/video1",
-        transcript: "In this video, we explore various leadership styles...",
-      },
-      estimatedMinutes: 25,
-      orderIndex: 1,
-    },
-    {
-      moduleId: module1.id,
-      name: "Self-Assessment",
-      description: "Reflect on your current leadership capabilities",
-      type: "reflection",
-      content: {
+        instructions: 'Complete the leadership style assessment and reflect on your results.',
         questions: [
-          "What leadership qualities do you currently possess?",
-          "What areas would you like to develop?",
-          "Describe a situation where you demonstrated leadership.",
+          'What leadership style do you most identify with?',
+          'How does your style impact your team?',
         ],
       },
-      estimatedMinutes: 20,
-      orderIndex: 2,
+      dripType: 'sequential',
+      status: 'active',
     },
-  ]);
-
-  // Module 2
-  const [module2] = await db
-    .insert(modules)
-    .values({
-      programId: program.id,
-      name: "Communication Skills",
-      description: "Master the art of effective communication",
-      orderIndex: 1,
-    })
-    .returning();
-
-  await db.insert(lessons).values([
     {
-      moduleId: module2.id,
-      name: "Active Listening",
-      description: "Learn techniques for becoming a better listener",
-      type: "reading",
+      moduleId: module1_1.id,
+      title: 'Set Your Leadership Goal',
+      contentType: 'goal',
+      order: 2,
+      durationMinutes: 20,
+      points: 15,
       content: {
-        body: "Active listening is a communication technique that involves fully concentrating on what is being said...",
+        goalPrompt: 'Based on your assessment, set a goal for developing your leadership skills.',
+        requireMetrics: true,
+        requireActionSteps: true,
       },
-      estimatedMinutes: 15,
-      orderIndex: 0,
+      dripType: 'sequential',
+      status: 'active',
     },
     {
-      moduleId: module2.id,
-      name: "Giving Feedback",
-      description: "How to deliver constructive feedback effectively",
-      type: "video",
+      moduleId: module1_1.id,
+      title: 'Mentor Check-in: Self-Awareness',
+      contentType: 'mentor_meeting',
+      order: 3,
+      durationMinutes: 30,
+      points: 10,
       content: {
-        videoUrl: "https://example.com/video2",
+        agenda: 'Discuss your self-awareness insights with your mentor.',
+        discussionQuestions: ['What surprised you about your self-assessment?', 'What areas do you want to develop?'],
       },
-      estimatedMinutes: 20,
-      orderIndex: 1,
+      approvalRequired: 'mentor',
+      dripType: 'sequential',
+      status: 'active',
     },
-  ]);
+  ]).returning();
+  console.log(`  ✓ Created 4 lessons for Module 1`);
 
-  console.log(`✓ Created 2 modules with 5 lessons\n`);
+  // Create lessons for Module 2
+  const module2Lessons = await db.insert(schema.lessons).values([
+    {
+      moduleId: module1_2.id,
+      title: 'Active Listening',
+      contentType: 'lesson',
+      order: 0,
+      durationMinutes: 25,
+      points: 10,
+      content: {
+        introduction: 'The foundation of great communication.',
+        videoUrl: 'https://example.com/videos/active-listening.mp4',
+        keyConcepts: [
+          { title: 'Focus', description: 'Give your full attention' },
+          { title: 'Reflect', description: 'Mirror back what you hear' },
+        ],
+      },
+      dripType: 'immediate',
+      status: 'active',
+    },
+    {
+      moduleId: module1_2.id,
+      title: 'Giving Feedback',
+      contentType: 'lesson',
+      order: 1,
+      durationMinutes: 30,
+      points: 10,
+      content: {
+        introduction: 'Learn the art of constructive feedback.',
+        reflectionPrompts: ['How do you typically give feedback?'],
+      },
+      dripType: 'sequential',
+      status: 'active',
+    },
+    {
+      moduleId: module1_2.id,
+      title: 'Communication Reflection',
+      contentType: 'text_form',
+      order: 2,
+      durationMinutes: 15,
+      points: 10,
+      content: {
+        formPrompt: 'Describe a recent communication challenge and how you addressed it.',
+        minLength: 100,
+      },
+      dripType: 'sequential',
+      status: 'active',
+    },
+  ]).returning();
+  console.log(`  ✓ Created 3 lessons for Module 2`);
 
-  // ============================================================================
-  // 8. CREATE ENROLLMENTS
-  // ============================================================================
-  console.log("Creating enrollments...");
-  await db.insert(enrollments).values([
+  // Create lessons for Module 3
+  const module3Lessons = await db.insert(schema.lessons).values([
     {
-      programId: program.id,
-      userId: user1.id,
-      role: "participant",
-      status: "active",
-      progress: 40,
+      moduleId: module1_3.id,
+      title: 'Team Dynamics',
+      contentType: 'lesson',
+      order: 0,
+      durationMinutes: 35,
+      points: 15,
+      content: {
+        introduction: 'Understanding how teams form and function.',
+      },
+      dripType: 'immediate',
+      status: 'active',
     },
     {
-      programId: program.id,
-      userId: user2.id,
-      role: "participant",
-      status: "active",
-      progress: 20,
+      moduleId: module1_3.id,
+      title: 'Mentor Meeting: Team Strategy',
+      contentType: 'mentor_meeting',
+      order: 1,
+      durationMinutes: 45,
+      points: 20,
+      content: {
+        agenda: 'Discuss your team building strategy',
+        discussionQuestions: [
+          'What are your team\'s strengths?',
+          'What challenges are you facing?',
+        ],
+      },
+      dripType: 'sequential',
+      status: 'active',
     },
     {
-      programId: program.id,
-      userId: coach.id,
-      role: "facilitator",
-      status: "active",
+      moduleId: module1_3.id,
+      title: 'Program Completion Review',
+      contentType: 'text_form',
+      order: 2,
+      durationMinutes: 10,
+      points: 25,
+      content: {
+        formPrompt: 'Write a final reflection on your leadership journey and key takeaways from the program.',
+        minLength: 200,
+      },
+      approvalRequired: 'facilitator',
+      dripType: 'sequential',
+      status: 'active',
     },
-  ]);
-  console.log("✓ Enrollments created\n");
+  ]).returning();
+  console.log(`  ✓ Created 3 lessons for Module 3`);
 
-  // ============================================================================
-  // 9. CREATE SCORECARD AND KPIS
-  // ============================================================================
-  console.log("Creating scorecard and KPIs...");
-  const [scorecard] = await db
-    .insert(scorecards)
+  // Program 2: Self-Paced Course
+  const [program2] = await db
+    .insert(schema.programs)
     .values({
       tenantId: tenant.id,
-      userId: user1.id,
-      roleTitle: "Senior Software Engineer",
-      missionStatement: "Drive technical excellence and mentor team members to deliver high-quality software solutions.",
+      agencyId: agency.id,
+      name: 'Time Management Mastery',
+      description: 'Learn to manage your time effectively and boost productivity.',
+      type: 'self_paced',
+      status: 'active',
+      config: {
+        sequentialAccess: false,
+        trackInScorecard: true,
+      },
+      createdBy: facilitator.id,
+    })
+    .returning();
+  console.log(`  ✓ Program created: ${program2.name}`);
+
+  const [module2_1] = await db
+    .insert(schema.modules)
+    .values({
+      programId: program2.id,
+      title: 'Prioritization Techniques',
+      order: 0,
+      depth: 0,
+      dripType: 'immediate',
+      status: 'active',
     })
     .returning();
 
-  await db.insert(kpis).values([
+  const prog2Lessons = await db.insert(schema.lessons).values([
     {
-      scorecardId: scorecard.id,
-      name: "Team Engagement Score",
-      description: "Measure of team engagement and satisfaction",
-      category: "people_culture",
-      targetValue: "85",
-      currentValue: "78",
-      unit: "%",
-      trend: "up",
+      moduleId: module2_1.id,
+      title: 'The Eisenhower Matrix',
+      contentType: 'lesson',
+      order: 0,
+      durationMinutes: 20,
+      points: 10,
+      content: {
+        introduction: 'Learn to prioritize with the Eisenhower Matrix.',
+      },
+      dripType: 'immediate',
+      status: 'active',
     },
     {
-      scorecardId: scorecard.id,
-      name: "Project Delivery Rate",
-      description: "Percentage of projects delivered on time",
-      category: "operational",
-      targetValue: "90",
-      currentValue: "85",
-      unit: "%",
-      trend: "flat",
+      moduleId: module2_1.id,
+      title: 'Apply the Matrix',
+      contentType: 'assignment',
+      order: 1,
+      durationMinutes: 30,
+      points: 15,
+      content: {
+        instructions: 'Create an Eisenhower Matrix for your current tasks.',
+      },
+      dripType: 'immediate',
+      status: 'active',
     },
-    {
-      scorecardId: scorecard.id,
-      name: "Customer Satisfaction",
-      description: "NPS score from customer surveys",
-      category: "market_growth",
-      targetValue: "50",
-      currentValue: "45",
-      unit: "NPS",
-      trend: "up",
-    },
-  ]);
-  console.log("✓ Scorecard and KPIs created\n");
+  ]).returning();
+  console.log(`  ✓ Created module and lessons for ${program2.name}`);
 
-  // ============================================================================
-  // 10. CREATE GOALS
-  // ============================================================================
-  console.log("Creating goals...");
-  const [goal1] = await db
-    .insert(goals)
+  // 11. Create Enrollments
+  console.log('\nCreating enrollments...');
+
+  // Enroll facilitator as facilitator
+  const [facilEnrollment] = await db
+    .insert(schema.enrollments)
     .values({
+      programId: program1.id,
+      userId: facilitator.id,
       tenantId: tenant.id,
-      ownerId: user1.id,
-      createdById: user1.id,
-      title: "Improve team communication effectiveness",
-      description: "Implement regular team meetings and improve feedback loops",
-      type: "personal",
-      status: "active",
-      progressStatus: "on_track",
-      progress: 35,
-      startDate: "2024-01-01",
-      targetDate: "2024-03-31",
+      role: 'facilitator',
+      status: 'active',
     })
     .returning();
+  console.log(`  ✓ Enrolled ${facilitator.email} as facilitator in ${program1.name}`);
 
-  await db.insert(goalMilestones).values([
-    {
-      goalId: goal1.id,
-      name: "Establish weekly team meetings",
-      description: "Set up recurring weekly team sync meetings",
-      orderIndex: 0,
-      isCompleted: true,
-      completedAt: new Date("2024-01-15T00:00:00.000Z"),
-    },
-    {
-      goalId: goal1.id,
-      name: "Implement feedback system",
-      description: "Create a structured feedback process",
-      orderIndex: 1,
-      isCompleted: false,
-    },
-    {
-      goalId: goal1.id,
-      name: "Conduct communication training",
-      description: "Complete communication skills workshop",
-      orderIndex: 2,
-      isCompleted: false,
-    },
-  ]);
-
-  const [goal2] = await db
-    .insert(goals)
+  // Enroll mentor as mentor
+  const [mentorEnrollment] = await db
+    .insert(schema.enrollments)
     .values({
+      programId: program1.id,
+      userId: mentor.id,
       tenantId: tenant.id,
-      ownerId: user1.id,
-      createdById: coach.id,
-      title: "Complete Leadership Excellence Program",
-      description: "Finish all modules and assignments in the leadership program",
-      type: "personal",
-      status: "active",
-      progressStatus: "on_track",
-      progress: 40,
-      startDate: "2024-01-01",
-      targetDate: "2024-04-30",
-      programId: program.id,
+      role: 'mentor',
+      status: 'active',
     })
     .returning();
+  console.log(`  ✓ Enrolled ${mentor.email} as mentor in ${program1.name}`);
 
-  console.log(`✓ Goals created with milestones\n`);
+  // Enroll learners
+  const learnerEnrollments: (typeof schema.enrollments.$inferSelect)[] = [];
+  for (const learner of learners) {
+    const [enrollment] = await db
+      .insert(schema.enrollments)
+      .values({
+        programId: program1.id,
+        userId: learner.id,
+        tenantId: tenant.id,
+        role: 'learner',
+        status: 'active',
+        progress: Math.floor(Math.random() * 50), // Random progress 0-50%
+      })
+      .returning();
+    learnerEnrollments.push(enrollment);
+    console.log(`  ✓ Enrolled ${learner.email} as learner in ${program1.name}`);
+  }
 
-  // ============================================================================
-  // 11. CREATE COACHING RELATIONSHIP
-  // ============================================================================
-  console.log("Creating coaching relationship...");
-  await db.insert(coachingRelationships).values({
-    tenantId: tenant.id,
-    coachId: coach.id,
-    coacheeId: user1.id,
-    relationshipType: "mentor",
-    defaultDurationMinutes: 60,
-    meetingFrequency: "biweekly",
-    preferredDay: "Tuesday",
-    preferredTime: "10:00",
+  // 12. Create Mentor-Learner Assignments
+  console.log('\nAssigning mentors to learners...');
+  for (const enrollment of learnerEnrollments) {
+    await db.insert(schema.enrollmentMentorships).values({
+      enrollmentId: enrollment.id,
+      mentorUserId: mentor.id,
+      programId: program1.id,
+    });
+    console.log(`  ✓ Assigned mentor to enrollment ${enrollment.id}`);
+  }
+
+  // ============================================================
+  // 13. Dashboard Seed Data for john.doe@techcorp.com
+  // ============================================================
+  console.log('\nSeeding dashboard data for John Doe...');
+
+  const johnDoe = learners[0]; // john.doe@techcorp.com
+  const johnEnrollment = learnerEnrollments[0];
+  const janeSmith = learners[1];
+  const janeEnrollment = learnerEnrollments[1];
+
+  // -- Lesson Progress: John completed all of Module 1, started Module 2 --
+  // Module 1: all 4 lessons completed
+  for (const lesson of module1Lessons) {
+    await db.insert(schema.lessonProgress).values({
+      enrollmentId: johnEnrollment.id,
+      lessonId: lesson.id,
+      status: 'completed',
+      startedAt: new Date('2026-02-03'),
+      completedAt: new Date('2026-02-07'),
+      pointsEarned: lesson.points,
+    });
+  }
+  console.log('  ✓ John completed Module 1 (4 lessons)');
+
+  // Module 2: first lesson completed, second in progress
+  await db.insert(schema.lessonProgress).values({
+    enrollmentId: johnEnrollment.id,
+    lessonId: module2Lessons[0].id,
+    status: 'completed',
+    startedAt: new Date('2026-02-08'),
+    completedAt: new Date('2026-02-09'),
+    pointsEarned: module2Lessons[0].points,
   });
-  console.log("✓ Coaching relationship created\n");
-
-  // ============================================================================
-  // 12. CREATE ANNOUNCEMENT
-  // ============================================================================
-  console.log("Creating announcement...");
-  await db.insert(announcements).values({
-    tenantId: tenant.id,
-    title: "Welcome to Transformation OS!",
-    body: "We're excited to have you on board. This platform will help you track your development goals, complete training programs, and collaborate with your team. If you have any questions, reach out to your administrator.",
-    type: "info",
-    isPublished: true,
-    isPinned: true,
-    authorId: adminUser.id,
+  await db.insert(schema.lessonProgress).values({
+    enrollmentId: johnEnrollment.id,
+    lessonId: module2Lessons[1].id,
+    status: 'in_progress',
+    startedAt: new Date('2026-02-10'),
+    pointsEarned: 0,
   });
-  console.log("✓ Announcement created\n");
+  console.log('  ✓ John started Module 2 (1 completed, 1 in progress)');
 
-  // ============================================================================
-  // 13. CREATE ASSESSMENT TEMPLATES
-  // ============================================================================
-  console.log("Creating assessment templates...");
+  // Update John's enrollment progress
+  const johnCompletedLessons = 5; // 4 from module1 + 1 from module2
+  const johnTotalLessons = 10; // 4 + 3 + 3
+  const johnProgress = Math.round((johnCompletedLessons / johnTotalLessons) * 100);
+  const johnPoints = module1Lessons.reduce((s, l) => s + l.points, 0) + module2Lessons[0].points;
+  await db.update(schema.enrollments)
+    .set({ progress: johnProgress, pointsEarned: johnPoints, startedAt: new Date('2026-02-03') })
+    .where(eq(schema.enrollments.id, johnEnrollment.id));
+  console.log(`  ✓ Updated John's enrollment: ${johnProgress}% progress, ${johnPoints} points`);
 
-  // Leadership 360 Template
-  const [leadership360] = await db
-    .insert(assessmentTemplates)
-    .values({
-      agencyId: agency.id,
-      name: "Leadership 360",
-      description: "Comprehensive 360-degree feedback assessment for leadership competencies",
-      type: "360",
-      scaleMin: 1,
-      scaleMax: 5,
-      scaleLabels: ["Never", "Rarely", "Sometimes", "Often", "Always"],
-      competencies: [
-        {
-          id: "comp-1",
-          name: "Strategic Thinking",
-          description: "Ability to think strategically and plan for the future",
-          questions: [
-            { id: "q1-1", text: "Develops clear long-term vision and goals" },
-            { id: "q1-2", text: "Anticipates future challenges and opportunities" },
-            { id: "q1-3", text: "Makes decisions aligned with organizational strategy" },
-          ],
-        },
-        {
-          id: "comp-2",
-          name: "Communication",
-          description: "Effectiveness in conveying information and ideas",
-          questions: [
-            { id: "q2-1", text: "Communicates clearly and concisely" },
-            { id: "q2-2", text: "Listens actively to others' perspectives" },
-            { id: "q2-3", text: "Adapts communication style to different audiences" },
-            { id: "q2-4", text: "Provides timely and constructive feedback" },
-          ],
-        },
-        {
-          id: "comp-3",
-          name: "Team Leadership",
-          description: "Ability to lead and develop teams effectively",
-          questions: [
-            { id: "q3-1", text: "Inspires and motivates team members" },
-            { id: "q3-2", text: "Delegates effectively and empowers others" },
-            { id: "q3-3", text: "Builds a culture of trust and collaboration" },
-            { id: "q3-4", text: "Recognizes and develops team members' strengths" },
-          ],
-        },
-        {
-          id: "comp-4",
-          name: "Decision Making",
-          description: "Quality and timeliness of decisions",
-          questions: [
-            { id: "q4-1", text: "Makes timely decisions even with incomplete information" },
-            { id: "q4-2", text: "Considers multiple perspectives before deciding" },
-            { id: "q4-3", text: "Takes accountability for decisions and outcomes" },
-          ],
-        },
-        {
-          id: "comp-5",
-          name: "Emotional Intelligence",
-          description: "Self-awareness and management of emotions",
-          questions: [
-            { id: "q5-1", text: "Demonstrates self-awareness and manages emotions effectively" },
-            { id: "q5-2", text: "Shows empathy and understanding towards others" },
-            { id: "q5-3", text: "Remains calm and composed under pressure" },
-            { id: "q5-4", text: "Builds positive relationships across the organization" },
-          ],
-        },
-      ],
-      goalSuggestionRules: [
-        {
-          competencyId: "comp-1",
-          threshold: 3,
-          operator: "less_than",
-          suggestedGoal: "Develop strategic thinking capabilities through executive coaching",
-        },
-        {
-          competencyId: "comp-2",
-          threshold: 3,
-          operator: "less_than",
-          suggestedGoal: "Improve communication skills through targeted training",
-        },
-        {
-          competencyId: "comp-3",
-          threshold: 3,
-          operator: "less_than",
-          suggestedGoal: "Strengthen team leadership through mentoring program",
-        },
-      ],
-      allowComments: true,
-      requireComments: false,
-      anonymizeResponses: true,
-    })
-    .returning();
+  // -- Goal Responses: John set a leadership goal --
+  const [johnGoal1] = await db.insert(schema.goalResponses).values({
+    lessonId: module1Lessons[2].id, // "Set Your Leadership Goal"
+    enrollmentId: johnEnrollment.id,
+    statement: 'Improve my ability to delegate effectively by empowering team members with clear ownership of tasks',
+    successMetrics: 'Delegate at least 3 major tasks per sprint; team satisfaction score above 8/10',
+    actionSteps: [
+      'Identify tasks suitable for delegation each week',
+      'Meet with each team member to discuss growth areas',
+      'Create clear RACI charts for all projects',
+      'Schedule weekly check-ins instead of daily micromanagement',
+    ],
+    targetDate: '2026-04-15',
+    reviewFrequency: 'biweekly',
+    status: 'active',
+  }).returning();
+  console.log('  ✓ Created goal: Delegation skills');
 
-  // Manager Effectiveness 180 Template
-  const [manager180] = await db
-    .insert(assessmentTemplates)
-    .values({
-      agencyId: agency.id,
-      name: "Manager Effectiveness 180",
-      description: "Manager feedback assessment focusing on core management competencies",
-      type: "180",
-      scaleMin: 1,
-      scaleMax: 5,
-      scaleLabels: ["Strongly Disagree", "Disagree", "Neutral", "Agree", "Strongly Agree"],
-      competencies: [
-        {
-          id: "mgr-1",
-          name: "Performance Management",
-          description: "Ability to manage and improve team performance",
-          questions: [
-            { id: "mq1-1", text: "Sets clear expectations and goals for team members" },
-            { id: "mq1-2", text: "Provides regular and actionable feedback" },
-            { id: "mq1-3", text: "Addresses performance issues promptly and fairly" },
-          ],
-        },
-        {
-          id: "mgr-2",
-          name: "Coaching & Development",
-          description: "Support for employee growth and development",
-          questions: [
-            { id: "mq2-1", text: "Invests time in developing team members" },
-            { id: "mq2-2", text: "Provides opportunities for growth and learning" },
-            { id: "mq2-3", text: "Helps team members identify career goals" },
-          ],
-        },
-        {
-          id: "mgr-3",
-          name: "Operational Excellence",
-          description: "Efficiency in managing day-to-day operations",
-          questions: [
-            { id: "mq3-1", text: "Manages resources and priorities effectively" },
-            { id: "mq3-2", text: "Removes obstacles for the team" },
-            { id: "mq3-3", text: "Ensures processes are efficient and effective" },
-          ],
-        },
-      ],
-      goalSuggestionRules: [
-        {
-          competencyId: "mgr-2",
-          threshold: 3,
-          operator: "less_than",
-          suggestedGoal: "Enhance coaching skills through manager development program",
-        },
-      ],
-      allowComments: true,
-      requireComments: false,
-      anonymizeResponses: true,
-    })
-    .returning();
+  // Add goal reviews
+  await db.insert(schema.goalReviews).values([
+    {
+      goalResponseId: johnGoal1.id,
+      reviewDate: '2026-02-07',
+      progressPercentage: 25,
+      reflectionNotes: 'Started identifying delegation opportunities. Delegated code review process to senior devs.',
+      nextSteps: 'Create RACI chart for Q1 projects',
+    },
+    {
+      goalResponseId: johnGoal1.id,
+      reviewDate: '2026-02-10',
+      progressPercentage: 40,
+      reflectionNotes: 'RACI chart completed for 2 projects. Team is responding well to added ownership.',
+      nextSteps: 'Reduce my involvement in daily standups - let team leads run them',
+    },
+  ]);
+  console.log('  ✓ Added 2 goal reviews (40% progress)');
 
-  // Executive Competency Assessment
-  const [execAssessment] = await db
-    .insert(assessmentTemplates)
-    .values({
-      agencyId: agency.id,
-      name: "Executive Competency Assessment",
-      description: "Comprehensive assessment for senior executives covering all key leadership dimensions",
-      type: "360",
-      scaleMin: 1,
-      scaleMax: 5,
-      scaleLabels: ["Developing", "Proficient", "Advanced", "Expert", "Mastery"],
-      competencies: [
-        {
-          id: "exec-1",
-          name: "Visionary Leadership",
-          description: "Ability to create and communicate compelling vision",
-          questions: [
-            { id: "eq1-1", text: "Articulates a clear and inspiring vision for the future" },
-            { id: "eq1-2", text: "Aligns team and organizational efforts with strategic vision" },
-            { id: "eq1-3", text: "Champions innovation and change" },
-          ],
-        },
-        {
-          id: "exec-2",
-          name: "Business Acumen",
-          description: "Understanding of business operations and financials",
-          questions: [
-            { id: "eq2-1", text: "Demonstrates strong understanding of business drivers" },
-            { id: "eq2-2", text: "Makes financially sound decisions" },
-            { id: "eq2-3", text: "Understands market dynamics and competitive landscape" },
-          ],
-        },
-        {
-          id: "exec-3",
-          name: "Stakeholder Management",
-          description: "Effectiveness in managing relationships with key stakeholders",
-          questions: [
-            { id: "eq3-1", text: "Builds strong relationships with key stakeholders" },
-            { id: "eq3-2", text: "Effectively manages board and investor relationships" },
-            { id: "eq3-3", text: "Represents the organization professionally externally" },
-          ],
-        },
-        {
-          id: "exec-4",
-          name: "Organizational Development",
-          description: "Ability to build and develop high-performing organizations",
-          questions: [
-            { id: "eq4-1", text: "Builds high-performing leadership teams" },
-            { id: "eq4-2", text: "Creates a culture of excellence and accountability" },
-            { id: "eq4-3", text: "Develops succession plans for critical roles" },
-          ],
-        },
-      ],
-      goalSuggestionRules: [],
-      allowComments: true,
-      requireComments: true,
-      anonymizeResponses: true,
-    })
-    .returning();
+  // Jane's goal (on her enrollment, different unique key)
+  const [janeGoal] = await db.insert(schema.goalResponses).values({
+    lessonId: module1Lessons[2].id,
+    enrollmentId: janeEnrollment.id,
+    statement: 'Build stronger cross-functional relationships by scheduling monthly 1:1s with peers from other departments',
+    successMetrics: 'Schedule and complete 1:1s with 5 different department leads; identify 2 collaboration opportunities',
+    actionSteps: [
+      'Map out key stakeholders across departments',
+      'Schedule introductory meetings with 2 department leads',
+      'Follow up with collaboration proposals',
+    ],
+    targetDate: '2026-03-31',
+    reviewFrequency: 'monthly',
+    status: 'active',
+  }).returning();
+  console.log('  ✓ Created Jane\'s goal: Cross-functional relationships');
 
-  // Team Collaboration Survey
-  const [teamSurvey] = await db
-    .insert(assessmentTemplates)
-    .values({
-      agencyId: agency.id,
-      name: "Team Collaboration Survey",
-      description: "Quick assessment to gauge team collaboration and dynamics",
-      type: "180",
-      scaleMin: 1,
-      scaleMax: 5,
-      scaleLabels: ["Poor", "Fair", "Good", "Very Good", "Excellent"],
-      competencies: [
-        {
-          id: "team-1",
-          name: "Collaboration",
-          description: "Effectiveness of team collaboration",
-          questions: [
-            { id: "tq1-1", text: "Team members work well together" },
-            { id: "tq1-2", text: "Information is shared openly within the team" },
-            { id: "tq1-3", text: "Conflicts are resolved constructively" },
-          ],
-        },
-        {
-          id: "team-2",
-          name: "Trust & Respect",
-          description: "Level of trust and mutual respect",
-          questions: [
-            { id: "tq2-1", text: "Team members trust each other" },
-            { id: "tq2-2", text: "Diverse perspectives are valued and respected" },
-          ],
-        },
-      ],
-      goalSuggestionRules: [],
-      allowComments: true,
-      requireComments: false,
-      anonymizeResponses: true,
-    })
-    .returning();
+  // -- Discussion Posts: Multiple users commenting on lessons --
+  // John's discussion post on Module 1 intro lesson
+  await db.insert(schema.lessonDiscussions).values({
+    lessonId: module1Lessons[0].id,
+    enrollmentId: johnEnrollment.id,
+    userId: johnDoe.id,
+    content: 'The concept of leadership as influence really resonated with me. I\'ve been too focused on authority in my role. Looking forward to shifting my approach with the team.',
+    createdAt: new Date('2026-02-04T14:30:00Z'),
+  });
 
-  console.log(`✓ Assessment templates created: ${leadership360.name}, ${manager180.name}, ${execAssessment.name}, ${teamSurvey.name}\n`);
+  // Facilitator reply
+  await db.insert(schema.lessonDiscussions).values({
+    lessonId: module1Lessons[0].id,
+    enrollmentId: facilEnrollment.id,
+    userId: facilitator.id,
+    content: 'Great insight, John! That shift from authority to influence is one of the most powerful mindset changes a leader can make. How do you plan to start?',
+    createdAt: new Date('2026-02-04T16:15:00Z'),
+  });
 
-  // ============================================================================
-  // SUMMARY
-  // ============================================================================
-  console.log("═".repeat(50));
-  console.log("🎉 Seed completed successfully!\n");
-  console.log("Created:");
-  console.log(`  • 1 Agency: ${agency.name}`);
-  console.log(`  • 2 Pricing Plans: ${starterPlan.name}, ${proPlan.name}`);
-  console.log(`  • 1 Tenant: ${tenant.name}`);
-  console.log(`  • 4 Users`);
-  console.log(`  • 1 Program with 2 modules and 5 lessons`);
-  console.log(`  • 3 Enrollments`);
-  console.log(`  • 1 Scorecard with 3 KPIs`);
-  console.log(`  • 2 Goals with milestones`);
-  console.log(`  • 1 Coaching relationship`);
-  console.log(`  • 1 Announcement`);
-  console.log(`  • 4 Assessment Templates`);
-  console.log("");
-  console.log("Test accounts:");
-  console.log(`  • Admin: admin@acme.com`);
-  console.log(`  • User 1: john.doe@acme.com`);
-  console.log(`  • User 2: jane.smith@acme.com`);
-  console.log(`  • Coach: coach@acme.com`);
-  console.log("");
-  console.log("Note: Firebase UIDs are placeholders. Update them after");
-  console.log("creating real Firebase accounts to enable login.");
-  console.log("═".repeat(50));
+  // Jane's post on the same lesson
+  await db.insert(schema.lessonDiscussions).values({
+    lessonId: module1Lessons[0].id,
+    enrollmentId: janeEnrollment.id,
+    userId: janeSmith.id,
+    content: 'I agree with John. I also found the section on servant leadership particularly eye-opening. It aligns with how I want to grow as a leader.',
+    createdAt: new Date('2026-02-05T09:00:00Z'),
+  });
 
+  // Mentor comment on the assessment lesson
+  await db.insert(schema.lessonDiscussions).values({
+    lessonId: module1Lessons[1].id,
+    enrollmentId: mentorEnrollment.id,
+    userId: mentor.id,
+    content: 'For those working on the assessment, remember to be honest with yourselves. The value comes from authentic self-reflection, not from trying to get the "right" answers.',
+    createdAt: new Date('2026-02-06T10:30:00Z'),
+  });
+
+  // John's reflection on the assessment
+  await db.insert(schema.lessonDiscussions).values({
+    lessonId: module1Lessons[1].id,
+    enrollmentId: johnEnrollment.id,
+    userId: johnDoe.id,
+    content: 'My assessment showed I lean heavily toward a directive style. Emily\'s advice to be honest really helped - initially I wanted to score higher on collaborative, but accepting where I am is the first step to growth.',
+    createdAt: new Date('2026-02-07T11:00:00Z'),
+  });
+
+  // Discussion on Module 2 Active Listening
+  await db.insert(schema.lessonDiscussions).values({
+    lessonId: module2Lessons[0].id,
+    enrollmentId: johnEnrollment.id,
+    userId: johnDoe.id,
+    content: 'Tried the active listening techniques in my 1:1 today. The "reflect back" method made a noticeable difference - my report opened up much more than usual.',
+    createdAt: new Date('2026-02-09T17:45:00Z'),
+  });
+
+  // Jane's response
+  await db.insert(schema.lessonDiscussions).values({
+    lessonId: module2Lessons[0].id,
+    enrollmentId: janeEnrollment.id,
+    userId: janeSmith.id,
+    content: 'Same experience here! I also noticed I had a habit of formulating my response while the other person was still talking. Being aware of it is already helping me improve.',
+    createdAt: new Date('2026-02-10T08:20:00Z'),
+  });
+
+  // Recent post from facilitator
+  await db.insert(schema.lessonDiscussions).values({
+    lessonId: module2Lessons[1].id,
+    enrollmentId: facilEnrollment.id,
+    userId: facilitator.id,
+    content: 'Reminder: the feedback framework we discussed (SBI - Situation, Behavior, Impact) is a great tool to practice this week. Try using it at least once before our next session.',
+    createdAt: new Date('2026-02-11T09:00:00Z'),
+  });
+  console.log('  ✓ Created 8 discussion posts across lessons');
+
+  // -- Approval Submissions: John submitted an approval for the mentor meeting --
+  await db.insert(schema.approvalSubmissions).values({
+    lessonId: module1Lessons[3].id, // "Mentor Check-in: Self-Awareness"
+    enrollmentId: johnEnrollment.id,
+    reviewerRole: 'mentor',
+    submissionText: 'Completed mentor check-in session on Feb 7. Discussed self-assessment results and identified delegation as my primary growth area. Emily provided great coaching on the RACI framework.',
+    submittedAt: new Date('2026-02-07T15:00:00Z'),
+    status: 'approved',
+    reviewedBy: mentor.id,
+    reviewedAt: new Date('2026-02-07T16:30:00Z'),
+    feedback: 'Great session! John showed strong self-awareness and a clear plan for improvement. Approved.',
+  });
+  console.log('  ✓ Created approved mentor check-in submission');
+
+  // Pending approval for Module 2 text form
+  await db.insert(schema.approvalSubmissions).values({
+    lessonId: module2Lessons[2].id, // "Communication Reflection"
+    enrollmentId: johnEnrollment.id,
+    reviewerRole: 'facilitator',
+    submissionText: 'Last week I had a challenging conversation with a cross-functional stakeholder about project priorities. I used the active listening techniques from Module 2 and found that acknowledging their concerns first before presenting my perspective led to a much more productive discussion. We were able to find a compromise that worked for both teams.',
+    submittedAt: new Date('2026-02-10T16:00:00Z'),
+    status: 'pending',
+  });
+  console.log('  ✓ Created pending communication reflection submission');
+
+  // -- Jane's progress (partial, for leaderboard/discussions context) --
+  await db.insert(schema.lessonProgress).values({
+    enrollmentId: janeEnrollment.id,
+    lessonId: module1Lessons[0].id,
+    status: 'completed',
+    startedAt: new Date('2026-02-04'),
+    completedAt: new Date('2026-02-05'),
+    pointsEarned: module1Lessons[0].points,
+  });
+  await db.insert(schema.lessonProgress).values({
+    enrollmentId: janeEnrollment.id,
+    lessonId: module1Lessons[1].id,
+    status: 'in_progress',
+    startedAt: new Date('2026-02-06'),
+    pointsEarned: 0,
+  });
+  await db.update(schema.enrollments)
+    .set({ progress: 10, pointsEarned: module1Lessons[0].points, startedAt: new Date('2026-02-04') })
+    .where(eq(schema.enrollments.id, janeEnrollment.id));
+  console.log('  ✓ Created Jane\'s partial progress');
+
+  console.log('\n✅ Seed completed successfully!\n');
+  console.log('Test accounts (password: password123):');
+  console.log('  - Agency Admin: admin@acme.com');
+  console.log('  - Tenant Admin: admin@techcorp.com');
+  console.log('  - Facilitator:  coach@techcorp.com');
+  console.log('  - Mentor:       mentor@techcorp.com');
+  console.log('  - Learners:     john.doe@techcorp.com, jane.smith@techcorp.com, alex.wilson@techcorp.com\n');
+
+  await client.end();
   process.exit(0);
 }
 
 seed().catch((error) => {
-  console.error("❌ Seed failed:", error);
+  console.error('❌ Seed failed:', error);
   process.exit(1);
 });

@@ -1,27 +1,20 @@
-// ============================================================================
-// SCHEMA INDEX - Export all schema definitions
-// ============================================================================
+// Core tables
+export * from './core/agencies';
+export * from './core/tenants';
+export * from './core/users';
+export * from './core/roles';
+export * from './core/sessions';
+export * from './core/impersonation-sessions';
+export * from './core/onboarding';
 
-// Core (multi-tenancy, users, roles)
-export * from "./core";
+// Programs tables
+export * from './programs';
 
-// Programs (LMS)
-export * from "./programs";
+// Planning & Goals tables
+export * from './planning';
 
-// Goals & Scorecards
-export * from "./goals";
+// Assessment tables
+export * from './assessments';
 
-// Coaching
-export * from "./coaching";
-
-// Assessments (180/360)
-export * from "./assessments";
-
-// Resources
-export * from "./resources";
-
-// Notifications & Feed
-export * from "./notifications";
-
-// Billing & Subscriptions
-export * from "./billing";
+// Mentoring tables (renamed from Coaching)
+export * from './mentoring';

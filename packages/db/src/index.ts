@@ -1,12 +1,21 @@
-// ============================================================================
-// DATABASE PACKAGE - Main entry point
-// ============================================================================
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import * as schema from './schema/index.js';
 
-// Export database client
-export { db } from "./client";
+const connectionString = process.env.DATABASE_URL;
 
-// Export all schema definitions
-export * from "./schema";
+if (!connectionString) {
+  throw new Error('DATABASE_URL environment variable is required');
+}
 
-// Re-export drizzle-orm utilities for convenience
-export { eq, ne, gt, gte, lt, lte, and, or, not, inArray, notInArray, isNull, isNotNull, sql } from "drizzle-orm";
+// Create postgres client
+const client = postgres(connectionString);
+
+// Create drizzle instance with schema
+export const db = drizzle(client, { schema });
+
+// Export schema for use in other packages
+export { schema };
+
+// Export types
+export type Database = typeof db;

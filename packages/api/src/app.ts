@@ -1,107 +1,90 @@
-import { Hono } from "hono";
-import { cors } from "hono/cors";
-import { logger } from "hono/logger";
-import { secureHeaders } from "hono/secure-headers";
-import { requestIdMiddleware, errorHandler } from "./middleware";
-import { auth, agenciesRouter, tenantsRouter, programsRouter, goalsRouter, coachingRouter, assessmentsRouter, assessmentPublicRouter, templatesRouter } from "./routes";
-import type { AppVariables } from "./types";
-import { env } from "./lib/env";
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import { logger } from 'hono/logger';
+import { secureHeaders } from 'hono/secure-headers';
+import { errorHandler } from './middleware/error-handler.js';
+import { authMiddleware } from './middleware/auth.js';
+import { authRoutes } from './routes/auth.js';
+import { usersRoutes } from './routes/users.js';
+import { tenantsRoutes } from './routes/tenants.js';
+import { agenciesRoutes } from './routes/agencies.js';
+import { programsRoutes } from './routes/programs.js';
+import { enrollmentsRoutes } from './routes/enrollments.js';
+import { progressRoutes } from './routes/progress.js';
+import { impersonationRoutes } from './routes/admin/impersonation.js';
+import { onboardingRoutes } from './routes/onboarding.js';
+import { agencyEnrollmentsRoutes } from './routes/agency-enrollments.js';
+import { dashboardRoutes } from './routes/dashboard.js';
+import type { Variables } from './types/context.js';
 
-// Create app instance
-const app = new Hono<{ Variables: AppVariables }>();
+// Create Hono app with typed variables
+export const app = new Hono<{ Variables: Variables }>();
 
-// ============================================================================
-// GLOBAL MIDDLEWARE
-// ============================================================================
-
-// Security headers
-app.use("*", secureHeaders());
-
-// CORS
+// Global middleware
+app.use('*', logger());
+app.use('*', secureHeaders());
 app.use(
-  "*",
+  '*',
   cors({
-    origin: env.CORS_ORIGIN.split(","),
-    credentials: true,
-    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowHeaders: [
-      "Content-Type",
-      "Authorization",
-      "X-Tenant-ID",
-      "X-Agency-ID",
-      "X-Request-ID",
+    origin: [
+      'http://localhost:3003',
+      'http://localhost:5173',
+      process.env.WEB_URL || 'http://localhost:3003',
     ],
+    credentials: true,
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID', 'X-Impersonation-Token'],
   })
 );
 
-// Request logging
-app.use("*", logger());
-
-// Request ID
-app.use("*", requestIdMiddleware);
-
-// Error handling
+// Error handler (Hono native onError)
 app.onError(errorHandler);
 
-// ============================================================================
-// HEALTH CHECK
-// ============================================================================
-
-app.get("/", (c) => {
-  return c.json({
-    name: "Transformation OS API",
-    version: "0.1.0",
-    status: "healthy",
-  });
-});
-
-app.get("/health", (c) => {
-  return c.json({
-    status: "healthy",
+// Health check (no auth required)
+app.get('/health', (c) =>
+  c.json({
+    status: 'ok',
     timestamp: new Date().toISOString(),
-  });
-});
+  })
+);
 
-// ============================================================================
-// API ROUTES
-// ============================================================================
+// Auth routes (no auth required for login/register)
+app.route('/api/auth', authRoutes);
 
-// Auth routes
-app.route("/auth", auth);
+// Protected routes - require authentication
+app.use('/api/*', authMiddleware());
 
-// Agency routes
-app.route("/agencies", agenciesRouter);
+// Mount protected route handlers
+app.route('/api/users', usersRoutes);
+app.route('/api/tenants', tenantsRoutes);
+app.route('/api/agencies', agenciesRoutes);
 
-// Agency-level template routes
-app.route("/agencies/:agencyId/templates", templatesRouter);
+// Programs routes (nested under tenants)
+app.route('/api/tenants/:tenantId/programs', programsRoutes);
+app.route('/api/tenants/:tenantId/programs/:programId/enrollments', enrollmentsRoutes);
+app.route('/api/tenants/:tenantId/programs/:programId', progressRoutes);
 
-// Tenant routes
-app.route("/tenants", tenantsRouter);
+// Dashboard routes (learner dashboard aggregation)
+app.route('/api/tenants/:tenantId/dashboard', dashboardRoutes);
 
-// Nested tenant routes
-app.route("/tenants/:tenantId/programs", programsRouter);
-app.route("/tenants/:tenantId/goals", goalsRouter);
-app.route("/tenants/:tenantId/coaching", coachingRouter);
-app.route("/tenants/:tenantId/assessments", assessmentsRouter);
+// Agency enrollment routes (cross-tenant participant management)
+app.route('/api/agencies/me/programs/:programId/enrollments', agencyEnrollmentsRoutes);
 
-// Public routes (no auth required)
-app.route("/assessments/respond", assessmentPublicRouter);
+// Admin routes
+app.route('/api/admin/impersonate', impersonationRoutes);
 
-// ============================================================================
-// 404 HANDLER
-// ============================================================================
+// Onboarding routes
+app.route('/api/onboarding', onboardingRoutes);
 
-app.notFound((c) => {
-  return c.json(
+// 404 handler
+app.notFound((c) =>
+  c.json(
     {
-      success: false,
       error: {
-        code: "NOT_FOUND",
+        code: 'NOT_FOUND',
         message: `Route ${c.req.method} ${c.req.path} not found`,
       },
     },
     404
-  );
-});
-
-export { app };
+  )
+);

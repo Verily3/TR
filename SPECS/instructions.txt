@@ -1,0 +1,3 @@
+❯ yes, use these as reference to improve our learner LMS view. we don't want ot copy their design. We just want to make sure we can create the same lesson types in the program builder which of course would be displayed correctly in the     
+  preview. Use the same text on the screens except "Promote" should be replaced with Results tracking.  
+────────────────────────────────────────────────────────────────────────────────────────────────────────

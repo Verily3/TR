@@ -1,100 +1,127 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
-import { useRouter, usePathname } from "next/navigation";
-import { onAuthChange } from "@/lib/firebase";
-import { api } from "@/lib/api";
-import { useAuthStore } from "@/stores/auth-store";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+} from 'react';
+import { api } from '@/lib/api';
+import type { AuthUser as BaseAuthUser } from '@tr/shared';
 
-const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"];
-
-interface AuthProviderProps {
-  children: React.ReactNode;
+// Extended user type with profile info
+interface AuthUser extends BaseAuthUser {
+  firstName?: string;
+  lastName?: string;
+  displayName?: string;
+  avatar?: string;
+  title?: string;
+  department?: string;
 }
 
-export function AuthProvider({ children }: AuthProviderProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const {
-    setUser,
-    setTenants,
-    setAgencies,
-    setCurrentTenant,
-    setCurrentAgency,
-    setLoading,
-    logout,
-  } = useAuthStore();
+interface AuthContextType {
+  user: AuthUser | null;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
+}
 
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Track client-side mount
   useEffect(() => {
-    const unsubscribe = onAuthChange(async (firebaseUser) => {
-      if (firebaseUser) {
+    setIsMounted(true);
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    const token = localStorage.getItem('accessToken');
+    if (!token) {
+      setUser(null);
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await api.get<AuthUser>('/api/auth/me');
+      setUser(response.data);
+    } catch {
+      // Token might be expired, try to refresh
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (refreshToken) {
         try {
-          // Fetch user data from API
-          const response = await api.get<{
-            user: {
-              id: string;
-              email: string;
-              firstName: string | null;
-              lastName: string | null;
-              avatarUrl: string | null;
-            };
-            tenants: Array<{
-              id: string;
-              name: string;
-              slug: string;
-              role: "admin" | "user";
-              logoUrl: string | null;
-            }>;
-            agencies: Array<{
-              id: string;
-              name: string;
-              role: "owner" | "admin" | "member";
-            }>;
-          }>("/auth/me");
-
-          if (response.data) {
-            setUser(response.data.user);
-            setTenants(response.data.tenants);
-            setAgencies(response.data.agencies);
-
-            // Set default tenant if not set
-            const { currentTenantId, currentAgencyId } = useAuthStore.getState();
-            if (!currentTenantId && response.data.tenants.length > 0) {
-              setCurrentTenant(response.data.tenants[0].id);
-            }
-
-            // Set default agency if not set
-            if (!currentAgencyId && response.data.agencies.length > 0) {
-              setCurrentAgency(response.data.agencies[0].id);
-            }
-
-            // Redirect to dashboard if on public path
-            if (PUBLIC_PATHS.includes(pathname)) {
-              router.push("/dashboard");
-            }
-          }
-        } catch (error) {
-          console.error("Failed to fetch user data:", error);
-          // User exists in Firebase but not in our DB - redirect to complete registration
-          if (PUBLIC_PATHS.includes(pathname)) {
-            // Stay on public path
-          } else {
-            router.push("/login");
-          }
+          const refreshResponse = await api.post<{ accessToken: string }>('/api/auth/refresh', {
+            refreshToken,
+          });
+          localStorage.setItem('accessToken', refreshResponse.data.accessToken);
+          // Retry getting user
+          const userResponse = await api.get<AuthUser>('/api/auth/me');
+          setUser(userResponse.data);
+        } catch {
+          // Refresh failed, clear tokens
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          setUser(null);
         }
       } else {
-        logout();
-        // Redirect to login if on protected path
-        if (!PUBLIC_PATHS.includes(pathname)) {
-          router.push("/login");
-        }
+        localStorage.removeItem('accessToken');
+        setUser(null);
       }
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
-      setLoading(false);
-    });
+  useEffect(() => {
+    if (isMounted) {
+      refreshUser();
+    }
+  }, [isMounted, refreshUser]);
 
-    return () => unsubscribe();
-  }, [pathname, router, setUser, setTenants, setAgencies, setCurrentTenant, setCurrentAgency, setLoading, logout]);
+  const login = async (email: string, password: string) => {
+    const response = await api.post<{ accessToken: string; refreshToken: string }>('/api/auth/login', { email, password });
+    const { accessToken, refreshToken } = response.data;
 
-  return <>{children}</>;
+    localStorage.setItem('accessToken', accessToken);
+    localStorage.setItem('refreshToken', refreshToken);
+
+    // Get full user data including permissions
+    const userResponse = await api.get<AuthUser>('/api/auth/me');
+    setUser(userResponse.data);
+  };
+
+  const logout = async () => {
+    try {
+      await api.post('/api/auth/logout');
+    } finally {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      sessionStorage.removeItem('impersonation_token');
+      setUser(null);
+    }
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{ user, isLoading, login, logout, refreshUser }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export type { AuthContextType, AuthUser };
+
+export function useAuthContext(): AuthContextType {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuthContext must be used within an AuthProvider');
+  }
+  return context;
 }

@@ -1,374 +1,369 @@
-import { Hono } from "hono";
-import { zValidator } from "@hono/zod-validator";
-import { z } from "zod";
-import { HTTPException } from "hono/http-exception";
-import {
-  db,
-  eq,
-  and,
-  like,
-  sql,
-  tenants,
-  tenantMembers,
-  users,
-} from "@tr/db";
-import { success, paginated, noContent } from "../lib/response";
-import { listQuerySchema, idParamSchema } from "../lib/validation";
-import {
-  authMiddleware,
-  tenantMiddleware,
-  requireTenantAdmin,
-} from "../middleware";
-import type { AppVariables } from "../types";
+import { Hono } from 'hono';
+import { zValidator } from '@hono/zod-validator';
+import { z } from 'zod';
+import { eq, and, isNull, desc, sql } from 'drizzle-orm';
+import { db, schema } from '@tr/db';
+import { requireAgencyAccess, requirePermission, requireTenantAccess } from '../middleware/permissions.js';
+import { BadRequestError, ConflictError, NotFoundError } from '../lib/errors.js';
+import { PERMISSIONS, SYSTEM_ROLES } from '@tr/shared';
+import type { Variables } from '../types/context.js';
+import type { PaginationMeta } from '@tr/shared';
 
-const tenantsRouter = new Hono<{ Variables: AppVariables }>();
+const { tenants, users, roles, userRoles } = schema;
 
-// ============================================================================
-// SCHEMAS
-// ============================================================================
+export const tenantsRoutes = new Hono<{ Variables: Variables }>();
+
+// Query params schema
+const listQuerySchema = z.object({
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(20),
+  status: z.enum(['active', 'trial', 'suspended', 'churned']).optional(),
+});
+
+/**
+ * GET /api/tenants
+ * List tenants (for agency users, lists tenants in their agency)
+ * (for tenant users, returns their own tenant)
+ */
+tenantsRoutes.get('/', zValidator('query', listQuerySchema), async (c) => {
+  const user = c.get('user');
+  const { page, limit, status } = c.req.valid('query');
+
+  // If tenant user, return only their tenant
+  if (user.tenantId && !user.agencyId) {
+    const [tenant] = await db
+      .select()
+      .from(tenants)
+      .where(
+        and(eq(tenants.id, user.tenantId), isNull(tenants.deletedAt))
+      )
+      .limit(1);
+
+    if (!tenant) {
+      throw new NotFoundError('Tenant');
+    }
+
+    return c.json({ data: [tenant], meta: { pagination: { page: 1, limit: 1, total: 1, totalPages: 1, hasNext: false, hasPrev: false } } });
+  }
+
+  // Agency user - list all tenants in agency
+  if (!user.agencyId) {
+    throw new NotFoundError('Agency context required');
+  }
+
+  const conditions = [
+    eq(tenants.agencyId, user.agencyId),
+    isNull(tenants.deletedAt),
+  ];
+
+  if (status) {
+    conditions.push(eq(tenants.status, status));
+  }
+
+  // Get total count
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(tenants)
+    .where(and(...conditions));
+
+  // Get paginated results with user count
+  const results = await db
+    .select({
+      id: tenants.id,
+      name: tenants.name,
+      slug: tenants.slug,
+      domain: tenants.domain,
+      industry: tenants.industry,
+      status: tenants.status,
+      logo: tenants.logo,
+      usersLimit: tenants.usersLimit,
+      settings: tenants.settings,
+      createdAt: tenants.createdAt,
+      userCount: sql<number>`(
+        SELECT count(*) FROM "users" u
+        WHERE u."tenant_id" = "tenants"."id"
+        AND u."deleted_at" IS NULL
+      )`,
+    })
+    .from(tenants)
+    .where(and(...conditions))
+    .orderBy(desc(tenants.createdAt))
+    .limit(limit)
+    .offset((page - 1) * limit);
+
+  const pagination: PaginationMeta = {
+    page,
+    limit,
+    total: Number(count),
+    totalPages: Math.ceil(Number(count) / limit),
+    hasNext: page * limit < Number(count),
+    hasPrev: page > 1,
+  };
+
+  return c.json({ data: results, meta: { pagination } });
+});
+
+/**
+ * GET /api/tenants/:tenantId
+ * Get a specific tenant
+ */
+tenantsRoutes.get('/:tenantId', requireTenantAccess(), async (c) => {
+  const tenant = c.get('tenant');
+
+  if (!tenant) {
+    throw new NotFoundError('Tenant');
+  }
+
+  // Get user count for this tenant
+  const [{ userCount }] = await db
+    .select({ userCount: sql<number>`count(*)` })
+    .from(users)
+    .where(
+      and(eq(users.tenantId, tenant.id), isNull(users.deletedAt))
+    );
+
+  return c.json({
+    data: {
+      ...tenant,
+      userCount: Number(userCount),
+    },
+  });
+});
+
+/**
+ * GET /api/tenants/:tenantId/stats
+ * Get tenant statistics
+ */
+tenantsRoutes.get('/:tenantId/stats', requireTenantAccess(), async (c) => {
+  const tenant = c.get('tenant');
+
+  if (!tenant) {
+    throw new NotFoundError('Tenant');
+  }
+
+  // Get various stats
+  const [{ totalUsers }] = await db
+    .select({ totalUsers: sql<number>`count(*)` })
+    .from(users)
+    .where(
+      and(eq(users.tenantId, tenant.id), isNull(users.deletedAt))
+    );
+
+  const [{ activeUsers }] = await db
+    .select({ activeUsers: sql<number>`count(*)` })
+    .from(users)
+    .where(
+      and(
+        eq(users.tenantId, tenant.id),
+        eq(users.status, 'active'),
+        isNull(users.deletedAt)
+      )
+    );
+
+  return c.json({
+    data: {
+      totalUsers: Number(totalUsers),
+      activeUsers: Number(activeUsers),
+      usersLimit: tenant.usersLimit,
+      usersRemaining: tenant.usersLimit - Number(totalUsers),
+    },
+  });
+});
+
+// ============================================
+// TENANT CRUD (Agency admins only)
+// ============================================
 
 const createTenantSchema = z.object({
   name: z.string().min(1).max(255),
-  slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/),
-  agencyId: z.string().uuid(),
+  slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with hyphens').optional(),
+  domain: z.string().max(255).optional(),
+  industry: z.string().max(100).optional(),
+  status: z.enum(['active', 'trial', 'suspended']).default('active'),
+  usersLimit: z.number().int().min(1).max(10000).default(50),
+  settings: z.object({
+    timezone: z.string().optional(),
+    dateFormat: z.string().optional(),
+    fiscalYearStart: z.string().optional(),
+    canCreatePrograms: z.boolean().optional(),
+    features: z.object({
+      programs: z.boolean().optional(),
+      assessments: z.boolean().optional(),
+      mentoring: z.boolean().optional(),
+      goals: z.boolean().optional(),
+      analytics: z.boolean().optional(),
+      scorecard: z.boolean().optional(),
+      planning: z.boolean().optional(),
+    }).optional(),
+  }).optional(),
 });
 
-const updateTenantSchema = z.object({
-  name: z.string().min(1).max(255).optional(),
-  logoUrl: z.string().url().optional().nullable(),
-  settings: z.record(z.unknown()).optional(),
+const updateTenantSchema = createTenantSchema.partial().extend({
+  logo: z.string().optional(),
+  primaryColor: z.string().max(7).optional(),
+  accentColor: z.string().max(7).optional(),
 });
-
-const inviteMemberSchema = z.object({
-  email: z.string().email(),
-  role: z.enum(["admin", "user"]),
-  firstName: z.string().optional(),
-  lastName: z.string().optional(),
-});
-
-// ============================================================================
-// TENANT CRUD
-// ============================================================================
 
 /**
- * GET /tenants
- * List tenants for current user
+ * POST /api/tenants
+ * Create a new tenant (agency admin only)
  */
-tenantsRouter.get(
-  "/",
-  authMiddleware,
-  zValidator("query", listQuerySchema),
+tenantsRoutes.post(
+  '/',
+  requireAgencyAccess(),
+  requirePermission(PERMISSIONS.AGENCY_MANAGE_CLIENTS),
+  zValidator('json', createTenantSchema),
   async (c) => {
-    const user = c.get("user");
-    const query = c.req.valid("query");
+    const user = c.get('user');
+    const body = c.req.valid('json');
 
-    // Get user's tenant memberships
-    const memberships = await db.query.tenantMembers.findMany({
-      where: and(
-        eq(tenantMembers.userId, user.id),
-        eq(tenantMembers.isActive, true)
-      ),
-      with: {
-        tenant: true,
-      },
-    });
+    // Auto-generate slug from name if not provided
+    const slug = body.slug || body.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-    const tenantList = memberships
-      .filter((m) => m.tenant.isActive)
-      .filter((m) =>
-        query.search
-          ? m.tenant.name.toLowerCase().includes(query.search.toLowerCase())
-          : true
-      );
+    // Check slug uniqueness within agency
+    const [existing] = await db
+      .select({ id: tenants.id })
+      .from(tenants)
+      .where(
+        and(
+          eq(tenants.slug, slug),
+          eq(tenants.agencyId, user.agencyId!)
+        )
+      )
+      .limit(1);
 
-    // Apply pagination
-    const start = (query.page - 1) * query.perPage;
-    const paginatedTenants = tenantList.slice(start, start + query.perPage);
+    if (existing) {
+      throw new ConflictError(`A client with slug '${slug}' already exists`);
+    }
 
-    return paginated(
-      c,
-      paginatedTenants.map((m) => ({
-        id: m.tenant.id,
-        name: m.tenant.name,
-        slug: m.tenant.slug,
-        logoUrl: m.tenant.logoUrl,
-        role: m.role,
-        joinedAt: m.joinedAt,
-      })),
-      {
-        page: query.page,
-        perPage: query.perPage,
-        total: tenantList.length,
+    // Create tenant
+    const [tenant] = await db
+      .insert(tenants)
+      .values({
+        agencyId: user.agencyId!,
+        name: body.name,
+        slug,
+        domain: body.domain,
+        industry: body.industry,
+        status: body.status,
+        usersLimit: body.usersLimit,
+        settings: body.settings || {},
+      })
+      .returning();
+
+    // Create default system roles for the new tenant
+    const tenantRoles = Object.values(SYSTEM_ROLES).filter(r => !r.isAgencyRole);
+    for (const roleDef of tenantRoles) {
+      await db.insert(roles).values({
+        tenantId: tenant.id,
+        name: roleDef.name,
+        slug: roleDef.slug,
+        description: roleDef.description,
+        level: roleDef.level,
+        isSystem: true,
+        permissions: roleDef.permissions as string[],
+      });
+    }
+
+    return c.json({ data: tenant }, 201);
+  }
+);
+
+/**
+ * PUT /api/tenants/:tenantId
+ * Update a tenant (agency admin only)
+ */
+tenantsRoutes.put(
+  '/:tenantId',
+  requireAgencyAccess(),
+  requirePermission(PERMISSIONS.AGENCY_MANAGE_CLIENTS),
+  zValidator('json', updateTenantSchema),
+  async (c) => {
+    const user = c.get('user');
+    const { tenantId } = c.req.param();
+    const body = c.req.valid('json');
+
+    // Verify tenant belongs to this agency
+    const [existing] = await db
+      .select()
+      .from(tenants)
+      .where(
+        and(
+          eq(tenants.id, tenantId),
+          eq(tenants.agencyId, user.agencyId!),
+          isNull(tenants.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundError('Tenant', tenantId);
+    }
+
+    // If slug is being changed, check uniqueness
+    if (body.slug && body.slug !== existing.slug) {
+      const [slugConflict] = await db
+        .select({ id: tenants.id })
+        .from(tenants)
+        .where(
+          and(
+            eq(tenants.slug, body.slug),
+            eq(tenants.agencyId, user.agencyId!)
+          )
+        )
+        .limit(1);
+
+      if (slugConflict) {
+        throw new ConflictError(`A client with slug '${body.slug}' already exists`);
       }
-    );
-  }
-);
+    }
 
-/**
- * GET /tenants/:tenantId
- * Get tenant details
- */
-tenantsRouter.get(
-  "/:tenantId",
-  authMiddleware,
-  tenantMiddleware,
-  async (c) => {
-    const tenantCtx = c.get("tenant")!;
-
-    const tenant = await db.query.tenants.findFirst({
-      where: eq(tenants.id, tenantCtx.id),
-    });
-
-    return success(c, {
-      id: tenant!.id,
-      name: tenant!.name,
-      slug: tenant!.slug,
-      logoUrl: tenant!.logoUrl,
-      settings: tenant!.settings,
-      createdAt: tenant!.createdAt,
-    });
-  }
-);
-
-/**
- * PATCH /tenants/:tenantId
- * Update tenant (admin only)
- */
-tenantsRouter.patch(
-  "/:tenantId",
-  authMiddleware,
-  tenantMiddleware,
-  requireTenantAdmin,
-  zValidator("json", updateTenantSchema),
-  async (c) => {
-    const tenantCtx = c.get("tenant")!;
-    const body = c.req.valid("json");
-
-    const [updatedTenant] = await db
+    const [updated] = await db
       .update(tenants)
       .set({
         ...body,
         updatedAt: new Date(),
       })
-      .where(eq(tenants.id, tenantCtx.id))
+      .where(eq(tenants.id, tenantId))
       .returning();
 
-    return success(c, {
-      id: updatedTenant.id,
-      name: updatedTenant.name,
-      slug: updatedTenant.slug,
-      logoUrl: updatedTenant.logoUrl,
-      settings: updatedTenant.settings,
-    });
-  }
-);
-
-// ============================================================================
-// TENANT MEMBERS
-// ============================================================================
-
-/**
- * GET /tenants/:tenantId/members
- * List tenant members
- */
-tenantsRouter.get(
-  "/:tenantId/members",
-  authMiddleware,
-  tenantMiddleware,
-  zValidator("query", listQuerySchema),
-  async (c) => {
-    const tenantCtx = c.get("tenant")!;
-    const query = c.req.valid("query");
-
-    const members = await db.query.tenantMembers.findMany({
-      where: eq(tenantMembers.tenantId, tenantCtx.id),
-      with: {
-        user: true,
-      },
-      limit: query.perPage,
-      offset: (query.page - 1) * query.perPage,
-    });
-
-    // Get total count
-    const [{ count }] = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(tenantMembers)
-      .where(eq(tenantMembers.tenantId, tenantCtx.id));
-
-    return paginated(
-      c,
-      members.map((m) => ({
-        id: m.id,
-        userId: m.userId,
-        email: m.user.email,
-        firstName: m.user.firstName,
-        lastName: m.user.lastName,
-        avatarUrl: m.user.avatarUrl,
-        role: m.role,
-        isActive: m.isActive,
-        joinedAt: m.joinedAt,
-      })),
-      {
-        page: query.page,
-        perPage: query.perPage,
-        total: Number(count),
-      }
-    );
+    return c.json({ data: updated });
   }
 );
 
 /**
- * POST /tenants/:tenantId/members/invite
- * Invite a member to tenant (admin only)
+ * DELETE /api/tenants/:tenantId
+ * Soft delete a tenant (agency admin only)
  */
-tenantsRouter.post(
-  "/:tenantId/members/invite",
-  authMiddleware,
-  tenantMiddleware,
-  requireTenantAdmin,
-  zValidator("json", inviteMemberSchema),
+tenantsRoutes.delete(
+  '/:tenantId',
+  requireAgencyAccess(),
+  requirePermission(PERMISSIONS.AGENCY_MANAGE_CLIENTS),
   async (c) => {
-    const tenantCtx = c.get("tenant")!;
-    const body = c.req.valid("json");
+    const user = c.get('user');
+    const { tenantId } = c.req.param();
 
-    // Check if user with email exists
-    const existingUser = await db.query.users.findFirst({
-      where: eq(users.email, body.email),
-    });
-
-    if (existingUser) {
-      // Check if already a member
-      const existingMember = await db.query.tenantMembers.findFirst({
-        where: and(
-          eq(tenantMembers.tenantId, tenantCtx.id),
-          eq(tenantMembers.userId, existingUser.id)
-        ),
-      });
-
-      if (existingMember) {
-        throw new HTTPException(409, {
-          message: "User is already a member of this tenant",
-        });
-      }
-
-      // Add existing user to tenant
-      const [membership] = await db
-        .insert(tenantMembers)
-        .values({
-          tenantId: tenantCtx.id,
-          userId: existingUser.id,
-          role: body.role,
-        })
-        .returning();
-
-      return success(
-        c,
-        {
-          id: membership.id,
-          userId: existingUser.id,
-          email: existingUser.email,
-          role: membership.role,
-          status: "added",
-        },
-        201
-      );
-    }
-
-    // TODO: Create invitation record and send email
-    // For now, return pending status
-
-    return success(
-      c,
-      {
-        email: body.email,
-        role: body.role,
-        status: "invited",
-      },
-      201
-    );
-  }
-);
-
-/**
- * PATCH /tenants/:tenantId/members/:memberId
- * Update member role (admin only)
- */
-tenantsRouter.patch(
-  "/:tenantId/members/:memberId",
-  authMiddleware,
-  tenantMiddleware,
-  requireTenantAdmin,
-  zValidator("json", z.object({ role: z.enum(["admin", "user"]) })),
-  async (c) => {
-    const tenantCtx = c.get("tenant")!;
-    const memberId = c.req.param("memberId");
-    const body = c.req.valid("json");
-
-    const [updated] = await db
-      .update(tenantMembers)
-      .set({
-        role: body.role,
-        updatedAt: new Date(),
-      })
+    const [existing] = await db
+      .select()
+      .from(tenants)
       .where(
         and(
-          eq(tenantMembers.id, memberId),
-          eq(tenantMembers.tenantId, tenantCtx.id)
+          eq(tenants.id, tenantId),
+          eq(tenants.agencyId, user.agencyId!),
+          isNull(tenants.deletedAt)
         )
       )
-      .returning();
+      .limit(1);
 
-    if (!updated) {
-      throw new HTTPException(404, { message: "Member not found" });
-    }
-
-    return success(c, { id: updated.id, role: updated.role });
-  }
-);
-
-/**
- * DELETE /tenants/:tenantId/members/:memberId
- * Remove member from tenant (admin only)
- */
-tenantsRouter.delete(
-  "/:tenantId/members/:memberId",
-  authMiddleware,
-  tenantMiddleware,
-  requireTenantAdmin,
-  async (c) => {
-    const tenantCtx = c.get("tenant")!;
-    const user = c.get("user");
-    const memberId = c.req.param("memberId");
-
-    // Prevent self-removal
-    const member = await db.query.tenantMembers.findFirst({
-      where: and(
-        eq(tenantMembers.id, memberId),
-        eq(tenantMembers.tenantId, tenantCtx.id)
-      ),
-    });
-
-    if (!member) {
-      throw new HTTPException(404, { message: "Member not found" });
-    }
-
-    if (member.userId === user.id) {
-      throw new HTTPException(400, {
-        message: "Cannot remove yourself from tenant",
-      });
+    if (!existing) {
+      throw new NotFoundError('Tenant', tenantId);
     }
 
     await db
-      .delete(tenantMembers)
-      .where(
-        and(
-          eq(tenantMembers.id, memberId),
-          eq(tenantMembers.tenantId, tenantCtx.id)
-        )
-      );
+      .update(tenants)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(eq(tenants.id, tenantId));
 
-    return noContent(c);
+    return c.json({ data: { success: true } });
   }
 );
-
-export { tenantsRouter };

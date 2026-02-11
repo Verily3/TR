@@ -1,0 +1,23 @@
+Programs are the main focus of this application. 
+Agency creates programs for it's clients. 
+Participants from multiple clients can be part of the same program. 
+Mentors can only see participants assigned to them.
+Client Admin can't create a program unless given permission from agency admin.
+Program participant can only see repective dashboards, programs, Coaching (this should be changed to Mentor/Mentoring throughout wherever Coach/Coaching is used), Assessments (we need 180 and 360 assessments. 180 is between boss and self, and 360 is with boss, peers, self, direct reports), Notifications, help & support, and settings.
+
+Learners, Mentors, and Facilitator can't see client dashboard, scorecard, Planning & Goals, People, Analytics, Settings, Program builder, and agency portal unless permission is assigned to them.
+
+it's not necessary to create a client before adding participant to a program. We should the option to if the company is not already created. 
+
+Client accounts are needed for strategic planning features specific to the organization and individuals. For example; scorecard, planning & goals. There might be things missing for basic strategic planning that you could suggest such  3-Year Highly Achievable Goal (3HAG) and BHAG related interactions. 
+
+If users are part of the Strategic planning process and leadership program, we need an intelligent way to handle program goals, individual goals that may not only relate to the respective program but also to the strategic planning process.
+
+notifications should specific to user roles
+
+Agency admin should be able to login as a client's user role or participant, to see what they may be experiencing. 
+It should be clearly display who they logged in as and be able to easily switch back to the admin view.
+
+onboarding paths vary based on user (programs and features assigned to)
+A person in a single program would only see a welcome page with a video, then next would be a page with prework instructions, then setting up their program info. The system must be saving their info in the background incase they get diconnected and should remember where they left off and returning them to the same place.Additional Program Specs 
+

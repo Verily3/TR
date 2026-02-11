@@ -1,214 +1,227 @@
-"use client";
+'use client';
 
+import { useAuth } from '@/hooks/use-auth';
+import { useLearnerDashboard } from '@/hooks/api/useLearnerDashboard';
 import {
-  BookOpen,
-  Target,
-  Users,
+  ProgramTracker,
+  WeekAtAGlance,
+  RecentComments,
+  JourneyHub,
+  Leaderboard,
+  MySchedule,
+  LearningQueue,
+} from '@/components/dashboard';
+import {
+  Trophy,
   TrendingUp,
-  Calendar,
-  CheckCircle2,
-  Loader2,
-} from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useUser, useCurrentTenant } from "@/stores/auth-store";
-import { usePrograms, useGoalStats, useTenantMembers } from "@/hooks/api";
+  BookOpen,
+  Flame,
+} from 'lucide-react';
 
-export default function DashboardPage() {
-  const user = useUser();
-  const tenant = useCurrentTenant();
-  const tenantId = tenant?.id || null;
+const LEARNER_ROLES = ['learner', 'mentor', 'facilitator'];
 
-  // Fetch real data
-  const { data: programsData, isLoading: programsLoading } = usePrograms(tenantId, {
-    perPage: 100,
-  });
-  const { data: goalStats, isLoading: goalsLoading } = useGoalStats(tenantId);
-  const { data: membersData, isLoading: membersLoading } = useTenantMembers(tenantId, {
-    perPage: 100,
+function LearnerDashboard() {
+  const { user } = useAuth();
+  const tenantId = user?.tenantId;
+  const { data, isLoading } = useLearnerDashboard(tenantId);
+
+  const today = new Date();
+  const dateString = today.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
   });
 
-  const isLoading = programsLoading || goalsLoading || membersLoading;
-
-  // Calculate stats from real data
-  const activePrograms = programsData?.items.filter(
-    (p) => p.status === "active"
-  ).length ?? 0;
-  const inProgressPrograms = programsData?.items.filter(
-    (p) => p.status === "active" && p.enrollmentCount > 0
-  ).length ?? 0;
-
-  const totalGoals = goalStats?.total ?? 0;
-  const onTrackGoals = goalStats?.onTrack ?? 0;
-
-  const totalMembers = membersData?.meta.total ?? 0;
-
-  // Calculate completion rate from goals
-  const completionRate = totalGoals > 0
-    ? Math.round((goalStats?.completed ?? 0) / totalGoals * 100)
+  const actionCount = data
+    ? data.upcomingItems.length + data.activeGoals.length + data.pendingApprovals.length
     : 0;
 
   const stats = [
     {
-      title: "Active Programs",
-      value: isLoading ? "..." : String(activePrograms),
-      description: isLoading ? "Loading..." : `${inProgressPrograms} in progress`,
-      icon: BookOpen,
-      color: "text-blue-500",
+      label: 'Points Earned',
+      value: data?.summary.totalPoints.toLocaleString() ?? '0',
+      icon: Trophy,
+      accent: true,
     },
     {
-      title: "Goals",
-      value: isLoading ? "..." : String(totalGoals),
-      description: isLoading ? "Loading..." : `${onTrackGoals} on track`,
-      icon: Target,
-      color: "text-green-500",
-    },
-    {
-      title: "Team Members",
-      value: isLoading ? "..." : String(totalMembers),
-      description: isLoading ? "Loading..." : "Active members",
-      icon: Users,
-      color: "text-purple-500",
-    },
-    {
-      title: "Goal Completion",
-      value: isLoading ? "..." : `${completionRate}%`,
-      description: isLoading ? "Loading..." : `${goalStats?.completed ?? 0} completed`,
+      label: 'Progress',
+      value: `${data?.summary.overallProgress ?? 0}%`,
       icon: TrendingUp,
-      color: "text-orange-500",
     },
-  ];
-
-  // TODO: Fetch these from API when coaching/scheduling routes exist
-  const upcomingItems = [
     {
-      title: "Leadership Workshop",
-      type: "Program",
-      date: "Today, 2:00 PM",
+      label: 'Lessons Done',
+      value: `${data?.summary.lessonsCompleted ?? 0}/${data?.summary.totalLessons ?? 0}`,
       icon: BookOpen,
     },
     {
-      title: "1:1 with Sarah",
-      type: "Coaching",
-      date: "Tomorrow, 10:00 AM",
-      icon: Calendar,
-    },
-    {
-      title: "Q1 Goals Review",
-      type: "Review",
-      date: "Jan 25, 3:00 PM",
-      icon: Target,
-    },
-  ];
-
-  // TODO: Fetch from activity/audit log API
-  const recentActivity = [
-    {
-      action: "Completed lesson",
-      item: "Effective Communication",
-      time: "2 hours ago",
-    },
-    {
-      action: "Updated goal",
-      item: "Increase team productivity",
-      time: "Yesterday",
-    },
-    {
-      action: "Submitted assessment",
-      item: "360 Feedback",
-      time: "2 days ago",
+      label: 'Programs',
+      value: String(data?.summary.enrolledPrograms ?? 0),
+      icon: Flame,
     },
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Welcome Section */}
-      <div>
-        <h1 className="text-3xl font-bold">
-          Welcome back, {user?.firstName || "User"}
+    <div className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8">
+      {/* Dashboard Header */}
+      <div className="mb-6 lg:mb-8">
+        <h1 className="text-xl sm:text-2xl text-sidebar-foreground mb-1">
+          Welcome back, {user?.firstName}
         </h1>
-        <p className="text-muted-foreground mt-1">
-          Here&apos;s what&apos;s happening in {tenant?.name || "your organization"}
+        <p className="text-sm text-muted-foreground">
+          {dateString}
+          {actionCount > 0 && (
+            <span className="ml-1">
+              &middot;{' '}
+              <span className="text-accent font-medium">
+                {actionCount} action{actionCount > 1 ? 's' : ''} need attention
+              </span>
+            </span>
+          )}
         </p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <Card key={stat.title}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {stat.title}
-              </CardTitle>
-              {isLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              ) : (
-                <stat.icon className={`h-5 w-5 ${stat.color}`} />
-              )}
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <p className="text-xs text-muted-foreground">{stat.description}</p>
-            </CardContent>
-          </Card>
-        ))}
+      {isLoading ? (
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-20 bg-muted/50 rounded-xl animate-pulse" />
+            ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div className="lg:col-span-2 h-48 bg-muted/50 rounded-xl animate-pulse" />
+            <div className="h-48 bg-muted/50 rounded-xl animate-pulse" />
+          </div>
+          <div className="h-64 bg-muted/50 rounded-xl animate-pulse" />
+        </div>
+      ) : (
+        <>
+          {/* Summary Stats */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6 lg:mb-8">
+            {stats.map((stat) => {
+              const Icon = stat.icon;
+              return (
+                <div
+                  key={stat.label}
+                  className="bg-card border border-border rounded-xl p-4 hover:border-accent/30 transition-all"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Icon className={`w-4 h-4 ${stat.accent ? 'text-accent' : 'text-muted-foreground'}`} />
+                    <span className="text-xs text-muted-foreground uppercase tracking-wide">
+                      {stat.label}
+                    </span>
+                  </div>
+                  <div className={`text-xl sm:text-2xl ${stat.accent ? 'text-accent' : 'text-sidebar-foreground'}`}>
+                    {stat.value}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Program Tracker + My Schedule - side by side */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 mb-6 lg:mb-8">
+            <div className="lg:col-span-2">
+              <ProgramTracker
+                enrollment={data?.enrollments[0] ?? null}
+                modules={data?.programModules ?? []}
+              />
+            </div>
+            <div>
+              <MySchedule
+                meetings={(data?.upcomingItems ?? []).filter(
+                  (item) => item.contentType === 'mentor_meeting'
+                )}
+              />
+            </div>
+          </div>
+
+          {/* Week at a Glance + Recent Comments - side by side */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6 lg:gap-8 mb-6 lg:mb-8">
+            <div className="lg:col-span-3">
+              <WeekAtAGlance
+                upcomingItems={data?.upcomingItems ?? []}
+                activeGoals={data?.activeGoals ?? []}
+                pendingApprovals={data?.pendingApprovals ?? []}
+              />
+            </div>
+            {tenantId && (
+              <div className="lg:col-span-2">
+                <RecentComments
+                  tenantId={tenantId}
+                  discussions={data?.recentDiscussions ?? []}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Journey Hub + Learning Queue */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
+            <JourneyHub
+              enrollment={data?.enrollments[0] ?? null}
+              upcomingItems={data?.upcomingItems ?? []}
+              activeGoals={data?.activeGoals ?? []}
+              pendingApprovals={data?.pendingApprovals ?? []}
+              summary={data?.summary ?? { totalPoints: 0, overallProgress: 0 }}
+            />
+            <LearningQueue />
+          </div>
+
+          {/* Leaderboard */}
+          <Leaderboard />
+        </>
+      )}
+    </div>
+  );
+}
+
+function AdminDashboard() {
+  const { user } = useAuth();
+
+  return (
+    <div className="max-w-[1400px] mx-auto">
+      <h1 className="text-2xl font-semibold text-gray-900">
+        Welcome back, {user?.firstName}
+      </h1>
+      <p className="mt-2 text-gray-600">
+        Here&apos;s what&apos;s happening in your organization.
+      </p>
+
+      <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="p-6 bg-white rounded-xl shadow-sm border border-gray-200">
+          <h3 className="font-medium text-gray-900">Active Programs</h3>
+          <p className="mt-2 text-3xl font-semibold text-gray-900">0</p>
+        </div>
+        <div className="p-6 bg-white rounded-xl shadow-sm border border-gray-200">
+          <h3 className="font-medium text-gray-900">Goals in Progress</h3>
+          <p className="mt-2 text-3xl font-semibold text-gray-900">0</p>
+        </div>
+        <div className="p-6 bg-white rounded-xl shadow-sm border border-gray-200">
+          <h3 className="font-medium text-gray-900">Upcoming Sessions</h3>
+          <p className="mt-2 text-3xl font-semibold text-gray-900">0</p>
+        </div>
       </div>
 
-      {/* Content Grid */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Upcoming */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Upcoming
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {upcomingItems.map((item, index) => (
-              <div
-                key={index}
-                className="flex items-center gap-4 p-3 rounded-lg bg-muted/50"
-              >
-                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                  <item.icon className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium">{item.title}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {item.type} • {item.date}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* Recent Activity */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5" />
-              Recent Activity
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {recentActivity.map((activity, index) => (
-              <div
-                key={index}
-                className="flex items-start gap-4 p-3 rounded-lg bg-muted/50"
-              >
-                <div className="h-2 w-2 mt-2 rounded-full bg-primary" />
-                <div className="flex-1">
-                  <p className="font-medium">
-                    {activity.action}: {activity.item}
-                  </p>
-                  <p className="text-sm text-muted-foreground">{activity.time}</p>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+      <div className="mt-8 p-6 bg-white rounded-xl shadow-sm border border-gray-200">
+        <h2 className="text-lg font-semibold text-gray-900">Your Profile</h2>
+        <div className="mt-4 space-y-2 text-sm">
+          <p><span className="font-medium">Email:</span> {user?.email}</p>
+          <p><span className="font-medium">Role:</span> {user?.roleSlug}</p>
+          <p><span className="font-medium">Permissions:</span> {user?.permissions?.length || 0} granted</p>
+        </div>
       </div>
     </div>
   );
+}
+
+export default function DashboardPage() {
+  const { user } = useAuth();
+
+  const isLearnerRole = user?.roleSlug && LEARNER_ROLES.includes(user.roleSlug) && !user.agencyId;
+
+  if (isLearnerRole) {
+    return <LearnerDashboard />;
+  }
+
+  return <AdminDashboard />;
 }

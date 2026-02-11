@@ -1,120 +1,137 @@
-"use client";
+'use client';
 
-import { useRouter } from "next/navigation";
-import { Bell, ChevronDown, LogOut, Settings, User } from "lucide-react";
-import { signOut } from "@/lib/firebase";
-import { useUser, useTenants, useCurrentTenant, useAuthStore } from "@/stores/auth-store";
-import { getInitials } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { useState, useRef, useEffect } from 'react';
+import { useAuth } from '@/hooks/use-auth';
+import { useRouter } from 'next/navigation';
+import { Menu, LogOut, Settings, UserRoundCog, ChevronDown } from 'lucide-react';
+import { ImpersonationSearchModal } from './ImpersonationSearchModal';
 
-export function Header() {
+interface HeaderProps {
+  onMenuClick?: () => void;
+}
+
+export function Header({ onMenuClick }: HeaderProps) {
+  const { user, logout } = useAuth();
   const router = useRouter();
-  const user = useUser();
-  const tenants = useTenants();
-  const currentTenant = useCurrentTenant();
-  const setCurrentTenant = useAuthStore((state) => state.setCurrentTenant);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [showImpersonateModal, setShowImpersonateModal] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const handleSignOut = async () => {
-    await signOut();
-    router.push("/login");
+  const handleLogout = async () => {
+    setDropdownOpen(false);
+    await logout();
+    router.push('/login');
   };
 
-  const handleTenantSwitch = (tenantId: string) => {
-    setCurrentTenant(tenantId);
-    router.push("/dashboard");
-  };
+  // Close dropdown on click outside
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [dropdownOpen]);
+
+  const initials = `${(user?.firstName?.[0] || '').toUpperCase()}${(user?.lastName?.[0] || '').toUpperCase()}`;
 
   return (
-    <header className="h-16 border-b bg-card flex items-center justify-between px-6">
-      {/* Tenant Switcher */}
-      <div>
-        {tenants.length > 1 && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="gap-2">
-                {currentTenant?.name || "Select Account"}
-                <ChevronDown className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              <DropdownMenuLabel>Switch Account</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {tenants.map((tenant) => (
-                <DropdownMenuItem
-                  key={tenant.id}
-                  onClick={() => handleTenantSwitch(tenant.id)}
-                  className={tenant.id === currentTenant?.id ? "bg-accent" : ""}
-                >
-                  {tenant.name}
-                  {tenant.role === "admin" && (
-                    <span className="ml-2 text-xs text-muted-foreground">Admin</span>
-                  )}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+    <>
+      <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center gap-3 lg:hidden">
+          <button
+            onClick={onMenuClick}
+            className="p-2 -ml-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-red-600 rounded-lg flex items-center justify-center text-white text-xs font-bold">
+              TR
+            </div>
+            <span className="text-sm font-medium text-gray-900">Results Tracking</span>
+          </div>
+        </div>
+
+        {/* Impersonation inline indicator */}
+        {user?.isImpersonating && (
+          <div className="flex-1 flex justify-center">
+            <div className="px-4 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
+              Viewing as: {user.email}
+            </div>
+          </div>
         )}
-      </div>
 
-      {/* Right Side */}
-      <div className="flex items-center gap-4">
-        {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          <span className="absolute top-1 right-1 h-2 w-2 bg-destructive rounded-full" />
-        </Button>
-
-        {/* User Menu */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="gap-2">
-              <Avatar className="h-8 w-8">
-                <AvatarImage src={user?.avatarUrl || undefined} />
-                <AvatarFallback>
-                  {getInitials(user?.firstName, user?.lastName)}
-                </AvatarFallback>
-              </Avatar>
-              <span className="hidden sm:block">
-                {user?.firstName} {user?.lastName}
-              </span>
-              <ChevronDown className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>
-              <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium">
-                  {user?.firstName} {user?.lastName}
-                </p>
-                <p className="text-xs text-muted-foreground">{user?.email}</p>
+        {/* User dropdown */}
+        <div className="relative ml-auto" ref={dropdownRef}>
+          <button
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+            className="flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            {user?.avatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={user.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-red-50 text-red-600 flex items-center justify-center text-sm font-medium">
+                {initials}
               </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => router.push("/settings/profile")}>
-              <User className="mr-2 h-4 w-4" />
-              Profile
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push("/settings")}>
-              <Settings className="mr-2 h-4 w-4" />
-              Settings
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </header>
+            )}
+            <div className="text-sm text-right hidden sm:block">
+              <p className="font-medium text-gray-900">
+                {user?.firstName} {user?.lastName}
+              </p>
+              <p className="text-gray-500 capitalize text-xs">{user?.roleSlug?.replace(/_/g, ' ')}</p>
+            </div>
+            <ChevronDown className={`w-4 h-4 text-gray-400 hidden sm:block transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {/* Dropdown Menu */}
+          {dropdownOpen && (
+            <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+              <button
+                onClick={() => {
+                  setDropdownOpen(false);
+                  router.push('/settings');
+                }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <Settings className="w-4 h-4 text-gray-400" />
+                Settings
+              </button>
+
+              {user?.agencyId && (
+                <button
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    setShowImpersonateModal(true);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <UserRoundCog className="w-4 h-4 text-gray-400" />
+                  Login As User
+                </button>
+              )}
+
+              <div className="border-t border-gray-200 my-1" />
+
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
+      </header>
+
+      <ImpersonationSearchModal
+        open={showImpersonateModal}
+        onClose={() => setShowImpersonateModal(false)}
+      />
+    </>
   );
 }

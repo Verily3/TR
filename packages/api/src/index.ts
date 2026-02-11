@@ -1,40 +1,13 @@
-import { serve } from "@hono/node-server";
-import { app } from "./app";
-import { env } from "./lib/env";
-import { initializeFirebase } from "./lib/firebase";
+import { serve } from '@hono/node-server';
+import { app } from './app.js';
 
-// Initialize Firebase Admin
-try {
-  initializeFirebase();
-  console.log("✅ Firebase Admin initialized");
-} catch (error) {
-  console.error("❌ Failed to initialize Firebase Admin:", error);
-  process.exit(1);
-}
+const port = parseInt(process.env.API_PORT || '3002', 10);
 
-// Start server
-const port = parseInt(env.PORT, 10);
+console.log(`🚀 API server starting on port ${port}...`);
 
-console.log(`🚀 Starting server on port ${port}...`);
-
-serve(
-  {
-    fetch: app.fetch,
-    port,
-  },
-  (info) => {
-    console.log(`✅ Server running at http://localhost:${info.port}`);
-    console.log(`   Environment: ${env.NODE_ENV}`);
-  }
-);
-
-// Graceful shutdown
-process.on("SIGINT", () => {
-  console.log("\n👋 Shutting down gracefully...");
-  process.exit(0);
+serve({
+  fetch: app.fetch,
+  port,
 });
 
-process.on("SIGTERM", () => {
-  console.log("\n👋 Shutting down gracefully...");
-  process.exit(0);
-});
+console.log(`✅ API server running at http://localhost:${port}`);

@@ -2,86 +2,167 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    /* Matching prototype color scheme */
-    --background: 0 0% 100%;
-    --foreground: 220 13% 18%; /* #1F2937 */
-    --card: 0 0% 100%;
-    --card-foreground: 220 13% 18%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 13% 18%;
-    --primary: 220 13% 18%; /* #1F2937 - dark charcoal */
-    --primary-foreground: 0 0% 100%;
-    --secondary: 240 5% 94%; /* #ececf0 */
-    --secondary-foreground: 240 10% 5%;
-    --muted: 240 5% 94%; /* #ececf0 */
-    --muted-foreground: 240 4% 48%; /* #717182 */
-    --accent: 0 74% 55%; /* #E53E3E - red accent */
-    --accent-foreground: 0 0% 100%;
-    --destructive: 350 80% 46%; /* #d4183d */
-    --destructive-foreground: 0 0% 100%;
-    --border: 0 0% 0% / 0.1;
-    --input: 240 5% 96%;
-    --ring: 220 13% 18%;
-    --radius: 0.625rem;
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
 
-    /* Sidebar specific */
-    --sidebar: 210 20% 98%; /* #F9FAFB */
-    --sidebar-foreground: 220 13% 18%; /* #1F2937 */
-    --sidebar-primary: 220 13% 18%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 20% 96%;
-    --sidebar-accent-foreground: 220 13% 18%;
-    --sidebar-border: 220 13% 91%; /* #E5E7EB */
-    --sidebar-ring: 220 13% 18%;
+/* ============================================
+   Animation Keyframes
+   ============================================ */
 
-    /* Chart colors */
-    --chart-1: 24 75% 50%;
-    --chart-2: 175 60% 45%;
-    --chart-3: 215 50% 35%;
-    --chart-4: 48 85% 60%;
-    --chart-5: 38 80% 55%;
+@keyframes fade-in {
+  from {
+    opacity: 0;
   }
-
-  .dark {
-    --background: 220 13% 10%;
-    --foreground: 0 0% 98%;
-    --card: 220 13% 10%;
-    --card-foreground: 0 0% 98%;
-    --popover: 220 13% 10%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 220 13% 18%;
-    --secondary: 220 10% 20%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 220 10% 20%;
-    --muted-foreground: 220 5% 60%;
-    --accent: 220 10% 20%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62% 30%;
-    --destructive-foreground: 0 84% 60%;
-    --border: 220 10% 20%;
-    --input: 220 10% 20%;
-    --ring: 220 5% 40%;
-
-    /* Sidebar specific - dark */
-    --sidebar: 220 13% 12%;
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 220 80% 60%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 220 10% 20%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 220 10% 20%;
-    --sidebar-ring: 220 5% 40%;
+  to {
+    opacity: 1;
   }
 }
 
-@layer base {
-  * {
-    @apply border-border;
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
   }
-  body {
-    @apply bg-background text-foreground;
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes progress-grow {
+  from {
+    width: 0%;
+  }
+}
+
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ============================================
+   Animation Utility Classes
+   ============================================ */
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out forwards;
+  opacity: 0;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.4s ease-out forwards;
+  opacity: 0;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.2s ease-out forwards;
+  opacity: 0;
+}
+
+.animate-progress-grow {
+  animation: progress-grow 1s ease-out forwards;
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left 0.3s ease-out forwards;
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out forwards;
+}
+
+/* ============================================
+   Animation Fill Mode Support
+   For staggered animations with animation-delay
+   ============================================ */
+
+.animate-fade-in-up,
+.animate-fade-in,
+.animate-scale-in {
+  animation-fill-mode: both;
+}
+
+/* ============================================
+   Reduced Motion Support
+   Respects user's motion preferences
+   ============================================ */
+
+/* ============================================
+   Prose Link Styling
+   For admin-authored content with HTML links
+   ============================================ */
+
+/* ============================================
+   TipTap Rich Text Editor
+   ============================================ */
+
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #9ca3af;
+  pointer-events: none;
+  height: 0;
+}
+
+.tiptap:focus {
+  outline: none;
+}
+
+.prose-a a {
+  color: hsl(var(--accent));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 500;
+  transition: opacity 0.15s;
+}
+
+.prose-a a:hover {
+  opacity: 0.8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-fade-in-up,
+  .animate-scale-in,
+  .animate-progress-grow,
+  .animate-slide-in-left,
+  .animate-slide-in-right {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
   }
 }
