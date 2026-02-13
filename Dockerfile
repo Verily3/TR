@@ -32,7 +32,7 @@ COPY packages/db/package.json packages/db/tsconfig.json ./packages/db/
 COPY packages/api/package.json packages/api/tsconfig.json ./packages/api/
 COPY packages/web/package.json packages/web/tsconfig.json ./packages/web/
 
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 # ------------------------------------------------------------------------------
 # Stage 3: Build all packages
@@ -74,7 +74,7 @@ COPY packages/db/package.json ./packages/db/
 COPY packages/api/package.json ./packages/api/
 COPY packages/web/package.json ./packages/web/
 
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile --prod
 
 # ------------------------------------------------------------------------------
 # Stage 5: Production runner (minimal image)
