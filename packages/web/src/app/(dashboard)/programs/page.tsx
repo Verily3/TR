@@ -168,7 +168,7 @@ interface ProgramCardProps {
   animationIndex: number;
 }
 
-const ProgramCard = memo(function ProgramCard({ program, tenantId, userId, animationIndex }: ProgramCardProps) {
+const ProgramCard = memo(function ProgramCard({ program, tenantId, animationIndex }: ProgramCardProps) {
   const [showCurriculum, setShowCurriculum] = useState(false);
   const config = STATUS_CONFIG[program.status] || STATUS_CONFIG.draft;
 
