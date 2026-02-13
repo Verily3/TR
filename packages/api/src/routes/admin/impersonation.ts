@@ -9,7 +9,7 @@ import { PERMISSIONS } from '@tr/shared';
 import type { Variables } from '../../types/context.js';
 import crypto from 'node:crypto';
 
-const { users, tenants, impersonationSessions, sessions } = schema;
+const { users, tenants, impersonationSessions } = schema;
 
 export const impersonationRoutes = new Hono<{ Variables: Variables }>();
 
@@ -31,7 +31,6 @@ impersonationRoutes.post(
   zValidator('json', startImpersonationSchema),
   async (c) => {
     const adminUser = c.get('user');
-    const adminSession = c.get('session');
     const { targetUserId, reason, durationMinutes } = c.req.valid('json');
 
     // Can't impersonate yourself

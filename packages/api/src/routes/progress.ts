@@ -74,7 +74,8 @@ progressRoutes.get(
   async (c) => {
     const tenant = c.get('tenant')!;
     const user = c.get('user');
-    const { programId, enrollmentId } = c.req.param();
+    const enrollmentId = c.req.param('enrollmentId')!;
+    const programId = c.req.param('programId')!;
 
     // Verify enrollment exists
     const [enrollment] = await db
@@ -174,7 +175,8 @@ progressRoutes.put(
   async (c) => {
     const tenant = c.get('tenant')!;
     const user = c.get('user');
-    const { programId, lessonId } = c.req.param();
+    const lessonId = c.req.param('lessonId')!;
+    const programId = c.req.param('programId')!;
     const { submissionData } = c.req.valid('json');
 
     // Get user's enrollment
@@ -263,7 +265,8 @@ progressRoutes.post(
   async (c) => {
     const tenant = c.get('tenant')!;
     const user = c.get('user');
-    const { programId, lessonId } = c.req.param();
+    const lessonId = c.req.param('lessonId')!;
+    const programId = c.req.param('programId')!;
     const body = c.req.valid('json');
 
     // Get user's enrollment
@@ -352,7 +355,8 @@ progressRoutes.put(
   zValidator('json', updateGoalSchema),
   async (c) => {
     const tenant = c.get('tenant')!;
-    const { programId, goalId } = c.req.param();
+    const goalId = c.req.param('goalId')!;
+    const programId = c.req.param('programId')!;
     const body = c.req.valid('json');
 
     // Verify goal exists
@@ -440,7 +444,8 @@ progressRoutes.post(
   async (c) => {
     const tenant = c.get('tenant')!;
     const user = c.get('user');
-    const { programId, lessonId } = c.req.param();
+    const lessonId = c.req.param('lessonId')!;
+    const programId = c.req.param('programId')!;
     const { submissionText } = c.req.valid('json');
 
     // Get user's enrollment (must be a learner)
@@ -560,7 +565,8 @@ progressRoutes.post(
   async (c) => {
     const tenant = c.get('tenant')!;
     const user = c.get('user');
-    const { programId, lessonId } = c.req.param();
+    const lessonId = c.req.param('lessonId')!;
+    const programId = c.req.param('programId')!;
     const { status, reviewerRole, feedback } = c.req.valid('json');
 
     // Get enrollment ID from query
@@ -696,7 +702,8 @@ progressRoutes.get(
   async (c) => {
     const tenant = c.get('tenant')!;
     const user = c.get('user');
-    const { programId, enrollmentId } = c.req.param();
+    const enrollmentId = c.req.param('enrollmentId')!;
+    const programId = c.req.param('programId')!;
 
     // Verify enrollment belongs to this tenant/program
     const [enrollment] = await db
@@ -782,7 +789,8 @@ progressRoutes.get(
   requirePermission(PERMISSIONS.PROGRAMS_VIEW),
   async (c) => {
     const user = c.get('user');
-    const { programId, lessonId } = c.req.param();
+    const lessonId = c.req.param('lessonId')!;
+    const programId = c.req.param('programId')!;
 
     // Get user's enrollment
     const [enrollment] = await db
@@ -825,7 +833,8 @@ progressRoutes.get(
   requirePermission(PERMISSIONS.PROGRAMS_VIEW),
   async (c) => {
     const user = c.get('user');
-    const { programId, lessonId } = c.req.param();
+    const lessonId = c.req.param('lessonId')!;
+    const programId = c.req.param('programId')!;
 
     // Verify user is enrolled in this program
     const [enrollment] = await db
@@ -874,7 +883,8 @@ progressRoutes.post(
   zValidator('json', createDiscussionSchema),
   async (c) => {
     const user = c.get('user');
-    const { programId, lessonId } = c.req.param();
+    const lessonId = c.req.param('lessonId')!;
+    const programId = c.req.param('programId')!;
     const { content } = c.req.valid('json');
 
     // Get user's enrollment
@@ -963,7 +973,8 @@ progressRoutes.put(
   async (c) => {
     const tenant = c.get('tenant')!;
     const user = c.get('user');
-    const { programId, taskId } = c.req.param();
+    const taskId = c.req.param('taskId')!;
+    const programId = c.req.param('programId')!;
     const { submissionData } = c.req.valid('json');
 
     // Get user's enrollment
@@ -1056,7 +1067,8 @@ progressRoutes.post(
   async (c) => {
     const tenant = c.get('tenant')!;
     const user = c.get('user');
-    const { programId, taskId } = c.req.param();
+    const taskId = c.req.param('taskId')!;
+    const programId = c.req.param('programId')!;
     const { submissionText, submissionData } = c.req.valid('json');
 
     // Get user's enrollment
@@ -1189,7 +1201,8 @@ progressRoutes.post(
   async (c) => {
     const tenant = c.get('tenant')!;
     const user = c.get('user');
-    const { programId, taskId } = c.req.param();
+    const taskId = c.req.param('taskId')!;
+    const programId = c.req.param('programId')!;
     const { status, reviewerRole, feedback } = c.req.valid('json');
 
     const enrollmentId = c.req.query('enrollmentId');
@@ -1335,7 +1348,8 @@ progressRoutes.get(
   async (c) => {
     const tenant = c.get('tenant')!;
     const user = c.get('user');
-    const { programId, enrollmentId } = c.req.param();
+    const enrollmentId = c.req.param('enrollmentId')!;
+    const programId = c.req.param('programId')!;
 
     // Verify enrollment exists
     const [enrollment] = await db

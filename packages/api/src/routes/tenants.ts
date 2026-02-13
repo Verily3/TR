@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { eq, and, isNull, desc, sql } from 'drizzle-orm';
 import { db, schema } from '@tr/db';
 import { requireAgencyAccess, requirePermission, requireTenantAccess } from '../middleware/permissions.js';
-import { BadRequestError, ConflictError, NotFoundError } from '../lib/errors.js';
+import { ConflictError, NotFoundError } from '../lib/errors.js';
 import { PERMISSIONS, SYSTEM_ROLES } from '@tr/shared';
 import type { Variables } from '../types/context.js';
 import type { PaginationMeta } from '@tr/shared';

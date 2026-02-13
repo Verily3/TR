@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { eq, and, or, isNull, sql, desc, ilike } from 'drizzle-orm';
+import { eq, and, or, isNull, sql, desc } from 'drizzle-orm';
 import { hash } from 'argon2';
 import crypto from 'node:crypto';
 import { db, schema } from '@tr/db';
@@ -75,7 +75,7 @@ agencyEnrollmentsRoutes.get(
   zValidator('query', listQuerySchema),
   async (c) => {
     const user = c.get('user');
-    const programId = c.req.param('programId');
+    const programId = c.req.param('programId')!;
     const { page, limit, role, status, tenantId, search } = c.req.valid('query');
 
     await verifyAgencyProgram(programId, user.agencyId!);
@@ -174,7 +174,7 @@ agencyEnrollmentsRoutes.post(
   zValidator('json', createEnrollmentSchema),
   async (c) => {
     const user = c.get('user');
-    const programId = c.req.param('programId');
+    const programId = c.req.param('programId')!;
     const { userId, role } = c.req.valid('json');
 
     const program = await verifyAgencyProgram(programId, user.agencyId!);
@@ -269,10 +269,10 @@ agencyEnrollmentsRoutes.post(
   zValidator('json', bulkEnrollSchema),
   async (c) => {
     const user = c.get('user');
-    const programId = c.req.param('programId');
+    const programId = c.req.param('programId')!;
     const { participants } = c.req.valid('json');
 
-    const program = await verifyAgencyProgram(programId, user.agencyId!);
+    await verifyAgencyProgram(programId, user.agencyId!);
 
     // Validate all tenantIds belong to this agency
     const tenantIds = [...new Set(participants.filter(p => p.tenantId).map(p => p.tenantId!))];
@@ -436,7 +436,8 @@ agencyEnrollmentsRoutes.delete(
   requirePermission(PERMISSIONS.PROGRAMS_ENROLL),
   async (c) => {
     const user = c.get('user');
-    const { programId, enrollmentId } = c.req.param();
+    const enrollmentId = c.req.param('enrollmentId')!;
+    const programId = c.req.param('programId')!;
 
     await verifyAgencyProgram(programId, user.agencyId!);
 

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { eq, and, isNull, desc, sql, asc, or, arrayContains } from 'drizzle-orm';
+import { eq, and, isNull, desc, sql, asc, or } from 'drizzle-orm';
 import { db, schema } from '@tr/db';
 import { requireTenantAccess, requirePermission } from '../middleware/permissions.js';
 import { NotFoundError, BadRequestError, ForbiddenError } from '../lib/errors.js';
@@ -14,10 +14,6 @@ const {
   modules,
   lessons,
   enrollments,
-  enrollmentMentorships,
-  lessonProgress,
-  goalResponses,
-  approvalSubmissions,
   lessonTasks,
 } = schema;
 
@@ -1066,7 +1062,7 @@ programsRoutes.put(
   zValidator('json', updateLessonSchema),
   async (c) => {
     const tenant = c.get('tenant')!;
-    const { programId, moduleId, lessonId } = c.req.param();
+    const { moduleId, lessonId } = c.req.param();
     const body = c.req.valid('json');
 
     // Verify lesson exists
@@ -1112,7 +1108,7 @@ programsRoutes.delete(
   requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
   async (c) => {
     const tenant = c.get('tenant')!;
-    const { programId, moduleId, lessonId } = c.req.param();
+    const { moduleId, lessonId } = c.req.param();
 
     // Verify lesson exists
     const [existing] = await db
