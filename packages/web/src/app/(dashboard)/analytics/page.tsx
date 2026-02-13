@@ -235,7 +235,6 @@ function SimpleBarChart({
 function SimpleLineChart({
   data,
   color = 'accent',
-  suffix = '',
 }: {
   data: { label: string; value: number }[];
   color?: 'accent' | 'blue' | 'green' | 'purple';
