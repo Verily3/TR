@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node ../../scripts/fix-esm-imports.mjs dist",
     "dev": "tsx watch --env-file=.env src/index.ts",
     "start": "node dist/index.js",
     "clean": "rm -rf dist"

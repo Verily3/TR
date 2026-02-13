@@ -16,7 +16,7 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && node ../../scripts/fix-esm-imports.mjs dist",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
     "db:generate": "drizzle-kit generate",
