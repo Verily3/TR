@@ -41,8 +41,9 @@ FROM deps AS builder
 
 WORKDIR /app
 
-# Copy all source code
+# Copy all source code and build scripts
 COPY packages/ ./packages/
+COPY scripts/ ./scripts/
 
 # Build-time environment for Next.js
 # Empty NEXT_PUBLIC_API_URL = relative URLs (proxied via rewrites in Docker)
