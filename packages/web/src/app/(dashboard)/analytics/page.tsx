@@ -29,11 +29,6 @@ type TimeRange = '7d' | '30d' | '90d' | '12m';
 type MetricTrend = 'up' | 'down' | 'stable';
 type Tab = 'overview' | 'programs' | 'assessments' | 'team' | 'goals';
 
-interface TimeSeriesData {
-  date: string;
-  value: number;
-}
-
 interface ChartDataPoint {
   label: string;
   value: number;
