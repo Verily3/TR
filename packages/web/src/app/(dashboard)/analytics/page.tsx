@@ -20,7 +20,7 @@ import {
   Building2,
   Heart,
 } from 'lucide-react';
-import { useAuth } from '@/hooks/use-auth';
+
 
 // ============================================
 // Types
@@ -367,7 +367,6 @@ function getTrendColor(trend: MetricTrend, positive = true) {
 // Main Page Component
 // ============================================
 export default function AnalyticsPage() {
-  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
 
