@@ -68,6 +68,10 @@ RUN apt-get update && \
 
 WORKDIR /app
 
+# Use hoisted node_modules (flat, npm-style) so packages are resolvable at runtime
+# without pnpm's symlink structure (which breaks on Docker COPY)
+RUN echo "shamefully-hoist=true" > .npmrc
+
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/db/package.json ./packages/db/
