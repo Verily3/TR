@@ -9,7 +9,7 @@ import { PERMISSIONS, SYSTEM_ROLES } from '@tr/shared';
 import type { Variables } from '../types/context.js';
 import type { PaginationMeta } from '@tr/shared';
 
-const { tenants, users, roles, userRoles } = schema;
+const { tenants, users, roles } = schema;
 
 export const tenantsRoutes = new Hono<{ Variables: Variables }>();
 
