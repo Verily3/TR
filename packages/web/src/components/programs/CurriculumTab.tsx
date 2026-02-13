@@ -29,6 +29,7 @@ import {
   Type,
   Copy,
   AlertCircle,
+  Calendar,
 } from 'lucide-react';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { getEmbedUrl, getVideoProvider } from '@/lib/video-utils';
@@ -39,6 +40,9 @@ import {
   useDeleteModule,
   useUpdateLesson,
   useDeleteLesson,
+  useCreateTask,
+  useUpdateTask,
+  useDeleteTask,
 } from '@/hooks/api/usePrograms';
 import {
   useCreateAgencyModule,
@@ -46,7 +50,12 @@ import {
   useDeleteAgencyModule,
   useUpdateAgencyLesson,
   useDeleteAgencyLesson,
+  useCreateAgencyTask,
+  useUpdateAgencyTask,
+  useDeleteAgencyTask,
 } from '@/hooks/api/useAgencyPrograms';
+import { EventEditor } from './EventEditor';
+import { TaskEditor } from './TaskEditor';
 import type {
   ProgramWithModules,
   Module,
@@ -55,8 +64,11 @@ import type {
   LessonContent,
   VisibilitySettings,
   UpdateLessonInput,
+  UpdateModuleInput,
   ApprovalRequired,
   EnrollmentRole,
+  CreateTaskInput,
+  UpdateTaskInput,
 } from '@/types/programs';
 
 // ============================================
@@ -162,11 +174,22 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
   const agencyUpdateLesson = useUpdateAgencyLesson(program.id, selectedLessonModuleId || undefined);
   const agencyDeleteLesson = useDeleteAgencyLesson(program.id, selectedLessonModuleId || undefined);
 
+  // Task mutation hooks
+  const tenantCreateTask = useCreateTask(tenantId, program.id, selectedLesson?.id);
+  const tenantUpdateTask = useUpdateTask(tenantId, program.id, selectedLesson?.id);
+  const tenantDeleteTask = useDeleteTask(tenantId, program.id, selectedLesson?.id);
+  const agencyCreateTask = useCreateAgencyTask(program.id, selectedLesson?.id);
+  const agencyUpdateTask = useUpdateAgencyTask(program.id, selectedLesson?.id);
+  const agencyDeleteTask = useDeleteAgencyTask(program.id, selectedLesson?.id);
+
   const createModule = isAgencyContext ? agencyCreateModule : tenantCreateModule;
   const updateModule = isAgencyContext ? agencyUpdateModule : tenantUpdateModule;
   const deleteModule = isAgencyContext ? agencyDeleteModule : tenantDeleteModule;
   const updateLesson = isAgencyContext ? agencyUpdateLesson : tenantUpdateLesson;
   const deleteLesson = isAgencyContext ? agencyDeleteLesson : tenantDeleteLesson;
+  const createTask = isAgencyContext ? agencyCreateTask : tenantCreateTask;
+  const updateTask = isAgencyContext ? agencyUpdateTask : tenantUpdateTask;
+  const deleteTask = isAgencyContext ? agencyDeleteTask : tenantDeleteTask;
 
   // Sorted modules
   const sortedModules = useMemo(
@@ -175,8 +198,11 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
   );
 
   // Stats
-  const totalModules = sortedModules.length;
-  const totalLessons = sortedModules.reduce((sum, m) => sum + (m.lessons?.length || 0), 0);
+  const moduleItems = sortedModules.filter((m) => m.type !== 'event');
+  const eventItems = sortedModules.filter((m) => m.type === 'event');
+  const totalModules = moduleItems.length;
+  const totalEvents = eventItems.length;
+  const totalLessons = moduleItems.reduce((sum, m) => sum + (m.lessons?.length || 0), 0);
 
   // Auto-expand all modules on first load
   useEffect(() => {
@@ -286,6 +312,31 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
         }
       },
     });
+  };
+
+  const handleAddEvent = () => {
+    createModule.mutate({ title: 'New Event', type: 'event' }, {
+      onSuccess: (data: unknown) => {
+        const newEvent = data as { id?: string };
+        if (newEvent?.id) {
+          setSelectedModuleId(newEvent.id);
+          setSelectedLesson(null);
+          setSelectedLessonModuleId(null);
+        }
+      },
+    });
+  };
+
+  const handleSaveEvent = (input: UpdateModuleInput) => {
+    if (!selectedModuleId) return;
+    updateModule.mutate({ moduleId: selectedModuleId, input });
+  };
+
+  const handleDeleteEvent = () => {
+    if (!selectedModuleId) return;
+    if (!confirm('Are you sure you want to delete this event?')) return;
+    deleteModule.mutate(selectedModuleId);
+    setSelectedModuleId(null);
   };
 
   const handleSaveModuleSettings = () => {
@@ -1095,15 +1146,48 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
             <div className="text-xl font-semibold text-gray-900">{totalLessons}</div>
             <div className="text-xs text-gray-500">Lessons</div>
           </div>
+          {totalEvents > 0 && (
+            <div className="flex-1 text-center border border-gray-200 rounded-lg py-3">
+              <div className="text-xl font-semibold text-gray-900">{totalEvents}</div>
+              <div className="text-xs text-gray-500">Events</div>
+            </div>
+          )}
         </div>
 
         {/* Module Tree */}
         <div className="flex-1 overflow-y-auto py-2">
           {sortedModules.map((mod) => {
+            const isEvent = mod.type === 'event';
             const isExpanded = expandedModules[mod.id] ?? false;
             const isModSelected = selectedModuleId === mod.id && !selectedLesson;
             const sortedLessons = [...(mod.lessons || [])].sort((a, b) => a.order - b.order);
             const modulePoints = getModulePoints(mod);
+
+            // Event rendering
+            if (isEvent) {
+              return (
+                <div key={mod.id}>
+                  <button
+                    onClick={() => handleSelectModule(mod.id)}
+                    className={`w-full flex items-center gap-2 px-3 py-2.5 text-left transition-colors ${
+                      isModSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className="p-0.5 w-5" />
+                    <Calendar className={`w-4 h-4 shrink-0 ${isModSelected ? 'text-blue-500' : 'text-blue-400'}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-500 leading-none mb-0.5">Event</p>
+                      <p className={`text-sm font-medium truncate ${isModSelected ? 'text-blue-600' : 'text-gray-900'}`}>
+                        {mod.title}
+                      </p>
+                      {mod.eventConfig?.date && (
+                        <p className="text-xs text-gray-400">{mod.eventConfig.date}</p>
+                      )}
+                    </div>
+                  </button>
+                </div>
+              );
+            }
 
             return (
               <div key={mod.id}>
@@ -1227,8 +1311,8 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
           })}
         </div>
 
-        {/* Add Module Button */}
-        <div className="p-4 border-t border-gray-100">
+        {/* Add Module / Event Buttons */}
+        <div className="p-4 border-t border-gray-100 space-y-2">
           <button
             onClick={handleAddModule}
             disabled={createModule.isPending}
@@ -1236,6 +1320,14 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
           >
             <Plus className="w-4 h-4" />
             {createModule.isPending ? 'Adding...' : 'Add Module'}
+          </button>
+          <button
+            onClick={handleAddEvent}
+            disabled={createModule.isPending}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-blue-200 rounded-lg text-sm text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
+          >
+            <Calendar className="w-4 h-4" />
+            Add Event
           </button>
         </div>
       </div>
@@ -1631,38 +1723,14 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               )}
             </div>
 
-            {/* Task Section Card */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <ClipboardList className="w-5 h-5 text-gray-500" />
-                <h3 className="text-base font-semibold text-gray-900">Task / Action Item</h3>
-              </div>
-              <p className="text-sm text-gray-500 mb-4">
-                Optional task shown on the learn page. Learners must complete the task to mark the lesson as done.
-              </p>
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Task Title</label>
-                  <input
-                    type="text"
-                    value={editContent.taskTitle || ''}
-                    onChange={(e) => setEditContent({ ...editContent, taskTitle: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
-                    placeholder="e.g., Complete the Leadership Style Worksheet"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Task Description</label>
-                  <textarea
-                    value={editContent.taskDescription || ''}
-                    onChange={(e) => setEditContent({ ...editContent, taskDescription: e.target.value })}
-                    rows={3}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none resize-none bg-gray-50"
-                    placeholder="Describe what the learner needs to do..."
-                  />
-                </div>
-              </div>
-            </div>
+            {/* Tasks Section */}
+            <TaskEditor
+              tasks={selectedLesson.tasks || []}
+              onCreateTask={(input: CreateTaskInput) => createTask.mutate(input)}
+              onUpdateTask={(taskId: string, input: UpdateTaskInput) => updateTask.mutate({ taskId, input })}
+              onDeleteTask={(taskId: string) => deleteTask.mutate(taskId)}
+              isCreating={createTask.isPending}
+            />
 
             {/* Lesson Visibility Card */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -1732,6 +1800,15 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               </div>
             </div>
           </div>
+        ) : selectedModule?.type === 'event' ? (
+          /* --- Event Editor View --- */
+          <EventEditor
+            event={selectedModule}
+            onSave={handleSaveEvent}
+            onDelete={handleDeleteEvent}
+            isSaving={updateModule.isPending}
+            isDeleting={deleteModule.isPending}
+          />
         ) : selectedModule ? (
           /* --- Module Settings View --- */
           <div className="p-6 space-y-6">

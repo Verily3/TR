@@ -23,6 +23,11 @@ import type {
   CreateGoalInput,
   ApprovalSubmission,
   DiscussionPost,
+  LessonTask,
+  CreateTaskInput,
+  UpdateTaskInput,
+  TaskProgressData,
+  TaskWithProgress,
 } from '@/types/programs';
 
 // ============ Programs ============
@@ -584,5 +589,188 @@ export function useCreateDiscussionPost(
       queryClient.invalidateQueries({ queryKey: ['lessonDiscussions', tenantId, programId, variables.lessonId] });
       queryClient.invalidateQueries({ queryKey: ['learnerProgress', tenantId, programId] });
     },
+  });
+}
+
+// ============ Tasks ============
+
+export function useCreateTask(
+  tenantId: string | undefined,
+  programId: string | undefined,
+  lessonId: string | undefined
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: CreateTaskInput) => {
+      const response = await api.post<LessonTask>(
+        `/api/tenants/${tenantId}/programs/${programId}/lessons/${lessonId}/tasks`,
+        input
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['program', tenantId, programId] });
+    },
+  });
+}
+
+export function useUpdateTask(
+  tenantId: string | undefined,
+  programId: string | undefined,
+  lessonId: string | undefined
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ taskId, input }: { taskId: string; input: UpdateTaskInput }) => {
+      const response = await api.patch<LessonTask>(
+        `/api/tenants/${tenantId}/programs/${programId}/lessons/${lessonId}/tasks/${taskId}`,
+        input
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['program', tenantId, programId] });
+    },
+  });
+}
+
+export function useDeleteTask(
+  tenantId: string | undefined,
+  programId: string | undefined,
+  lessonId: string | undefined
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (taskId: string) => {
+      await api.delete(
+        `/api/tenants/${tenantId}/programs/${programId}/lessons/${lessonId}/tasks/${taskId}`
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['program', tenantId, programId] });
+    },
+  });
+}
+
+export function useReorderTasks(
+  tenantId: string | undefined,
+  programId: string | undefined,
+  lessonId: string | undefined
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (items: { id: string; order: number }[]) => {
+      await api.put(
+        `/api/tenants/${tenantId}/programs/${programId}/lessons/${lessonId}/tasks/reorder`,
+        { items }
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['program', tenantId, programId] });
+    },
+  });
+}
+
+// ============ Task Progress ============
+
+export function useCompleteTask(tenantId: string | undefined, programId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      taskId,
+      submissionData,
+    }: {
+      taskId: string;
+      submissionData?: Record<string, unknown>;
+    }) => {
+      const response = await api.put<TaskProgressData>(
+        `/api/tenants/${tenantId}/programs/${programId}/tasks/${taskId}/complete`,
+        { submissionData }
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['learnerProgress', tenantId, programId] });
+      queryClient.invalidateQueries({ queryKey: ['taskProgress', tenantId, programId] });
+      queryClient.invalidateQueries({ queryKey: ['myEnrollment', tenantId, programId] });
+    },
+  });
+}
+
+export function useSubmitTaskForApproval(tenantId: string | undefined, programId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      taskId,
+      submissionText,
+      submissionData,
+    }: {
+      taskId: string;
+      submissionText: string;
+      submissionData?: Record<string, unknown>;
+    }) => {
+      const response = await api.post<ApprovalSubmission[]>(
+        `/api/tenants/${tenantId}/programs/${programId}/tasks/${taskId}/submit`,
+        { submissionText, submissionData }
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['learnerProgress', tenantId, programId] });
+      queryClient.invalidateQueries({ queryKey: ['taskProgress', tenantId, programId] });
+    },
+  });
+}
+
+export function useApproveTask(tenantId: string | undefined, programId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      taskId,
+      enrollmentId,
+      reviewerRole,
+      status,
+      feedback,
+    }: {
+      taskId: string;
+      enrollmentId: string;
+      reviewerRole: 'mentor' | 'facilitator';
+      status: 'approved' | 'rejected';
+      feedback?: string;
+    }) => {
+      const response = await api.post<ApprovalSubmission>(
+        `/api/tenants/${tenantId}/programs/${programId}/tasks/${taskId}/approve?enrollmentId=${enrollmentId}`,
+        { status, reviewerRole, feedback }
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['learnerProgress', tenantId, programId] });
+      queryClient.invalidateQueries({ queryKey: ['taskProgress', tenantId, programId] });
+    },
+  });
+}
+
+export function useTaskProgress(
+  tenantId: string | undefined,
+  programId: string | undefined,
+  enrollmentId: string | undefined
+) {
+  return useQuery({
+    queryKey: ['taskProgress', tenantId, programId, enrollmentId],
+    queryFn: async () => {
+      const response = await api.get<TaskWithProgress[]>(
+        `/api/tenants/${tenantId}/programs/${programId}/enrollments/${enrollmentId}/task-progress`
+      ) as unknown as { data: TaskWithProgress[] };
+      return response.data;
+    },
+    enabled: !!tenantId && !!programId && !!enrollmentId,
   });
 }

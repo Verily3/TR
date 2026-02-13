@@ -18,6 +18,7 @@ const {
   lessonProgress,
   goalResponses,
   approvalSubmissions,
+  lessonTasks,
 } = schema;
 
 export const programsRoutes = new Hono<{ Variables: Variables }>();
@@ -60,12 +61,28 @@ const updateProgramSchema = createProgramSchema.partial().extend({
   allowedTenantIds: z.array(z.string().uuid()).optional(),
 });
 
+// Event config schema
+const eventConfigSchema = z.object({
+  date: z.string().optional(),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
+  timezone: z.string().optional(),
+  location: z.string().optional(),
+  zoomLink: z.string().optional(),
+  meetingId: z.string().optional(),
+  meetingPassword: z.string().optional(),
+  description: z.string().optional(),
+  videoUrl: z.string().optional(),
+});
+
 // Module schemas
 const createModuleSchema = z.object({
   title: z.string().min(1).max(255),
   description: z.string().optional(),
   parentModuleId: z.string().uuid().optional(),
   order: z.number().int().optional(),
+  type: z.enum(['module', 'event']).default('module'),
+  eventConfig: eventConfigSchema.optional(),
   dripType: z
     .enum(['immediate', 'days_after_enrollment', 'days_after_previous', 'on_date'])
     .default('immediate'),
@@ -120,6 +137,39 @@ const reorderSchema = z.object({
     })
   ),
 });
+
+// Task schemas
+const taskConfigSchema = z.object({
+  formPrompt: z.string().optional(),
+  minLength: z.number().optional(),
+  maxLength: z.number().optional(),
+  enableDiscussion: z.boolean().optional(),
+  goalPrompt: z.string().optional(),
+  requireMetrics: z.boolean().optional(),
+  requireActionSteps: z.boolean().optional(),
+  metricsGuidance: z.string().optional(),
+  actionStepsGuidance: z.string().optional(),
+  submissionTypes: z.array(z.enum(['text', 'file_upload', 'url', 'video', 'presentation', 'spreadsheet'])).optional(),
+  maxFileSize: z.number().optional(),
+  allowedFileTypes: z.array(z.string()).optional(),
+  instructions: z.string().optional(),
+  questions: z.array(z.string()).optional(),
+});
+
+const createTaskSchema = z.object({
+  title: z.string().min(1).max(255),
+  description: z.string().optional(),
+  order: z.number().int().optional(),
+  responseType: z.enum(['text', 'file_upload', 'goal', 'completion_click', 'discussion']).default('completion_click'),
+  approvalRequired: z.enum(['none', 'mentor', 'facilitator', 'both']).default('none'),
+  dueDate: z.string().datetime().optional(),
+  dueDaysOffset: z.number().int().optional(),
+  points: z.number().int().default(0),
+  config: taskConfigSchema.optional(),
+  status: z.enum(['draft', 'active']).default('draft'),
+});
+
+const updateTaskSchema = createTaskSchema.partial();
 
 /**
  * GET /api/tenants/:tenantId/programs
@@ -401,6 +451,16 @@ programsRoutes.get(
       )
       .orderBy(asc(lessons.order));
 
+    // Get tasks for all lessons in the program
+    const lessonIds = moduleLessons.map((l) => l.id);
+    const allTasks = lessonIds.length > 0
+      ? await db
+          .select()
+          .from(lessonTasks)
+          .where(sql`${lessonTasks.lessonId} IN ${lessonIds}`)
+          .orderBy(asc(lessonTasks.order))
+      : [];
+
     // Get enrollment stats
     const [{ learnerCount, mentorCount, facilitatorCount }] = await db
       .select({
@@ -411,10 +471,15 @@ programsRoutes.get(
       .from(enrollments)
       .where(eq(enrollments.programId, programId));
 
-    // Organize lessons by module
+    // Organize lessons by module, with tasks nested in lessons
     const modulesWithLessons = programModules.map((mod) => ({
       ...mod,
-      lessons: moduleLessons.filter((l) => l.moduleId === mod.id),
+      lessons: moduleLessons
+        .filter((l) => l.moduleId === mod.id)
+        .map((l) => ({
+          ...l,
+          tasks: allTasks.filter((t) => t.lessonId === l.id),
+        })),
     }));
 
     return c.json({
@@ -686,7 +751,7 @@ programsRoutes.post(
         .orderBy(asc(lessons.order));
 
       for (const lesson of moduleLessons) {
-        await db.insert(lessons).values({
+        const [newLesson] = await db.insert(lessons).values({
           moduleId: newModule.id,
           title: lesson.title,
           contentType: lesson.contentType,
@@ -698,8 +763,31 @@ programsRoutes.post(
           dripValue: lesson.dripValue,
           dripDate: lesson.dripDate,
           visibleTo: lesson.visibleTo,
+          approvalRequired: lesson.approvalRequired,
           status: 'draft',
-        });
+        }).returning();
+
+        // Copy tasks for this lesson
+        const lessonTaskList = await db
+          .select()
+          .from(lessonTasks)
+          .where(eq(lessonTasks.lessonId, lesson.id))
+          .orderBy(asc(lessonTasks.order));
+
+        for (const task of lessonTaskList) {
+          await db.insert(lessonTasks).values({
+            lessonId: newLesson.id,
+            title: task.title,
+            description: task.description,
+            order: task.order,
+            responseType: task.responseType,
+            approvalRequired: task.approvalRequired,
+            dueDaysOffset: task.dueDaysOffset,
+            points: task.points,
+            config: task.config,
+            status: 'draft',
+          });
+        }
       }
     }
 
@@ -780,6 +868,8 @@ programsRoutes.post(
         description: body.description,
         order,
         depth,
+        type: body.type,
+        eventConfig: body.eventConfig,
         dripType: body.dripType,
         dripValue: body.dripValue,
         dripDate: body.dripDate ? new Date(body.dripDate) : null,
@@ -1067,6 +1157,186 @@ programsRoutes.put(
         .update(lessons)
         .set({ order: item.order, updatedAt: new Date() })
         .where(and(eq(lessons.id, item.id), eq(lessons.moduleId, moduleId)));
+    }
+
+    return c.json({ data: { success: true } });
+  }
+);
+
+// ============================================
+// TASK ROUTES (within lessons)
+// ============================================
+
+/**
+ * POST /api/tenants/:tenantId/programs/:programId/lessons/:lessonId/tasks
+ * Create a task within a lesson
+ */
+programsRoutes.post(
+  '/:programId/lessons/:lessonId/tasks',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', createTaskSchema),
+  async (c) => {
+    const tenant = c.get('tenant')!;
+    const { programId, lessonId } = c.req.param();
+    const body = c.req.valid('json');
+
+    // Verify lesson exists in program owned by this tenant
+    const [lesson] = await db
+      .select()
+      .from(lessons)
+      .innerJoin(modules, eq(lessons.moduleId, modules.id))
+      .innerJoin(programs, eq(modules.programId, programs.id))
+      .where(
+        and(
+          eq(lessons.id, lessonId),
+          eq(programs.id, programId),
+          eq(programs.tenantId, tenant.id)
+        )
+      )
+      .limit(1);
+
+    if (!lesson) {
+      throw new NotFoundError('Lesson', lessonId);
+    }
+
+    // Get max order if not provided
+    let order = body.order;
+    if (order === undefined) {
+      const [{ maxOrder }] = await db
+        .select({ maxOrder: sql<number>`coalesce(max(${lessonTasks.order}), -1)` })
+        .from(lessonTasks)
+        .where(eq(lessonTasks.lessonId, lessonId));
+      order = Number(maxOrder) + 1;
+    }
+
+    const [task] = await db
+      .insert(lessonTasks)
+      .values({
+        lessonId,
+        title: body.title,
+        description: body.description,
+        order,
+        responseType: body.responseType,
+        approvalRequired: body.approvalRequired,
+        dueDate: body.dueDate ? new Date(body.dueDate) : null,
+        dueDaysOffset: body.dueDaysOffset,
+        points: body.points,
+        config: body.config,
+        status: body.status,
+      })
+      .returning();
+
+    return c.json({ data: task }, 201);
+  }
+);
+
+/**
+ * PATCH /api/tenants/:tenantId/programs/:programId/lessons/:lessonId/tasks/:taskId
+ * Update a task
+ */
+programsRoutes.patch(
+  '/:programId/lessons/:lessonId/tasks/:taskId',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', updateTaskSchema),
+  async (c) => {
+    const tenant = c.get('tenant')!;
+    const { programId, lessonId, taskId } = c.req.param();
+    const body = c.req.valid('json');
+
+    // Verify task exists in a lesson owned by this tenant
+    const [existing] = await db
+      .select()
+      .from(lessonTasks)
+      .innerJoin(lessons, eq(lessonTasks.lessonId, lessons.id))
+      .innerJoin(modules, eq(lessons.moduleId, modules.id))
+      .innerJoin(programs, eq(modules.programId, programs.id))
+      .where(
+        and(
+          eq(lessonTasks.id, taskId),
+          eq(lessonTasks.lessonId, lessonId),
+          eq(programs.id, programId),
+          eq(programs.tenantId, tenant.id)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundError('Task', taskId);
+    }
+
+    const [updated] = await db
+      .update(lessonTasks)
+      .set({
+        ...body,
+        dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
+        updatedAt: new Date(),
+      })
+      .where(eq(lessonTasks.id, taskId))
+      .returning();
+
+    return c.json({ data: updated });
+  }
+);
+
+/**
+ * DELETE /api/tenants/:tenantId/programs/:programId/lessons/:lessonId/tasks/:taskId
+ * Delete a task
+ */
+programsRoutes.delete(
+  '/:programId/lessons/:lessonId/tasks/:taskId',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  async (c) => {
+    const tenant = c.get('tenant')!;
+    const { programId, lessonId, taskId } = c.req.param();
+
+    // Verify task exists
+    const [existing] = await db
+      .select()
+      .from(lessonTasks)
+      .innerJoin(lessons, eq(lessonTasks.lessonId, lessons.id))
+      .innerJoin(modules, eq(lessons.moduleId, modules.id))
+      .innerJoin(programs, eq(modules.programId, programs.id))
+      .where(
+        and(
+          eq(lessonTasks.id, taskId),
+          eq(lessonTasks.lessonId, lessonId),
+          eq(programs.id, programId),
+          eq(programs.tenantId, tenant.id)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundError('Task', taskId);
+    }
+
+    await db.delete(lessonTasks).where(eq(lessonTasks.id, taskId));
+
+    return c.json({ data: { success: true } });
+  }
+);
+
+/**
+ * PUT /api/tenants/:tenantId/programs/:programId/lessons/:lessonId/tasks/reorder
+ * Reorder tasks within a lesson
+ */
+programsRoutes.put(
+  '/:programId/lessons/:lessonId/tasks/reorder',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', reorderSchema),
+  async (c) => {
+    const { lessonId } = c.req.param();
+    const { items } = c.req.valid('json');
+
+    for (const item of items) {
+      await db
+        .update(lessonTasks)
+        .set({ order: item.order, updatedAt: new Date() })
+        .where(and(eq(lessonTasks.id, item.id), eq(lessonTasks.lessonId, lessonId)));
     }
 
     return c.json({ data: { success: true } });

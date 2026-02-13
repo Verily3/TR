@@ -7,3 +7,5 @@ export { GoalContent } from './GoalContent';
 export { QuizContent } from './QuizContent';
 export { ApprovalContent } from './ApprovalContent';
 export { DiscussionContent } from './DiscussionContent';
+export { EventContent } from './EventContent';
+export { TaskList } from './TaskList';

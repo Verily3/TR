@@ -6,50 +6,18 @@ import {
   integer,
   jsonb,
   index,
-  pgEnum,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { modules } from './modules';
+import {
+  contentTypeEnum,
+  lessonDripTypeEnum,
+  lessonStatusEnum,
+  approvalRequiredEnum,
+} from './enums';
 
-/**
- * Content type enum - 9 types
- */
-export const contentTypeEnum = pgEnum('content_type', [
-  'lesson',
-  'sub_module',
-  'quiz',
-  'assignment',
-  'mentor_meeting',
-  'text_form',
-  'goal',
-  'mentor_approval',
-  'facilitator_approval',
-]);
-
-/**
- * Lesson drip type enum
- */
-export const lessonDripTypeEnum = pgEnum('lesson_drip_type', [
-  'immediate',
-  'sequential',
-  'days_after_module_start',
-  'on_date',
-]);
-
-/**
- * Lesson status enum
- */
-export const lessonStatusEnum = pgEnum('lesson_status', ['draft', 'active']);
-
-/**
- * Approval required enum - who must approve before lesson is marked complete
- */
-export const approvalRequiredEnum = pgEnum('approval_required', [
-  'none',
-  'mentor',
-  'facilitator',
-  'both',
-]);
+// Re-export enums for backward compatibility
+export { contentTypeEnum, lessonDripTypeEnum, lessonStatusEnum, approvalRequiredEnum };
 
 /**
  * Lesson content varies by content_type
@@ -167,10 +135,11 @@ export const lessons = pgTable(
     index('lessons_module_id_idx').on(table.moduleId),
     index('lessons_order_idx').on(table.moduleId, table.order),
     index('lessons_content_type_idx').on(table.contentType),
+    index('lessons_approval_required_idx').on(table.approvalRequired),
   ]
 );
 
-// Forward declare
+// Forward declare (avoid circular imports — tasks relation defined in tasks.ts)
 import { lessonProgress } from './progress';
 
 export const lessonsRelations = relations(lessons, ({ one, many }) => ({

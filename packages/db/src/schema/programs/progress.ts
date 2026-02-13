@@ -14,6 +14,7 @@ import { relations } from 'drizzle-orm';
 import { lessons } from './lessons';
 import { enrollments } from './enrollments';
 import { users } from '../core/users';
+import { lessonTasks } from './tasks';
 
 /**
  * Lesson progress status enum
@@ -188,6 +189,9 @@ export const approvalSubmissions = pgTable(
       .notNull()
       .references(() => enrollments.id, { onDelete: 'cascade' }),
 
+    // Optional task reference (null = lesson-level, non-null = task-level)
+    taskId: uuid('task_id').references(() => lessonTasks.id, { onDelete: 'cascade' }),
+
     // Which role must approve this row
     reviewerRole: reviewerRoleEnum('reviewer_role').notNull(),
 
@@ -225,6 +229,7 @@ export const approvalSubmissions = pgTable(
     index('approval_submissions_lesson_idx').on(table.lessonId),
     index('approval_submissions_status_idx').on(table.status),
     index('approval_submissions_reviewer_idx').on(table.reviewedBy),
+    index('approval_submissions_task_idx').on(table.taskId),
   ]
 );
 
@@ -309,6 +314,10 @@ export const approvalSubmissionsRelations = relations(
     enrollment: one(enrollments, {
       fields: [approvalSubmissions.enrollmentId],
       references: [enrollments.id],
+    }),
+    task: one(lessonTasks, {
+      fields: [approvalSubmissions.taskId],
+      references: [lessonTasks.id],
     }),
     reviewer: one(users, {
       fields: [approvalSubmissions.reviewedBy],

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { eq, and, isNull } from 'drizzle-orm';
+import { eq, and, isNull, sql } from 'drizzle-orm';
 import { db, schema } from '@tr/db';
 import { NotFoundError } from '../lib/errors.js';
 import type { Variables } from '../types/context.js';
@@ -67,13 +67,13 @@ async function determineOnboardingType(
   }
 
   // Check if user is enrolled in any programs
-  const enrollmentCount = await db
-    .select({ count: eq(enrollments.userId, userId) })
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
     .from(enrollments)
     .where(eq(enrollments.userId, userId));
 
   // If user has programs, use strategic planning flow (mix of both)
-  if (enrollmentCount.length > 0) {
+  if (Number(count) > 0) {
     return 'strategic_planning';
   }
 

@@ -57,16 +57,21 @@ export const questionTypeEnum = pgEnum('question_type', [
 /**
  * Competency structure
  */
+export interface TemplateQuestion {
+  id: string;
+  text: string;
+  type?: 'rating' | 'text' | 'multiple_choice';
+  required?: boolean;
+  reverseScored?: boolean;  // [R] items — score is inverted during computation
+  isCCI?: boolean;          // Coaching Capacity Index item (one per competency)
+}
+
 export interface TemplateCompetency {
   id: string;
   name: string;
   description?: string;
-  questions: {
-    id: string;
-    text: string;
-    type?: 'rating' | 'text' | 'multiple_choice';
-    required?: boolean;
-  }[];
+  subtitle?: string;  // e.g., "Direction Must Hold Under Pressure"
+  questions: TemplateQuestion[];
 }
 
 /**

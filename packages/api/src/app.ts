@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
+import { bodyLimit } from 'hono/body-limit';
+import { timeout } from 'hono/timeout';
 import { errorHandler } from './middleware/error-handler.js';
 import { authMiddleware } from './middleware/auth.js';
 import { authRoutes } from './routes/auth.js';
@@ -15,6 +17,10 @@ import { impersonationRoutes } from './routes/admin/impersonation.js';
 import { onboardingRoutes } from './routes/onboarding.js';
 import { agencyEnrollmentsRoutes } from './routes/agency-enrollments.js';
 import { dashboardRoutes } from './routes/dashboard.js';
+import { agencyTemplatesRoutes } from './routes/agency-templates.js';
+import { assessmentsRoutes } from './routes/assessments.js';
+import { assessmentResponseRoutes, publicAssessmentRoutes } from './routes/assessment-responses.js';
+import { assessmentBenchmarksRoutes } from './routes/assessment-benchmarks.js';
 import type { Variables } from './types/context.js';
 
 // Create Hono app with typed variables
@@ -23,6 +29,13 @@ export const app = new Hono<{ Variables: Variables }>();
 // Global middleware
 app.use('*', logger());
 app.use('*', secureHeaders());
+
+// Request timeout: 30 seconds
+app.use('*', timeout(30_000));
+
+// Body size limit: 1MB for JSON payloads
+app.use('*', bodyLimit({ maxSize: 1024 * 1024 }));
+
 app.use(
   '*',
   cors({
@@ -51,6 +64,9 @@ app.get('/health', (c) =>
 // Auth routes (no auth required for login/register)
 app.route('/api/auth', authRoutes);
 
+// Public assessment response routes (token-based, no auth required)
+app.route('/api/assessments/respond', publicAssessmentRoutes);
+
 // Protected routes - require authentication
 app.use('/api/*', authMiddleware());
 
@@ -69,6 +85,18 @@ app.route('/api/tenants/:tenantId/dashboard', dashboardRoutes);
 
 // Agency enrollment routes (cross-tenant participant management)
 app.route('/api/agencies/me/programs/:programId/enrollments', agencyEnrollmentsRoutes);
+
+// Agency assessment templates
+app.route('/api/agencies/me/templates', agencyTemplatesRoutes);
+
+// Agency assessment benchmarks
+app.route('/api/agencies/me/benchmarks', assessmentBenchmarksRoutes);
+
+// Tenant assessments
+app.route('/api/tenants/:tenantId/assessments', assessmentsRoutes);
+
+// Assessment responses (nested under assessments)
+app.route('/api/tenants/:tenantId/assessments/:assessmentId/responses', assessmentResponseRoutes);
 
 // Admin routes
 app.route('/api/admin/impersonate', impersonationRoutes);

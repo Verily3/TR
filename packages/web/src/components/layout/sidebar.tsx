@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { getNavigationForRole } from '@tr/shared';
@@ -129,8 +130,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="p-3 lg:p-4 border-t border-gray-200">
           <div className="flex items-center gap-3 px-3 py-2">
             {user?.avatar ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={user.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+              <Image src={user.avatar} alt="" width={32} height={32} className="rounded-full object-cover" />
             ) : (
               <div className="w-8 h-8 rounded-full bg-red-600 text-white flex items-center justify-center text-sm font-medium">
                 {initials}

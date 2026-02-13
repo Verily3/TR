@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import type { Program, ProgramWithModules, ProgramConfig, UpdateProgramInput, UpdateLessonInput } from '@/types/programs';
+import type { Program, ProgramWithModules, ProgramConfig, UpdateProgramInput, UpdateModuleInput, UpdateLessonInput, LessonTask, CreateTaskInput, UpdateTaskInput } from '@/types/programs';
 
 interface AgencyProgramsListParams {
   page?: number;
@@ -129,7 +129,7 @@ export function useCreateAgencyModule(programId: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: { title: string; description?: string; parentModuleId?: string; order?: number }) => {
+    mutationFn: async (input: { title: string; description?: string; parentModuleId?: string; order?: number; type?: 'module' | 'event'; eventConfig?: Record<string, unknown> }) => {
       const response = await api.post(`/api/agencies/me/programs/${programId}/modules`, input);
       return (response as unknown as { data: unknown }).data;
     },
@@ -143,7 +143,7 @@ export function useUpdateAgencyModule(programId: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ moduleId, input }: { moduleId: string; input: Record<string, unknown> }) => {
+    mutationFn: async ({ moduleId, input }: { moduleId: string; input: UpdateModuleInput }) => {
       const response = await api.put(`/api/agencies/me/programs/${programId}/modules/${moduleId}`, input);
       return (response as unknown as { data: unknown }).data;
     },
@@ -210,6 +210,73 @@ export function usePublishAgencyProgram(programId: string | undefined) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agencyProgram', programId] });
       queryClient.invalidateQueries({ queryKey: ['agencyPrograms'] });
+    },
+  });
+}
+
+// ============ Agency Tasks ============
+
+export function useCreateAgencyTask(programId: string | undefined, lessonId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: CreateTaskInput) => {
+      const response = await api.post<LessonTask>(
+        `/api/agencies/me/programs/${programId}/lessons/${lessonId}/tasks`,
+        input
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agencyProgram', programId] });
+    },
+  });
+}
+
+export function useUpdateAgencyTask(programId: string | undefined, lessonId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ taskId, input }: { taskId: string; input: UpdateTaskInput }) => {
+      const response = await api.patch<LessonTask>(
+        `/api/agencies/me/programs/${programId}/lessons/${lessonId}/tasks/${taskId}`,
+        input
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agencyProgram', programId] });
+    },
+  });
+}
+
+export function useDeleteAgencyTask(programId: string | undefined, lessonId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (taskId: string) => {
+      await api.delete(
+        `/api/agencies/me/programs/${programId}/lessons/${lessonId}/tasks/${taskId}`
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agencyProgram', programId] });
+    },
+  });
+}
+
+export function useReorderAgencyTasks(programId: string | undefined, lessonId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (items: { id: string; order: number }[]) => {
+      await api.put(
+        `/api/agencies/me/programs/${programId}/lessons/${lessonId}/tasks/reorder`,
+        { items }
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agencyProgram', programId] });
     },
   });
 }

@@ -1,7 +1,7 @@
 /**
  * LeaderShift Program Seed Script
  * Creates the full LeaderShift leadership development program
- * with 11 modules and 73 lessons.
+ * with modules, events, lessons, and tasks.
  *
  * Prerequisites: Run `db:seed` first to create tenant, users, etc.
  * Usage: pnpm --filter @tr/db db:seed-leadershift
@@ -23,6 +23,15 @@ const db = drizzle(client, { schema });
 // Types
 // ============================================
 
+interface TaskDef {
+  title: string;
+  description?: string;
+  responseType: 'text' | 'file_upload' | 'goal' | 'completion_click' | 'discussion';
+  approvalRequired?: 'none' | 'mentor' | 'facilitator' | 'both';
+  points: number;
+  config?: Record<string, unknown>;
+}
+
 interface LessonDef {
   title: string;
   contentType: 'lesson' | 'assignment' | 'text_form' | 'goal' | 'mentor_meeting' | 'mentor_approval' | 'facilitator_approval' | 'quiz' | 'sub_module';
@@ -30,6 +39,7 @@ interface LessonDef {
   points: number;
   approvalRequired?: 'none' | 'mentor' | 'facilitator' | 'both';
   content: Record<string, unknown>;
+  tasks?: TaskDef[];
 }
 
 interface ModuleDef {
@@ -38,6 +48,24 @@ interface ModuleDef {
   order: number;
   dripType: 'immediate' | 'days_after_enrollment' | 'days_after_previous' | 'on_date';
   dripValue?: number;
+}
+
+interface EventDef {
+  title: string;
+  description: string;
+  order: number;
+  eventConfig: {
+    date?: string;
+    startTime?: string;
+    endTime?: string;
+    timezone?: string;
+    location?: string;
+    zoomLink?: string;
+    meetingId?: string;
+    meetingPassword?: string;
+    description?: string;
+    videoUrl?: string;
+  };
 }
 
 // ============================================
@@ -76,10 +104,53 @@ async function createModuleWithLessons(
     status: 'active' as const,
   }));
 
-  await db.insert(schema.lessons).values(lessonValues);
+  const insertedLessons = await db.insert(schema.lessons).values(lessonValues).returning();
+
+  // Create tasks for lessons that have them
+  let totalTasks = 0;
+  for (let i = 0; i < lessonDefs.length; i++) {
+    const def = lessonDefs[i];
+    if (def.tasks && def.tasks.length > 0) {
+      const lesson = insertedLessons[i];
+      const taskValues = def.tasks.map((t, tidx) => ({
+        lessonId: lesson.id,
+        title: t.title,
+        description: t.description ?? null,
+        order: tidx,
+        responseType: t.responseType,
+        approvalRequired: (t.approvalRequired ?? 'none') as 'none' | 'mentor' | 'facilitator' | 'both',
+        points: t.points,
+        config: t.config ?? null,
+        status: 'active' as const,
+      }));
+      await db.insert(schema.lessonTasks).values(taskValues);
+      totalTasks += def.tasks.length;
+    }
+  }
 
   const totalPoints = lessonDefs.reduce((sum, l) => sum + l.points, 0);
-  console.log(`  ✓ Module ${moduleDef.order}: "${moduleDef.title}" — ${lessonDefs.length} lessons, ${totalPoints} pts`);
+  const taskInfo = totalTasks > 0 ? `, ${totalTasks} tasks` : '';
+  console.log(`  ✓ Module ${moduleDef.order}: "${moduleDef.title}" — ${lessonDefs.length} lessons${taskInfo}, ${totalPoints} pts`);
+  return mod;
+}
+
+async function createEvent(programId: string, eventDef: EventDef) {
+  const [mod] = await db
+    .insert(schema.modules)
+    .values({
+      programId,
+      title: eventDef.title,
+      description: eventDef.description,
+      order: eventDef.order,
+      depth: 0,
+      type: 'event',
+      eventConfig: eventDef.eventConfig,
+      dripType: 'immediate',
+      status: 'active',
+    })
+    .returning();
+
+  console.log(`  ✓ Event ${eventDef.order}: "${eventDef.title}" (${eventDef.eventConfig.date || 'TBD'})`);
   return mod;
 }
 
@@ -228,6 +299,7 @@ async function seedLeaderShift() {
 
   // ──────────────────────────────────────────────
   // MODULE 0: Introduction to the Results Tracking Platform
+  // (Restructured: 1 lesson + 2 tasks instead of 3 separate lessons)
   // ──────────────────────────────────────────────
   await createModuleWithLessons(
     program.id,
@@ -241,35 +313,30 @@ async function seedLeaderShift() {
       {
         title: 'Welcome to the Results Tracking Platform',
         contentType: 'lesson',
-        durationMinutes: 10,
+        durationMinutes: 15,
         points: 5,
         content: {
           introduction:
             'Welcome! We are excited that you have chosen to continue your leadership journey with us. The learning transfer platform makes your training a process rather than just an event.',
           mainContent:
-            '<p>Here you will find the tasks to be done before, during and after the training sessions. You will be supported along the way by program facilitators and your coach.</p><p>We will be supporting this learning journey using this platform. If you are new, we recommend watching the short orientation tutorials.</p>',
-          videoUrl: 'https://placeholder.com/get-started',
+            '<p>Here you will find the tasks to be done before, during and after the training sessions. You will be supported along the way by program facilitators and your coach.</p><p>We will be supporting this learning journey using this platform. If you are new, we recommend watching the short orientation tutorials.</p><p>Complete the tasks below to get started.</p>',
         },
-      },
-      {
-        title: 'Upload Your Profile Picture',
-        contentType: 'facilitator_approval',
-        durationMinutes: 5,
-        points: 5,
-        approvalRequired: 'facilitator',
-        content: {
-          instructions: 'Upload a professional profile picture to your account. This helps your coach, mentor, and peers identify you throughout the program.<br/><br/>Navigate to <strong>Settings</strong> from the main menu to upload your photo, then come back here and click "Mark as Done".',
-        },
-      },
-      {
-        title: 'Watch the "Get Started" Video',
-        contentType: 'facilitator_approval',
-        durationMinutes: 10,
-        points: 5,
-        approvalRequired: 'facilitator',
-        content: {
-          instructions: 'Watch the platform orientation video to learn how to navigate the platform, complete lessons, and track your progress.',
-        },
+        tasks: [
+          {
+            title: 'Upload Your Profile Picture',
+            description: 'Upload a professional profile picture to your account. Navigate to Settings from the main menu to upload your photo.',
+            responseType: 'completion_click',
+            approvalRequired: 'facilitator',
+            points: 5,
+          },
+          {
+            title: 'Watch the "Get Started" Video',
+            description: 'Watch the platform orientation video to learn how to navigate the platform, complete lessons, and track your progress.',
+            responseType: 'completion_click',
+            approvalRequired: 'none',
+            points: 5,
+          },
+        ],
       },
     ]
   );
@@ -297,6 +364,15 @@ async function seedLeaderShift() {
           mainContent:
             '<p>In this program, you will develop essential leadership skills through video content, coaching sessions, goal setting, and peer discussions. Each module builds on the previous one.</p>',
         },
+        tasks: [
+          {
+            title: 'Complete Your Talent Insights Assessment',
+            description: 'The Talent Insights Assessment will give you significant insight into your natural behavior style and what motivates you. The resulting report will be emailed to you automatically.',
+            responseType: 'completion_click',
+            approvalRequired: 'facilitator',
+            points: 5,
+          },
+        ],
       },
       {
         title: 'Challenges & Frustrations Worksheet',
@@ -312,17 +388,6 @@ async function seedLeaderShift() {
             'What would success look like for you at the end of this program?',
           ],
           submissionTypes: ['text'],
-        },
-      },
-      {
-        title: 'Complete Your Assessment',
-        contentType: 'facilitator_approval',
-        durationMinutes: 5,
-        points: 5,
-        approvalRequired: 'facilitator',
-        content: {
-          instructions:
-            'As part of the LeaderShift process we will be utilizing a number of assessments. The Talent Insights Assessment will give you significant insight into your natural behavior style and what motivates you into action. The resulting report will be emailed to you automatically. Once you have completed your assessment, click the Finish Task button.',
         },
       },
       {
@@ -370,7 +435,13 @@ async function seedLeaderShift() {
         content: {
           introduction: 'We have included a number of additional videos that will help you learn more about each of the four behavioral styles.',
           mainContent:
-            '<p>Explore these bonus resources at your own pace:</p><ul><li>Getting to Know High Blue (High C)</li><li>Getting to Know the Green (High S)</li><li>Getting to Know the Red (High D)</li><li>Getting to Know the Yellow (High I)</li></ul>',
+            '<p>Explore these bonus resources at your own pace. Each video introduces one of the four DISC behavioral styles in detail.</p>',
+          resources: [
+            { title: 'Getting to Know High Blue (High C)', url: 'https://player.vimeo.com/video/948880680', type: 'video' },
+            { title: 'Getting to Know the Green (High S)', url: 'https://player.vimeo.com/video/948880670', type: 'video' },
+            { title: 'Getting to Know the Red (High D)', url: 'https://player.vimeo.com/video/948880690', type: 'video' },
+            { title: 'Getting to Know the Yellow (High I)', url: 'https://player.vimeo.com/video/948880700', type: 'video' },
+          ],
         },
       },
     ]
@@ -479,6 +550,27 @@ async function seedLeaderShift() {
   );
 
   // ──────────────────────────────────────────────
+  // EVENT: Program Kickoff (between Module 2 and Module 3)
+  // ──────────────────────────────────────────────
+  await createEvent(program.id, {
+    title: 'Program Kickoff',
+    description: 'First session to kick off the LeaderShift program. Review pre-work, discuss DISC results, and begin goal setting.',
+    order: 3,
+    eventConfig: {
+      date: '2026-03-15',
+      startTime: '09:00',
+      endTime: '12:00',
+      timezone: 'America/New_York',
+      location: 'Virtual',
+      zoomLink: 'https://zoom.us/j/1234567890',
+      meetingId: '123 456 7890',
+      meetingPassword: 'leadershift',
+      description: '<p><strong>Meeting Preparation:</strong></p><ul><li>Downloaded and completed the Challenges and Frustrations Worksheet</li><li>Completed your Talent Insights Assessment</li><li>Printed your assessment results</li><li>Watched the DISC introduction videos</li><li>Shared your DISC insights with peers</li></ul><p>We look forward to seeing you at the kickoff!</p>',
+      videoUrl: 'https://player.vimeo.com/video/910101196',
+    },
+  });
+
+  // ──────────────────────────────────────────────
   // MODULE 3: The Leader and The Manager
   // ──────────────────────────────────────────────
   await createModuleWithLessons(
@@ -486,7 +578,7 @@ async function seedLeaderShift() {
     {
       title: 'The Leader and The Manager',
       description: 'Explore the difference between leadership and management, vision and goal setting, and qualities of leadership.',
-      order: 3,
+      order: 4,
       dripType: 'days_after_previous',
       dripValue: 14,
     },
@@ -523,7 +615,7 @@ async function seedLeaderShift() {
     {
       title: 'Leading Yourself',
       description: 'Master self-leadership through effective time management, overcoming roadblocks, and identifying high-payoff activities.',
-      order: 4,
+      order: 5,
       dripType: 'days_after_previous',
       dripValue: 14,
     },
@@ -578,7 +670,7 @@ async function seedLeaderShift() {
     {
       title: 'Planning Performance',
       description: 'Learn how to plan for and manage team performance. Create position scorecards and practice performance planning skills.',
-      order: 5,
+      order: 6,
       dripType: 'days_after_previous',
       dripValue: 14,
     },
@@ -645,6 +737,25 @@ async function seedLeaderShift() {
   );
 
   // ──────────────────────────────────────────────
+  // EVENT: MidPoint Session (between Module 5 and Module 6)
+  // ──────────────────────────────────────────────
+  await createEvent(program.id, {
+    title: 'MidPoint Session',
+    description: 'Mid-program group session. Review progress, share learnings, and recalibrate goals for the second half.',
+    order: 7,
+    eventConfig: {
+      date: '2026-05-15',
+      startTime: '09:00',
+      endTime: '12:00',
+      timezone: 'America/New_York',
+      location: 'Virtual',
+      zoomLink: 'https://zoom.us/j/1234567891',
+      meetingId: '123 456 7891',
+      description: '<p>This is the mid-program check-in session. Come prepared to share your progress, wins, and challenges from the first half of the program.</p><p><strong>Agenda:</strong></p><ul><li>Progress review and reflection</li><li>Peer learning exchange</li><li>Goal recalibration</li><li>Introduction to coaching for improved performance</li></ul>',
+    },
+  });
+
+  // ──────────────────────────────────────────────
   // MODULE 6: MidPoint Session — Coaching For Improved Performance
   // ──────────────────────────────────────────────
   await createModuleWithLessons(
@@ -652,7 +763,7 @@ async function seedLeaderShift() {
     {
       title: 'MidPoint Session: Coaching For Improved Performance',
       description: 'Mid-program checkpoint. Complete your mid-term assessment and learn coaching for improved performance.',
-      order: 6,
+      order: 8,
       dripType: 'days_after_previous',
       dripValue: 14,
     },
@@ -720,7 +831,7 @@ async function seedLeaderShift() {
     {
       title: 'Coaching For Development',
       description: 'Learn coaching for long-term development, training, career coaching, and the Stockdale Paradox for resilient leadership.',
-      order: 7,
+      order: 9,
       dripType: 'days_after_previous',
       dripValue: 14,
     },
@@ -783,7 +894,7 @@ async function seedLeaderShift() {
     {
       title: 'Leading A Team',
       description: 'Develop skills to lead high-performing teams through delegation, communication, and meeting strategies.',
-      order: 8,
+      order: 10,
       dripType: 'days_after_previous',
       dripValue: 14,
     },
@@ -832,7 +943,7 @@ async function seedLeaderShift() {
     {
       title: 'Counseling and Corrective Action',
       description: 'Learn to handle difficult conversations, define performance standards, and demonstrate a skill process for corrective action.',
-      order: 9,
+      order: 11,
       dripType: 'days_after_previous',
       dripValue: 14,
     },
@@ -860,6 +971,25 @@ async function seedLeaderShift() {
   );
 
   // ──────────────────────────────────────────────
+  // EVENT: Final Session (between Module 9 and Module 10)
+  // ──────────────────────────────────────────────
+  await createEvent(program.id, {
+    title: 'Final Session',
+    description: 'Closing session to celebrate growth, share key learnings, and plan for continued leadership development.',
+    order: 12,
+    eventConfig: {
+      date: '2026-08-15',
+      startTime: '09:00',
+      endTime: '12:00',
+      timezone: 'America/New_York',
+      location: 'Virtual',
+      zoomLink: 'https://zoom.us/j/1234567892',
+      meetingId: '123 456 7892',
+      description: '<p>This is the final celebration session. Come prepared to share your leadership transformation story.</p><p><strong>Agenda:</strong></p><ul><li>Leadership growth reflections</li><li>Celebration letters sharing</li><li>Goal achievement review</li><li>Commitment to continued development</li><li>Certificate presentation</li></ul>',
+    },
+  });
+
+  // ──────────────────────────────────────────────
   // MODULE 10: Final Session — Leadership Thinking
   // ──────────────────────────────────────────────
   await createModuleWithLessons(
@@ -867,7 +997,7 @@ async function seedLeaderShift() {
     {
       title: 'Final Session: Leadership Thinking',
       description: 'Develop strategic thinking skills, reflect on your entire journey, and celebrate your leadership transformation.',
-      order: 10,
+      order: 13,
       dripType: 'days_after_previous',
       dripValue: 14,
     },
@@ -988,9 +1118,7 @@ async function seedLeaderShift() {
 
   console.log('\n🎉 LeaderShift program seeded successfully!');
   console.log(`   Program: ${program.name} (${program.id})`);
-  console.log(`   Modules: 11`);
-  console.log(`   Lessons: 73`);
-  console.log(`   Total Points: 750`);
+  console.log(`   Modules: 11 + 3 events`);
   console.log(`   Enrollments: 5 (1 facilitator, 1 mentor, 3 learners)\n`);
 }
 

@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { Menu, LogOut, Settings, UserRoundCog, ChevronDown } from 'lucide-react';
 import { ImpersonationSearchModal } from './ImpersonationSearchModal';
 
@@ -10,18 +11,18 @@ interface HeaderProps {
   onMenuClick?: () => void;
 }
 
-export function Header({ onMenuClick }: HeaderProps) {
+export const Header = memo(function Header({ onMenuClick }: HeaderProps) {
   const { user, logout } = useAuth();
   const router = useRouter();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showImpersonateModal, setShowImpersonateModal] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     setDropdownOpen(false);
     await logout();
     router.push('/login');
-  };
+  }, [logout, router]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -71,8 +72,7 @@ export function Header({ onMenuClick }: HeaderProps) {
             className="flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
           >
             {user?.avatar ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={user.avatar} alt="" className="w-8 h-8 rounded-full object-cover" />
+              <Image src={user.avatar} alt="" width={32} height={32} className="rounded-full object-cover" />
             ) : (
               <div className="w-8 h-8 rounded-full bg-red-50 text-red-600 flex items-center justify-center text-sm font-medium">
                 {initials}
@@ -134,4 +134,4 @@ export function Header({ onMenuClick }: HeaderProps) {
       />
     </>
   );
-}
+});

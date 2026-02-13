@@ -21,8 +21,33 @@ const db = drizzle(client, { schema });
 async function seed() {
   console.log('🌱 Starting database seed...\n');
 
+  // Wrap entire seed in a transaction for atomicity
+  // If any operation fails, all changes are rolled back
+  await db.transaction(async (tx) => {
+    await seedData(tx);
+  });
+
+  console.log('\n✅ Seed completed successfully!\n');
+  console.log('Test accounts (password: password123):');
+  console.log('  - Agency Admin: admin@acme.com');
+  console.log('  - Tenant Admin: admin@techcorp.com');
+  console.log('  - Facilitator:  coach@techcorp.com');
+  console.log('  - Mentor:       mentor@techcorp.com');
+  console.log('  - Learners:     john.doe@techcorp.com, jane.smith@techcorp.com, alex.wilson@techcorp.com\n');
+
+  await client.end();
+  process.exit(0);
+}
+
+async function seedData(db: any) {
   // Clear existing data (in reverse order of dependencies)
   console.log('Clearing existing data...');
+  await db.delete(schema.assessmentResponses);
+  await db.delete(schema.assessmentInvitations);
+  await db.delete(schema.assessments);
+  await db.delete(schema.assessmentBenchmarks);
+  await db.delete(schema.assessmentTemplates);
+  await db.delete(schema.lessonDiscussions);
   await db.delete(schema.enrollmentMentorships);
   await db.delete(schema.lessonProgress);
   await db.delete(schema.goalReviews);
@@ -859,16 +884,761 @@ async function seed() {
     .where(eq(schema.enrollments.id, janeEnrollment.id));
   console.log('  ✓ Created Jane\'s partial progress');
 
-  console.log('\n✅ Seed completed successfully!\n');
-  console.log('Test accounts (password: password123):');
-  console.log('  - Agency Admin: admin@acme.com');
-  console.log('  - Tenant Admin: admin@techcorp.com');
-  console.log('  - Facilitator:  coach@techcorp.com');
-  console.log('  - Mentor:       mentor@techcorp.com');
-  console.log('  - Learners:     john.doe@techcorp.com, jane.smith@techcorp.com, alex.wilson@techcorp.com\n');
+  // ============================================
+  // 14. Assessment Seed Data
+  // ============================================
+  console.log('\nSeeding assessment data...');
 
-  await client.end();
-  process.exit(0);
+  // Create 2 assessment templates
+  const [leadershipTemplate] = await db.insert(schema.assessmentTemplates).values({
+    agencyId: agency.id,
+    createdBy: agencyAdmin.id,
+    name: 'Leadership 360',
+    description: 'Comprehensive 360-degree leadership assessment covering core leadership competencies.',
+    assessmentType: '360',
+    status: 'published',
+    config: {
+      competencies: [
+        {
+          id: 'c1',
+          name: 'Strategic Thinking',
+          description: 'Ability to think long-term, anticipate trends, and align daily work with organizational vision.',
+          questions: [
+            { id: 'c1q1', text: 'Develops clear long-term plans and strategies', type: 'rating', required: true },
+            { id: 'c1q2', text: 'Connects daily decisions to broader organizational goals', type: 'rating', required: true },
+            { id: 'c1q3', text: 'Anticipates future challenges and prepares accordingly', type: 'rating', required: true },
+          ],
+        },
+        {
+          id: 'c2',
+          name: 'Communication',
+          description: 'Effectiveness in conveying information, listening actively, and fostering open dialogue.',
+          questions: [
+            { id: 'c2q1', text: 'Communicates ideas clearly and concisely', type: 'rating', required: true },
+            { id: 'c2q2', text: 'Listens actively and considers others\' perspectives', type: 'rating', required: true },
+            { id: 'c2q3', text: 'Provides constructive feedback in a timely manner', type: 'rating', required: true },
+          ],
+        },
+        {
+          id: 'c3',
+          name: 'Team Development',
+          description: 'Commitment to developing team members, delegating effectively, and building high-performing teams.',
+          questions: [
+            { id: 'c3q1', text: 'Empowers team members to take ownership of their work', type: 'rating', required: true },
+            { id: 'c3q2', text: 'Invests time in coaching and developing team members', type: 'rating', required: true },
+            { id: 'c3q3', text: 'Delegates tasks appropriately based on team strengths', type: 'rating', required: true },
+          ],
+        },
+        {
+          id: 'c4',
+          name: 'Decision Making',
+          description: 'Ability to make sound decisions, balance data with intuition, and take accountability.',
+          questions: [
+            { id: 'c4q1', text: 'Makes timely decisions even with incomplete information', type: 'rating', required: true },
+            { id: 'c4q2', text: 'Considers multiple perspectives before deciding', type: 'rating', required: true },
+            { id: 'c4q3', text: 'Takes accountability for decisions and their outcomes', type: 'rating', required: true },
+          ],
+        },
+      ],
+      scaleMin: 1,
+      scaleMax: 5,
+      scaleLabels: ['Rarely', 'Sometimes', 'Often', 'Usually', 'Consistently'],
+      allowComments: true,
+      requireComments: false,
+      anonymizeResponses: true,
+      raterTypes: ['self', 'manager', 'peer', 'direct_report'],
+    },
+  }).returning();
+  console.log('  ✓ Template created: Leadership 360');
+
+  const [managerTemplate] = await db.insert(schema.assessmentTemplates).values({
+    agencyId: agency.id,
+    createdBy: agencyAdmin.id,
+    name: 'Manager Effectiveness 180',
+    description: 'Focused 180-degree assessment for evaluating manager effectiveness from self and manager perspectives.',
+    assessmentType: '180',
+    status: 'published',
+    config: {
+      competencies: [
+        {
+          id: 'mc1',
+          name: 'People Management',
+          description: 'Ability to manage, motivate, and retain team members.',
+          questions: [
+            { id: 'mc1q1', text: 'Creates a positive and inclusive team environment', type: 'rating', required: true },
+            { id: 'mc1q2', text: 'Handles conflict fairly and constructively', type: 'rating', required: true },
+          ],
+        },
+        {
+          id: 'mc2',
+          name: 'Execution',
+          description: 'Ability to set goals, prioritize, and deliver results on time.',
+          questions: [
+            { id: 'mc2q1', text: 'Sets clear and measurable goals for the team', type: 'rating', required: true },
+            { id: 'mc2q2', text: 'Follows through on commitments and deadlines', type: 'rating', required: true },
+          ],
+        },
+        {
+          id: 'mc3',
+          name: 'Growth Mindset',
+          description: 'Openness to feedback, continuous learning, and adapting to change.',
+          questions: [
+            { id: 'mc3q1', text: 'Seeks and acts on feedback from others', type: 'rating', required: true },
+            { id: 'mc3q2', text: 'Adapts approach when faced with new challenges', type: 'rating', required: true },
+          ],
+        },
+      ],
+      scaleMin: 1,
+      scaleMax: 5,
+      scaleLabels: ['Strongly Disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly Agree'],
+      allowComments: true,
+      requireComments: false,
+      anonymizeResponses: true,
+      raterTypes: ['self', 'manager'],
+    },
+  }).returning();
+  console.log('  ✓ Template created: Manager Effectiveness 180');
+
+  // Assessment 1: Completed 360 for Jane Smith
+  // janeSmith already declared above as learners[1]
+  const [completedAssessment] = await db.insert(schema.assessments).values({
+    templateId: leadershipTemplate.id,
+    tenantId: tenant.id,
+    subjectId: janeSmith.id,
+    createdBy: facilitator.id,
+    name: 'Jane Smith — Leadership 360 (Q1 2026)',
+    description: 'Q1 leadership assessment for Jane Smith as part of the LeaderShift program.',
+    status: 'completed',
+    openDate: '2026-01-10',
+    closeDate: '2026-01-31',
+    anonymizeResults: true,
+    showResultsToSubject: true,
+  }).returning();
+  console.log('  ✓ Assessment created: Jane Smith Leadership 360 (completed)');
+
+  // Raters for Jane's assessment: self, manager (facilitator), 2 peers, 1 DR
+  const janeRaters = [
+    { raterId: janeSmith.id, raterType: 'self' as const },
+    { raterId: facilitator.id, raterType: 'manager' as const },
+    { raterId: learners[0].id, raterType: 'peer' as const }, // John
+    { raterId: learners[2].id, raterType: 'peer' as const }, // Alex
+    { raterId: mentor.id, raterType: 'direct_report' as const },
+  ];
+
+  const janeInvitations = [];
+  for (const rater of janeRaters) {
+    const [inv] = await db.insert(schema.assessmentInvitations).values({
+      assessmentId: completedAssessment.id,
+      raterId: rater.raterId,
+      raterType: rater.raterType,
+      status: 'completed',
+      accessToken: crypto.randomUUID().replace(/-/g, '').slice(0, 32),
+      sentAt: new Date('2026-01-11'),
+      viewedAt: new Date('2026-01-12'),
+      startedAt: new Date('2026-01-13'),
+      completedAt: new Date('2026-01-20'),
+    }).returning();
+    janeInvitations.push(inv);
+  }
+  console.log('  ✓ Created 5 invitations (all completed) for Jane\'s assessment');
+
+  // Submit responses for each rater (realistic scores with gaps)
+  // Self-assessment: Jane rates herself (tends to rate strategicThinking high, teamDev low)
+  const janeResponses: Record<string, Record<string, { self: number; manager: number; peer1: number; peer2: number; dr: number }>> = {
+    c1: {
+      c1q1: { self: 4, manager: 3, peer1: 3, peer2: 3, dr: 3 },
+      c1q2: { self: 4, manager: 3, peer1: 4, peer2: 3, dr: 3 },
+      c1q3: { self: 5, manager: 3, peer1: 3, peer2: 3, dr: 2 },
+    },
+    c2: {
+      c2q1: { self: 4, manager: 5, peer1: 4, peer2: 5, dr: 5 },
+      c2q2: { self: 3, manager: 4, peer1: 5, peer2: 4, dr: 5 },
+      c2q3: { self: 4, manager: 4, peer1: 4, peer2: 4, dr: 4 },
+    },
+    c3: {
+      c3q1: { self: 3, manager: 3, peer1: 2, peer2: 3, dr: 2 },
+      c3q2: { self: 3, manager: 2, peer1: 3, peer2: 2, dr: 3 },
+      c3q3: { self: 2, manager: 3, peer1: 2, peer2: 3, dr: 2 },
+    },
+    c4: {
+      c4q1: { self: 4, manager: 4, peer1: 4, peer2: 4, dr: 4 },
+      c4q2: { self: 4, manager: 5, peer1: 4, peer2: 4, dr: 5 },
+      c4q3: { self: 5, manager: 4, peer1: 5, peer2: 4, dr: 4 },
+    },
+  };
+
+  const raterKeys = ['self', 'manager', 'peer1', 'peer2', 'dr'] as const;
+  const overallComments = [
+    'I think I need to work more on delegating effectively.', // self
+    'Jane is strong in communication but could improve strategic planning visibility.', // manager
+    'Great team player, always willing to help. Sometimes takes on too much herself.', // peer1
+    'Jane communicates really well but I wish she would share her strategic thinking more openly.', // peer2
+    'Excellent listener. Could delegate more to develop the team.', // dr
+  ];
+
+  for (let i = 0; i < janeInvitations.length; i++) {
+    const key = raterKeys[i];
+    const responses: { competencyId: string; questionId: string; rating: number; comment?: string }[] = [];
+
+    for (const [compId, questions] of Object.entries(janeResponses)) {
+      for (const [qId, ratings] of Object.entries(questions)) {
+        responses.push({
+          competencyId: compId,
+          questionId: qId,
+          rating: ratings[key],
+        });
+      }
+    }
+
+    await db.insert(schema.assessmentResponses).values({
+      invitationId: janeInvitations[i].id,
+      responses,
+      overallComments: overallComments[i],
+      submittedAt: new Date('2026-01-20'),
+      isComplete: true,
+    });
+  }
+  console.log('  ✓ Created 5 complete responses for Jane\'s assessment');
+
+  // Assessment 2: Active 360 for John Doe (2 of 5 complete)
+  const [activeAssessment] = await db.insert(schema.assessments).values({
+    templateId: leadershipTemplate.id,
+    tenantId: tenant.id,
+    subjectId: johnDoe.id,
+    createdBy: facilitator.id,
+    name: 'John Doe — Leadership 360 (Q1 2026)',
+    description: 'Q1 leadership assessment for John Doe.',
+    status: 'open',
+    openDate: '2026-02-01',
+    closeDate: '2026-02-28',
+    anonymizeResults: true,
+    showResultsToSubject: true,
+  }).returning();
+  console.log('  ✓ Assessment created: John Doe Leadership 360 (active)');
+
+  const johnRaters = [
+    { raterId: johnDoe.id, raterType: 'self' as const, status: 'completed' as const },
+    { raterId: facilitator.id, raterType: 'manager' as const, status: 'completed' as const },
+    { raterId: janeSmith.id, raterType: 'peer' as const, status: 'sent' as const },
+    { raterId: learners[2].id, raterType: 'peer' as const, status: 'viewed' as const },
+    { raterId: mentor.id, raterType: 'direct_report' as const, status: 'pending' as const },
+  ];
+
+  for (const rater of johnRaters) {
+    const [inv] = await db.insert(schema.assessmentInvitations).values({
+      assessmentId: activeAssessment.id,
+      raterId: rater.raterId,
+      raterType: rater.raterType,
+      status: rater.status,
+      accessToken: crypto.randomUUID().replace(/-/g, '').slice(0, 32),
+      sentAt: rater.status !== 'pending' ? new Date('2026-02-02') : null,
+      viewedAt: ['viewed', 'started', 'completed'].includes(rater.status) ? new Date('2026-02-03') : null,
+      completedAt: rater.status === 'completed' ? new Date('2026-02-05') : null,
+    }).returning();
+
+    // Submit responses for completed raters only
+    if (rater.status === 'completed') {
+      const responses = [];
+      for (const [compId, questions] of Object.entries(janeResponses)) {
+        for (const qId of Object.keys(questions)) {
+          responses.push({
+            competencyId: compId,
+            questionId: qId,
+            rating: Math.floor(Math.random() * 2) + 3, // random 3-4
+          });
+        }
+      }
+      await db.insert(schema.assessmentResponses).values({
+        invitationId: inv.id,
+        responses,
+        overallComments: rater.raterType === 'self' ? 'I feel I am growing in my leadership skills.' : 'John is making good progress.',
+        submittedAt: new Date('2026-02-05'),
+        isComplete: true,
+      });
+    }
+  }
+  console.log('  ✓ Created 5 invitations (2 completed) for John\'s assessment');
+
+  // Assessment 3: Draft 180 for Alex Wilson
+  await db.insert(schema.assessments).values({
+    templateId: managerTemplate.id,
+    tenantId: tenant.id,
+    subjectId: learners[2].id,
+    createdBy: facilitator.id,
+    name: 'Alex Wilson — Manager Effectiveness 180',
+    description: 'Manager effectiveness assessment for Alex Wilson.',
+    status: 'draft',
+    anonymizeResults: true,
+    showResultsToSubject: true,
+  });
+  console.log('  ✓ Assessment created: Alex Wilson Manager 180 (draft)');
+
+  console.log('\n✅ Assessment seed data complete!');
+
+  // ============================================
+  // 15. LeaderShift™ Assessment Seed Data
+  // ============================================
+  console.log('\nSeeding LeaderShift™ assessment data...');
+
+  const [leaderShiftTemplate] = await db.insert(schema.assessmentTemplates).values({
+    agencyId: agency.id,
+    createdBy: agencyAdmin.id,
+    name: 'LeaderShift™ Leadership Capacity Stress Test',
+    description: 'A frequency-based leadership assessment measuring six core capacities under pressure. Includes reverse-scored items and a Coaching Capacity Index.',
+    assessmentType: '360',
+    status: 'published',
+    config: {
+      competencies: [
+        {
+          id: 'vision',
+          name: 'VISION',
+          subtitle: 'Direction Must Hold Under Pressure',
+          description: 'The ability to maintain clear strategic direction even when under significant organizational pressure.',
+          questions: [
+            { id: 'v1', text: 'This leader maintains clear long-term direction even when under significant pressure.', type: 'rating', required: true },
+            { id: 'v2', text: 'Strategic priorities remain aligned with a defined future state.', type: 'rating', required: true },
+            { id: 'v3', text: 'The team confidently articulates where the organization is headed and why.', type: 'rating', required: true },
+            { id: 'v4', text: 'Decisions reflect long-term intent over short-term relief.', type: 'rating', required: true },
+            { id: 'v5', text: 'Direction remains steady when challenged or resisted.', type: 'rating', required: true },
+            { id: 'v6', text: 'Daily execution measurably advances a defined future state.', type: 'rating', required: true },
+            { id: 'v7', text: 'This leader challenges others to think strategically about long-term impact.', type: 'rating', required: true, isCCI: true },
+            { id: 'v8', text: 'Strategic direction shifts when short-term pressure increases.', type: 'rating', required: true, reverseScored: true },
+          ],
+        },
+        {
+          id: 'clarity',
+          name: 'CLARITY',
+          subtitle: 'Structure Must Reduce Friction',
+          description: 'The ability to create explicit role clarity, performance metrics, and outcome-based accountability.',
+          questions: [
+            { id: 'cl1', text: 'Role accountabilities are explicit and outcome-based.', type: 'rating', required: true },
+            { id: 'cl2', text: 'The 3–5 core results of each role are clearly defined and documented.', type: 'rating', required: true },
+            { id: 'cl3', text: 'Performance metrics are visible and actively reviewed.', type: 'rating', required: true },
+            { id: 'cl4', text: 'Ownership of results is unmistakable.', type: 'rating', required: true },
+            { id: 'cl5', text: 'Performance discussions are grounded in measurable outcomes.', type: 'rating', required: true },
+            { id: 'cl6', text: 'This leader eliminates ambiguity that slows execution.', type: 'rating', required: true },
+            { id: 'cl7', text: 'This leader requires team members to define clear success criteria before action.', type: 'rating', required: true, isCCI: true },
+            { id: 'cl8', text: 'Role ambiguity contributes to execution delays.', type: 'rating', required: true, reverseScored: true },
+          ],
+        },
+        {
+          id: 'teamwork',
+          name: 'TEAMWORK',
+          subtitle: 'Tension Must Improve Performance',
+          description: 'The capacity to build trust under pressure, address conflict directly, and prioritize enterprise results.',
+          questions: [
+            { id: 'tw1', text: 'Leadership team members demonstrate trust under pressure.', type: 'rating', required: true },
+            { id: 'tw2', text: 'Difficult issues are addressed directly and in the room.', type: 'rating', required: true },
+            { id: 'tw3', text: 'Productive conflict strengthens decisions.', type: 'rating', required: true },
+            { id: 'tw4', text: 'Enterprise results outweigh departmental preferences.', type: 'rating', required: true },
+            { id: 'tw5', text: 'Cross-functional coordination is disciplined and reliable.', type: 'rating', required: true },
+            { id: 'tw6', text: 'Feedback is exchanged without political consequence.', type: 'rating', required: true },
+            { id: 'tw7', text: 'This leader elevates the level of dialogue during disagreement.', type: 'rating', required: true, isCCI: true },
+            { id: 'tw8', text: 'Significant issues are discussed outside formal forums rather than openly.', type: 'rating', required: true, reverseScored: true },
+          ],
+        },
+        {
+          id: 'candor',
+          name: 'CANDOR',
+          subtitle: 'Standards Must Be Protected',
+          description: 'The willingness to address underperformance promptly, communicate difficult truths, and maintain high standards.',
+          questions: [
+            { id: 'ca1', text: 'Underperformance is addressed promptly and clearly.', type: 'rating', required: true },
+            { id: 'ca2', text: 'Expectations and standards are explicit and reinforced.', type: 'rating', required: true },
+            { id: 'ca3', text: 'Feedback is precise and tied to measurable outcomes.', type: 'rating', required: true },
+            { id: 'ca4', text: 'Difficult truths are communicated regardless of hierarchy.', type: 'rating', required: true },
+            { id: 'ca5', text: 'Performance data is openly visible and discussed.', type: 'rating', required: true },
+            { id: 'ca6', text: 'Mediocrity is corrected before it becomes normalized.', type: 'rating', required: true },
+            { id: 'ca7', text: 'This leader requires others to confront the gap between intent and impact.', type: 'rating', required: true, isCCI: true },
+            { id: 'ca8', text: 'Poor performance is excused to avoid discomfort.', type: 'rating', required: true, reverseScored: true },
+          ],
+        },
+        {
+          id: 'accountability',
+          name: 'ACCOUNTABILITY',
+          subtitle: 'Commitments Must Mean Something',
+          description: 'The discipline to ensure commitments include clear deadlines, coaching checkpoints, and meaningful consequences.',
+          questions: [
+            { id: 'ac1', text: 'Commitments include clear deadlines and measurable outcomes.', type: 'rating', required: true },
+            { id: 'ac2', text: 'Coaching conversations include defined follow-up checkpoints.', type: 'rating', required: true },
+            { id: 'ac3', text: 'Progress toward goals is reviewed on a disciplined cadence.', type: 'rating', required: true },
+            { id: 'ac4', text: 'Missed commitments trigger corrective action.', type: 'rating', required: true },
+            { id: 'ac5', text: 'This leader takes full responsibility for results in their scope.', type: 'rating', required: true },
+            { id: 'ac6', text: 'Repeated underperformance leads to visible consequences.', type: 'rating', required: true },
+            { id: 'ac7', text: 'This leader requires others to state explicit commitments before closing discussions.', type: 'rating', required: true, isCCI: true },
+            { id: 'ac8', text: 'Missed commitments are tolerated without meaningful follow-up.', type: 'rating', required: true, reverseScored: true },
+          ],
+        },
+        {
+          id: 'change',
+          name: 'CHANGE',
+          subtitle: 'Improvement Must Be Continuous',
+          description: 'The ability to update thinking when evidence warrants, redesign underperforming systems, and challenge the status quo.',
+          questions: [
+            { id: 'ch1', text: 'The leader updates thinking when evidence warrants it.', type: 'rating', required: true },
+            { id: 'ch2', text: 'Underperforming systems are redesigned without delay.', type: 'rating', required: true },
+            { id: 'ch3', text: 'Change initiatives are structured and completed.', type: 'rating', required: true },
+            { id: 'ch4', text: 'Performance improves quarter over quarter.', type: 'rating', required: true },
+            { id: 'ch5', text: 'Experimentation is encouraged when results plateau.', type: 'rating', required: true },
+            { id: 'ch6', text: 'The status quo is challenged when it limits growth.', type: 'rating', required: true },
+            { id: 'ch7', text: 'During change, this leader pushes others to generate forward-thinking solutions.', type: 'rating', required: true, isCCI: true },
+            { id: 'ch8', text: 'Existing systems are defended despite declining results.', type: 'rating', required: true, reverseScored: true },
+          ],
+        },
+      ],
+      scaleMin: 1,
+      scaleMax: 5,
+      scaleLabels: ['Never', 'Rarely', 'Sometimes', 'Frequently', 'Consistently'],
+      allowComments: true,
+      requireComments: false,
+      anonymizeResponses: true,
+      raterTypes: ['self', 'manager', 'peer', 'direct_report'],
+    },
+  }).returning();
+  console.log('  ✓ Template created: LeaderShift™ Leadership Capacity Stress Test');
+
+  // ------------------------------------------------------------------
+  // Assessment 4: Completed LeaderShift 360 for John Doe
+  // ------------------------------------------------------------------
+  const [lsAssessment360] = await db.insert(schema.assessments).values({
+    templateId: leaderShiftTemplate.id,
+    tenantId: tenant.id,
+    subjectId: johnDoe.id,
+    createdBy: facilitator.id,
+    name: 'John Doe — LeaderShift™ 360 (Q1 2026)',
+    description: 'Full 360-degree LeaderShift assessment for John Doe. Covers VISION, CLARITY, TEAMWORK, CANDOR, ACCOUNTABILITY, and CHANGE.',
+    status: 'completed',
+    openDate: '2026-01-05',
+    closeDate: '2026-01-25',
+    anonymizeResults: true,
+    showResultsToSubject: true,
+  }).returning();
+  console.log('  ✓ Assessment created: John Doe LeaderShift 360 (completed)');
+
+  // 5 raters: self, manager, 2 peers, 1 direct report
+  const lsRaters360 = [
+    { raterId: johnDoe.id, raterType: 'self' as const },
+    { raterId: facilitator.id, raterType: 'manager' as const },
+    { raterId: janeSmith.id, raterType: 'peer' as const },
+    { raterId: learners[2].id, raterType: 'peer' as const }, // Alex
+    { raterId: mentor.id, raterType: 'direct_report' as const },
+  ];
+
+  const lsInvitations360 = [];
+  for (const rater of lsRaters360) {
+    const [inv] = await db.insert(schema.assessmentInvitations).values({
+      assessmentId: lsAssessment360.id,
+      raterId: rater.raterId,
+      raterType: rater.raterType,
+      status: 'completed',
+      accessToken: crypto.randomUUID().replace(/-/g, '').slice(0, 32),
+      sentAt: new Date('2026-01-06'),
+      viewedAt: new Date('2026-01-07'),
+      startedAt: new Date('2026-01-08'),
+      completedAt: new Date('2026-01-20'),
+    }).returning();
+    lsInvitations360.push(inv);
+  }
+  console.log('  ✓ Created 5 invitations (all completed) for John\'s LeaderShift 360');
+
+  // Response data: competencyId → questionId → [self, manager, peer1, peer2, dr]
+  // Patterns:
+  //   VISION     — strong area, Self slightly over-rates
+  //   CLARITY    — moderate, fairly aligned
+  //   TEAMWORK   — blind spot (Self=high, Others=low)
+  //   CANDOR     — hidden strength (Self=low, Others=high)
+  //   ACCOUNTABILITY — moderate, aligned
+  //   CHANGE     — weakest area → becomes "Current Ceiling"
+  // Q8 in each competency is reverse-scored [R] — low raw = good behavior
+  const lsScores: Record<string, number[][]> = {
+    vision: [
+      // v1   v2   v3   v4   v5   v6   v7(CCI) v8[R]
+      [5,   4,   4,   5,   4,   4,   4,       2], // self
+      [4,   3,   4,   4,   3,   3,   3,       2], // manager
+      [4,   4,   3,   4,   4,   3,   4,       2], // peer1
+      [4,   3,   4,   4,   3,   3,   3,       3], // peer2
+      [3,   3,   3,   3,   3,   3,   3,       2], // dr
+    ],
+    clarity: [
+      [4,   4,   4,   4,   3,   4,   4,       2], // self
+      [3,   3,   4,   3,   3,   3,   3,       3], // manager
+      [3,   3,   3,   3,   3,   3,   3,       3], // peer1
+      [3,   3,   3,   4,   3,   3,   3,       3], // peer2
+      [3,   2,   3,   3,   3,   3,   3,       3], // dr
+    ],
+    teamwork: [
+      [4,   5,   4,   4,   4,   4,   4,       2], // self  ← over-rates
+      [2,   3,   2,   3,   2,   3,   2,       4], // manager ← sees issues
+      [3,   2,   2,   2,   2,   2,   2,       4], // peer1
+      [2,   2,   3,   2,   3,   2,   2,       4], // peer2
+      [2,   2,   2,   3,   2,   2,   2,       4], // dr
+    ],
+    candor: [
+      [2,   3,   2,   2,   3,   2,   2,       4], // self  ← under-rates
+      [4,   4,   4,   3,   4,   4,   4,       2], // manager ← sees strength
+      [4,   3,   4,   4,   3,   4,   3,       2], // peer1
+      [3,   4,   3,   4,   4,   3,   4,       2], // peer2
+      [4,   4,   3,   4,   3,   3,   4,       2], // dr
+    ],
+    accountability: [
+      [4,   3,   4,   3,   4,   3,   3,       3], // self
+      [3,   3,   4,   3,   4,   3,   3,       3], // manager
+      [3,   4,   3,   3,   3,   3,   3,       3], // peer1
+      [4,   3,   3,   3,   3,   4,   3,       3], // peer2
+      [3,   3,   3,   3,   4,   3,   3,       3], // dr
+    ],
+    change: [
+      [3,   3,   3,   3,   3,   3,   3,       3], // self  ← weakest
+      [2,   2,   3,   2,   2,   2,   2,       4], // manager
+      [2,   2,   2,   2,   3,   2,   2,       4], // peer1
+      [2,   2,   2,   3,   2,   2,   2,       4], // peer2
+      [2,   2,   2,   2,   2,   2,   2,       4], // dr
+    ],
+  };
+
+  const lsQuestionIds: Record<string, string[]> = {
+    vision: ['v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7', 'v8'],
+    clarity: ['cl1', 'cl2', 'cl3', 'cl4', 'cl5', 'cl6', 'cl7', 'cl8'],
+    teamwork: ['tw1', 'tw2', 'tw3', 'tw4', 'tw5', 'tw6', 'tw7', 'tw8'],
+    candor: ['ca1', 'ca2', 'ca3', 'ca4', 'ca5', 'ca6', 'ca7', 'ca8'],
+    accountability: ['ac1', 'ac2', 'ac3', 'ac4', 'ac5', 'ac6', 'ac7', 'ac8'],
+    change: ['ch1', 'ch2', 'ch3', 'ch4', 'ch5', 'ch6', 'ch7', 'ch8'],
+  };
+
+  const ls360Comments = [
+    'I need to work on being more open to team input. I tend to drive decisions independently.', // self
+    'John is strategically strong but needs to address teamwork dynamics. His team sometimes avoids open conflict.', // manager
+    'John is very direct with feedback, which I appreciate. Could improve on creating psychological safety in group settings.', // peer1
+    'Strong leader with clear vision. Team meetings could be more collaborative — he tends to dominate.', // peer2
+    'Very honest and transparent about performance expectations. Change management is an area that could use attention.', // dr
+  ];
+
+  for (let i = 0; i < lsInvitations360.length; i++) {
+    const responses: { competencyId: string; questionId: string; rating: number }[] = [];
+    for (const [compId, qIds] of Object.entries(lsQuestionIds)) {
+      for (let q = 0; q < qIds.length; q++) {
+        responses.push({
+          competencyId: compId,
+          questionId: qIds[q],
+          rating: lsScores[compId][i][q],
+        });
+      }
+    }
+    await db.insert(schema.assessmentResponses).values({
+      invitationId: lsInvitations360[i].id,
+      responses,
+      overallComments: ls360Comments[i],
+      submittedAt: new Date('2026-01-20'),
+      isComplete: true,
+    });
+  }
+  console.log('  ✓ Created 5 complete responses for John\'s LeaderShift 360');
+
+  // ------------------------------------------------------------------
+  // Assessment 5: Completed LeaderShift 180 for Alex Wilson (Self + Boss)
+  // ------------------------------------------------------------------
+  // Create a 180 variant of the LeaderShift template
+  const [leaderShift180Template] = await db.insert(schema.assessmentTemplates).values({
+    agencyId: agency.id,
+    createdBy: agencyAdmin.id,
+    name: 'LeaderShift™ 180 (Self + Boss)',
+    description: 'A 180-degree variant of the LeaderShift assessment — Self and Manager/Boss perspectives only.',
+    assessmentType: '180',
+    status: 'published',
+    // Same competencies/questions, different rater types
+    config: {
+      competencies: [
+        {
+          id: 'vision', name: 'VISION', subtitle: 'Direction Must Hold Under Pressure',
+          description: 'The ability to maintain clear strategic direction even when under significant organizational pressure.',
+          questions: [
+            { id: 'v1', text: 'This leader maintains clear long-term direction even when under significant pressure.', type: 'rating', required: true },
+            { id: 'v2', text: 'Strategic priorities remain aligned with a defined future state.', type: 'rating', required: true },
+            { id: 'v3', text: 'The team confidently articulates where the organization is headed and why.', type: 'rating', required: true },
+            { id: 'v4', text: 'Decisions reflect long-term intent over short-term relief.', type: 'rating', required: true },
+            { id: 'v5', text: 'Direction remains steady when challenged or resisted.', type: 'rating', required: true },
+            { id: 'v6', text: 'Daily execution measurably advances a defined future state.', type: 'rating', required: true },
+            { id: 'v7', text: 'This leader challenges others to think strategically about long-term impact.', type: 'rating', required: true, isCCI: true },
+            { id: 'v8', text: 'Strategic direction shifts when short-term pressure increases.', type: 'rating', required: true, reverseScored: true },
+          ],
+        },
+        {
+          id: 'clarity', name: 'CLARITY', subtitle: 'Structure Must Reduce Friction',
+          description: 'The ability to create explicit role clarity, performance metrics, and outcome-based accountability.',
+          questions: [
+            { id: 'cl1', text: 'Role accountabilities are explicit and outcome-based.', type: 'rating', required: true },
+            { id: 'cl2', text: 'The 3–5 core results of each role are clearly defined and documented.', type: 'rating', required: true },
+            { id: 'cl3', text: 'Performance metrics are visible and actively reviewed.', type: 'rating', required: true },
+            { id: 'cl4', text: 'Ownership of results is unmistakable.', type: 'rating', required: true },
+            { id: 'cl5', text: 'Performance discussions are grounded in measurable outcomes.', type: 'rating', required: true },
+            { id: 'cl6', text: 'This leader eliminates ambiguity that slows execution.', type: 'rating', required: true },
+            { id: 'cl7', text: 'This leader requires team members to define clear success criteria before action.', type: 'rating', required: true, isCCI: true },
+            { id: 'cl8', text: 'Role ambiguity contributes to execution delays.', type: 'rating', required: true, reverseScored: true },
+          ],
+        },
+        {
+          id: 'teamwork', name: 'TEAMWORK', subtitle: 'Tension Must Improve Performance',
+          description: 'The capacity to build trust under pressure, address conflict directly, and prioritize enterprise results.',
+          questions: [
+            { id: 'tw1', text: 'Leadership team members demonstrate trust under pressure.', type: 'rating', required: true },
+            { id: 'tw2', text: 'Difficult issues are addressed directly and in the room.', type: 'rating', required: true },
+            { id: 'tw3', text: 'Productive conflict strengthens decisions.', type: 'rating', required: true },
+            { id: 'tw4', text: 'Enterprise results outweigh departmental preferences.', type: 'rating', required: true },
+            { id: 'tw5', text: 'Cross-functional coordination is disciplined and reliable.', type: 'rating', required: true },
+            { id: 'tw6', text: 'Feedback is exchanged without political consequence.', type: 'rating', required: true },
+            { id: 'tw7', text: 'This leader elevates the level of dialogue during disagreement.', type: 'rating', required: true, isCCI: true },
+            { id: 'tw8', text: 'Significant issues are discussed outside formal forums rather than openly.', type: 'rating', required: true, reverseScored: true },
+          ],
+        },
+        {
+          id: 'candor', name: 'CANDOR', subtitle: 'Standards Must Be Protected',
+          description: 'The willingness to address underperformance promptly, communicate difficult truths, and maintain high standards.',
+          questions: [
+            { id: 'ca1', text: 'Underperformance is addressed promptly and clearly.', type: 'rating', required: true },
+            { id: 'ca2', text: 'Expectations and standards are explicit and reinforced.', type: 'rating', required: true },
+            { id: 'ca3', text: 'Feedback is precise and tied to measurable outcomes.', type: 'rating', required: true },
+            { id: 'ca4', text: 'Difficult truths are communicated regardless of hierarchy.', type: 'rating', required: true },
+            { id: 'ca5', text: 'Performance data is openly visible and discussed.', type: 'rating', required: true },
+            { id: 'ca6', text: 'Mediocrity is corrected before it becomes normalized.', type: 'rating', required: true },
+            { id: 'ca7', text: 'This leader requires others to confront the gap between intent and impact.', type: 'rating', required: true, isCCI: true },
+            { id: 'ca8', text: 'Poor performance is excused to avoid discomfort.', type: 'rating', required: true, reverseScored: true },
+          ],
+        },
+        {
+          id: 'accountability', name: 'ACCOUNTABILITY', subtitle: 'Commitments Must Mean Something',
+          description: 'The discipline to ensure commitments include clear deadlines, coaching checkpoints, and meaningful consequences.',
+          questions: [
+            { id: 'ac1', text: 'Commitments include clear deadlines and measurable outcomes.', type: 'rating', required: true },
+            { id: 'ac2', text: 'Coaching conversations include defined follow-up checkpoints.', type: 'rating', required: true },
+            { id: 'ac3', text: 'Progress toward goals is reviewed on a disciplined cadence.', type: 'rating', required: true },
+            { id: 'ac4', text: 'Missed commitments trigger corrective action.', type: 'rating', required: true },
+            { id: 'ac5', text: 'This leader takes full responsibility for results in their scope.', type: 'rating', required: true },
+            { id: 'ac6', text: 'Repeated underperformance leads to visible consequences.', type: 'rating', required: true },
+            { id: 'ac7', text: 'This leader requires others to state explicit commitments before closing discussions.', type: 'rating', required: true, isCCI: true },
+            { id: 'ac8', text: 'Missed commitments are tolerated without meaningful follow-up.', type: 'rating', required: true, reverseScored: true },
+          ],
+        },
+        {
+          id: 'change', name: 'CHANGE', subtitle: 'Improvement Must Be Continuous',
+          description: 'The ability to update thinking when evidence warrants, redesign underperforming systems, and challenge the status quo.',
+          questions: [
+            { id: 'ch1', text: 'The leader updates thinking when evidence warrants it.', type: 'rating', required: true },
+            { id: 'ch2', text: 'Underperforming systems are redesigned without delay.', type: 'rating', required: true },
+            { id: 'ch3', text: 'Change initiatives are structured and completed.', type: 'rating', required: true },
+            { id: 'ch4', text: 'Performance improves quarter over quarter.', type: 'rating', required: true },
+            { id: 'ch5', text: 'Experimentation is encouraged when results plateau.', type: 'rating', required: true },
+            { id: 'ch6', text: 'The status quo is challenged when it limits growth.', type: 'rating', required: true },
+            { id: 'ch7', text: 'During change, this leader pushes others to generate forward-thinking solutions.', type: 'rating', required: true, isCCI: true },
+            { id: 'ch8', text: 'Existing systems are defended despite declining results.', type: 'rating', required: true, reverseScored: true },
+          ],
+        },
+      ],
+      scaleMin: 1,
+      scaleMax: 5,
+      scaleLabels: ['Never', 'Rarely', 'Sometimes', 'Frequently', 'Consistently'],
+      allowComments: true,
+      requireComments: false,
+      anonymizeResponses: true,
+      raterTypes: ['self', 'manager'],
+    },
+  }).returning();
+  console.log('  ✓ Template created: LeaderShift™ 180 (Self + Boss)');
+
+  const alexWilson = learners[2];
+  const [lsAssessment180] = await db.insert(schema.assessments).values({
+    templateId: leaderShift180Template.id,
+    tenantId: tenant.id,
+    subjectId: alexWilson.id,
+    createdBy: facilitator.id,
+    name: 'Alex Wilson — LeaderShift™ 180 (Q1 2026)',
+    description: '180-degree LeaderShift assessment for Alex Wilson. Self and Boss perspectives.',
+    status: 'completed',
+    openDate: '2026-01-10',
+    closeDate: '2026-01-28',
+    anonymizeResults: true,
+    showResultsToSubject: true,
+  }).returning();
+  console.log('  ✓ Assessment created: Alex Wilson LeaderShift 180 (completed)');
+
+  const lsRaters180 = [
+    { raterId: alexWilson.id, raterType: 'self' as const },
+    { raterId: facilitator.id, raterType: 'manager' as const },
+  ];
+
+  const lsInvitations180 = [];
+  for (const rater of lsRaters180) {
+    const [inv] = await db.insert(schema.assessmentInvitations).values({
+      assessmentId: lsAssessment180.id,
+      raterId: rater.raterId,
+      raterType: rater.raterType,
+      status: 'completed',
+      accessToken: crypto.randomUUID().replace(/-/g, '').slice(0, 32),
+      sentAt: new Date('2026-01-11'),
+      viewedAt: new Date('2026-01-12'),
+      startedAt: new Date('2026-01-13'),
+      completedAt: new Date('2026-01-22'),
+    }).returning();
+    lsInvitations180.push(inv);
+  }
+  console.log('  ✓ Created 2 invitations (all completed) for Alex\'s LeaderShift 180');
+
+  // Alex 180 scores: Self vs Boss
+  // Self tends to over-rate VISION and ACCOUNTABILITY, Boss sees CLARITY as weakest
+  const ls180Scores: Record<string, number[][]> = {
+    vision: [
+      // v1  v2  v3  v4  v5  v6  v7(CCI) v8[R]
+      [4,  4,  5,  4,  4,  4,  4,      2], // self  ← confident
+      [3,  3,  3,  3,  3,  3,  3,      3], // boss  ← more conservative
+    ],
+    clarity: [
+      [3,  3,  3,  3,  3,  3,  3,      3], // self
+      [2,  2,  2,  2,  2,  2,  2,      4], // boss  ← sees real gap
+    ],
+    teamwork: [
+      [3,  3,  4,  3,  3,  3,  3,      3], // self
+      [3,  4,  3,  3,  3,  4,  3,      3], // boss  ← similar view
+    ],
+    candor: [
+      [3,  3,  3,  3,  3,  3,  3,      3], // self
+      [4,  4,  4,  4,  3,  4,  4,      2], // boss  ← sees hidden strength
+    ],
+    accountability: [
+      [4,  4,  4,  4,  5,  4,  4,      2], // self  ← over-rates
+      [3,  3,  3,  3,  3,  3,  3,      3], // boss
+    ],
+    change: [
+      [3,  3,  3,  3,  3,  3,  3,      3], // self
+      [3,  3,  3,  3,  3,  3,  3,      3], // boss  ← aligned, moderate
+    ],
+  };
+
+  const ls180Comments = [
+    'I believe I have strong strategic vision but recognize I may need to improve structural clarity for my team.',
+    'Alex has untapped potential in candor — he provides excellent direct feedback when he chooses to. Clarity and documentation are areas that need consistent attention.',
+  ];
+
+  for (let i = 0; i < lsInvitations180.length; i++) {
+    const responses: { competencyId: string; questionId: string; rating: number }[] = [];
+    for (const [compId, qIds] of Object.entries(lsQuestionIds)) {
+      for (let q = 0; q < qIds.length; q++) {
+        responses.push({
+          competencyId: compId,
+          questionId: qIds[q],
+          rating: ls180Scores[compId][i][q],
+        });
+      }
+    }
+    await db.insert(schema.assessmentResponses).values({
+      invitationId: lsInvitations180[i].id,
+      responses,
+      overallComments: ls180Comments[i],
+      submittedAt: new Date('2026-01-22'),
+      isComplete: true,
+    });
+  }
+  console.log('  ✓ Created 2 complete responses for Alex\'s LeaderShift 180');
+
+  console.log('\n✅ LeaderShift™ seed data complete!');
 }
 
 seed().catch((error) => {

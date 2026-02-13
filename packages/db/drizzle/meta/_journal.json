@@ -50,6 +50,20 @@
       "when": 1770582528032,
       "tag": "0006_ordinary_tinkerer",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1770956762022,
+      "tag": "0007_vengeful_virginia_dare",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1770991161611,
+      "tag": "0008_elite_silver_samurai",
+      "breakpoints": true
     }
   ]
 }

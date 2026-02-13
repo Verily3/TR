@@ -108,6 +108,8 @@ export const programs = pgTable(
     index('programs_agency_id_idx').on(table.agencyId),
     index('programs_status_idx').on(table.status),
     index('programs_type_idx').on(table.type),
+    index('programs_start_date_idx').on(table.startDate),
+    index('programs_end_date_idx').on(table.endDate),
   ]
 );
 

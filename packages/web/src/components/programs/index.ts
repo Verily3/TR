@@ -16,4 +16,6 @@ export {
   QuizContent,
   ApprovalContent,
   DiscussionContent,
+  EventContent,
+  TaskList,
 } from './lesson-content';

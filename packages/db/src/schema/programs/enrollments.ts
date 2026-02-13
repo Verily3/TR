@@ -100,6 +100,7 @@ export const enrollments = pgTable(
     index('enrollments_tenant_id_idx').on(table.tenantId),
     index('enrollments_role_idx').on(table.role),
     index('enrollments_status_idx').on(table.status),
+    index('enrollments_completed_at_idx').on(table.completedAt),
   ]
 );
 

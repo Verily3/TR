@@ -1,3 +1,14 @@
 ❯ yes, use these as reference to improve our learner LMS view. we don't want ot copy their design. We just want to make sure we can create the same lesson types in the program builder which of course would be displayed correctly in the     
   preview. Use the same text on the screens except "Promote" should be replaced with Results tracking.  
 ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+ 1. Go to https://soia-816056420126.us-central1.run.app/admin/migrate    
+  2. Click the "Run Schema Sync" button (blue/indigo) — this applies the  
+  16 indexes + unique constraint we added
+  3. Wait for it to finish — you'll see terminal output with a green      
+  "Success" or red "Failed" status
+  4. Click "Copy Output" and paste it here so I can see the results       
+  5. Then click "Check Status" under SQL Migrations to see if any custom  
+  SQL migrations are pending
+  6. If there are pending ones, click "Run Migrations" and copy that      
+  output too

@@ -13,6 +13,8 @@ import {
 import { relations } from 'drizzle-orm';
 import { tenants } from '../core/tenants';
 import { users } from '../core/users';
+import { programs } from '../programs/programs';
+import { enrollments } from '../programs/enrollments';
 import { assessmentTemplates, raterTypeEnum } from './templates';
 
 /**
@@ -82,6 +84,17 @@ export const assessments = pgTable(
       .notNull()
       .default(true),
 
+    // Computed results (populated when status -> 'completed')
+    computedResults: jsonb('computed_results').$type<ComputedAssessmentResults>(),
+
+    // Optional program/enrollment link
+    programId: uuid('program_id').references(() => programs.id, {
+      onDelete: 'set null',
+    }),
+    enrollmentId: uuid('enrollment_id').references(() => enrollments.id, {
+      onDelete: 'set null',
+    }),
+
     // Audit timestamps
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -149,6 +162,118 @@ export const assessmentInvitations = pgTable(
 );
 
 /**
+ * Computed assessment results — cached in assessments.computed_results JSONB
+ */
+export interface ComputedCompetencyScore {
+  competencyId: string;
+  competencyName: string;
+  scores: Record<string, number>; // raterType -> avgScore
+  overallAverage: number;
+  othersAverage: number; // avg excluding self
+  selfScore: number | null;
+  gap: number; // self - othersAverage
+  responseDistribution: Record<number, number>; // rating value -> count
+  raterAgreement: number; // standard deviation across raters
+}
+
+export interface ComputedItemScore {
+  competencyId: string;
+  questionId: string;
+  questionText: string;
+  scores: Record<string, number>; // raterType -> avgScore
+  overallAverage: number;
+  selfScore: number | null;
+  gap: number;
+}
+
+export interface RankedItem {
+  competencyId: string;
+  competencyName: string;
+  questionId: string;
+  questionText: string;
+  overallAverage: number;
+  selfScore: number | null;
+  gap: number;
+}
+
+export interface GapEntry {
+  competencyId: string;
+  competencyName: string;
+  selfScore: number;
+  othersAverage: number;
+  gap: number;
+  classification: 'blind_spot' | 'hidden_strength' | 'aligned';
+  interpretation: string;
+}
+
+export interface CCIResult {
+  score: number;
+  band: 'Low' | 'Moderate' | 'High' | 'Very High';
+  items: {
+    competencyId: string;
+    competencyName: string;
+    questionId: string;
+    questionText: string;
+    rawScore: number;
+    effectiveScore: number;
+  }[];
+}
+
+export interface CurrentCeiling {
+  competencyId: string;
+  competencyName: string;
+  subtitle: string;
+  score: number;
+  narrative: string;
+}
+
+export interface TrendComparison {
+  previousAssessmentId: string;
+  previousCompletedAt: string;
+  competencyChanges: {
+    competencyId: string;
+    competencyName: string;
+    previousScore: number;
+    currentScore: number;
+    change: number;
+    changePercent: number;
+    direction: 'improved' | 'declined' | 'stable';
+  }[];
+  overallChange: number;
+  overallDirection: 'improved' | 'declined' | 'stable';
+}
+
+export interface ComputedAssessmentResults {
+  computedAt: string;
+  overallScore: number;
+  responseRateByType: Record<
+    string,
+    { invited: number; completed: number; rate: number }
+  >;
+  competencyScores: ComputedCompetencyScore[];
+  itemScores: ComputedItemScore[];
+  gapAnalysis: GapEntry[];
+  topItems: RankedItem[];
+  bottomItems: RankedItem[];
+  strengths: string[];
+  developmentAreas: string[];
+  comments: {
+    competencyId: string;
+    raterType: string;
+    comment: string;
+  }[];
+  johariWindow: {
+    openArea: string[];
+    blindSpot: string[];
+    hiddenArea: string[];
+    unknownArea: string[];
+  };
+  cciResult?: CCIResult;
+  currentCeiling?: CurrentCeiling;
+  trend?: TrendComparison;
+}
+
+/**
  * Response data structure
  */
 export interface AssessmentResponseData {
@@ -214,6 +339,14 @@ export const assessmentsRelations = relations(assessments, ({ one, many }) => ({
     fields: [assessments.createdBy],
     references: [users.id],
     relationName: 'assessmentsCreated',
+  }),
+  program: one(programs, {
+    fields: [assessments.programId],
+    references: [programs.id],
+  }),
+  enrollment: one(enrollments, {
+    fields: [assessments.enrollmentId],
+    references: [enrollments.id],
   }),
   invitations: many(assessmentInvitations),
 }));

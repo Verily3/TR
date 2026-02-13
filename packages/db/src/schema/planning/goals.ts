@@ -12,6 +12,7 @@ import {
 import { relations } from 'drizzle-orm';
 import { users } from '../core/users';
 import { tenants } from '../core/tenants';
+import { assessments } from '../assessments/assessments';
 
 /**
  * Individual goal status enum
@@ -86,6 +87,11 @@ export const individualGoals = pgTable(
     // Parent goal (for cascading goals)
     parentGoalId: uuid('parent_goal_id'),
 
+    // Optional assessment link (goal created from assessment results)
+    assessmentId: uuid('assessment_id').references(() => assessments.id, {
+      onDelete: 'set null',
+    }),
+
     // Review settings (same as program goals)
     reviewFrequency: text('review_frequency').default('monthly'),
     lastReviewedAt: timestamp('last_reviewed_at', { withTimezone: true }),
@@ -104,6 +110,8 @@ export const individualGoals = pgTable(
     index('individual_goals_status_idx').on(table.status),
     index('individual_goals_category_idx').on(table.category),
     index('individual_goals_parent_idx').on(table.parentGoalId),
+    index('individual_goals_assessment_idx').on(table.assessmentId),
+    index('individual_goals_target_date_idx').on(table.targetDate),
   ]
 );
 
@@ -126,6 +134,10 @@ export const individualGoalsRelations = relations(
     }),
     childGoals: many(individualGoals, {
       relationName: 'childGoals',
+    }),
+    assessment: one(assessments, {
+      fields: [individualGoals.assessmentId],
+      references: [assessments.id],
     }),
   })
 );

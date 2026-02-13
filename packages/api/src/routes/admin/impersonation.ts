@@ -124,49 +124,56 @@ impersonationRoutes.post(
  * POST /api/admin/impersonate/end
  * End the current impersonation session
  */
-impersonationRoutes.post('/end', async (c) => {
-  const impersonationToken = c.req.header('X-Impersonation-Token');
+impersonationRoutes.post(
+  '/end',
+  requireAgencyAccess(),
+  requirePermission(PERMISSIONS.AGENCY_IMPERSONATE),
+  async (c) => {
+    const adminUser = c.get('user');
+    const impersonationToken = c.req.header('X-Impersonation-Token');
 
-  if (!impersonationToken) {
-    throw new BadRequestError('No impersonation token provided');
-  }
+    if (!impersonationToken) {
+      throw new BadRequestError('No impersonation token provided');
+    }
 
-  const tokenHash = crypto
-    .createHash('sha256')
-    .update(impersonationToken)
-    .digest('hex');
+    const tokenHash = crypto
+      .createHash('sha256')
+      .update(impersonationToken)
+      .digest('hex');
 
-  // Find active impersonation session
-  const [session] = await db
-    .select()
-    .from(impersonationSessions)
-    .where(
-      and(
-        eq(impersonationSessions.tokenHash, tokenHash),
-        isNull(impersonationSessions.endedAt),
-        gt(impersonationSessions.expiresAt, new Date())
+    // Find active impersonation session owned by this admin
+    const [session] = await db
+      .select()
+      .from(impersonationSessions)
+      .where(
+        and(
+          eq(impersonationSessions.tokenHash, tokenHash),
+          eq(impersonationSessions.adminUserId, adminUser.id),
+          isNull(impersonationSessions.endedAt),
+          gt(impersonationSessions.expiresAt, new Date())
+        )
       )
-    )
-    .limit(1);
+      .limit(1);
 
-  if (!session) {
-    throw new BadRequestError('Invalid or expired impersonation session');
+    if (!session) {
+      throw new BadRequestError('Invalid or expired impersonation session');
+    }
+
+    // End the session
+    await db
+      .update(impersonationSessions)
+      .set({ endedAt: new Date() })
+      .where(eq(impersonationSessions.id, session.id));
+
+    return c.json({ data: { success: true } });
   }
-
-  // End the session
-  await db
-    .update(impersonationSessions)
-    .set({ endedAt: new Date() })
-    .where(eq(impersonationSessions.id, session.id));
-
-  return c.json({ data: { success: true } });
-});
+);
 
 /**
  * GET /api/admin/impersonate/status
- * Check current impersonation status
+ * Check current impersonation status (agency admin only)
  */
-impersonationRoutes.get('/status', async (c) => {
+impersonationRoutes.get('/status', requireAgencyAccess(), requirePermission(PERMISSIONS.AGENCY_IMPERSONATE), async (c) => {
   const impersonationToken = c.req.header('X-Impersonation-Token');
 
   if (!impersonationToken) {

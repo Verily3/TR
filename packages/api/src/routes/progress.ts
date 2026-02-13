@@ -19,6 +19,8 @@ const {
   approvalSubmissions,
   lessonDiscussions,
   users,
+  lessonTasks,
+  taskProgress,
 } = schema;
 
 export const progressRoutes = new Hono<{ Variables: Variables }>();
@@ -929,6 +931,549 @@ progressRoutes.post(
     }, 201);
   }
 );
+
+// ============================================
+// TASK-LEVEL PROGRESS ROUTES
+// ============================================
+
+const completeTaskSchema = z.object({
+  submissionData: z.record(z.unknown()).optional(),
+});
+
+const submitTaskSchema = z.object({
+  submissionText: z.string().min(1),
+  submissionData: z.record(z.unknown()).optional(),
+});
+
+const reviewTaskSchema = z.object({
+  status: z.enum(['approved', 'rejected']),
+  reviewerRole: z.enum(['mentor', 'facilitator']),
+  feedback: z.string().optional(),
+});
+
+/**
+ * PUT /api/tenants/:tenantId/programs/:programId/tasks/:taskId/complete
+ * Mark a task as complete (no approval required)
+ */
+progressRoutes.put(
+  '/tasks/:taskId/complete',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_VIEW),
+  zValidator('json', completeTaskSchema),
+  async (c) => {
+    const tenant = c.get('tenant')!;
+    const user = c.get('user');
+    const { programId, taskId } = c.req.param();
+    const { submissionData } = c.req.valid('json');
+
+    // Get user's enrollment
+    const [enrollment] = await db
+      .select()
+      .from(enrollments)
+      .where(
+        and(
+          eq(enrollments.programId, programId),
+          eq(enrollments.userId, user.id),
+          eq(enrollments.role, 'learner')
+        )
+      )
+      .limit(1);
+
+    if (!enrollment) {
+      throw new ForbiddenError('You are not enrolled in this program');
+    }
+
+    // Verify task exists in this program
+    const [task] = await db
+      .select({
+        task: lessonTasks,
+        lesson: lessons,
+      })
+      .from(lessonTasks)
+      .innerJoin(lessons, eq(lessonTasks.lessonId, lessons.id))
+      .innerJoin(modules, eq(lessons.moduleId, modules.id))
+      .innerJoin(programs, eq(modules.programId, programs.id))
+      .where(
+        and(
+          eq(lessonTasks.id, taskId),
+          eq(programs.id, programId),
+          eq(programs.tenantId, tenant.id)
+        )
+      )
+      .limit(1);
+
+    if (!task) {
+      throw new NotFoundError('Task', taskId);
+    }
+
+    // Check if task requires approval
+    if (task.task.approvalRequired !== 'none') {
+      throw new BadRequestError(
+        'This task requires approval. Use the submit endpoint instead.'
+      );
+    }
+
+    // Upsert task progress
+    const [progress] = await db
+      .insert(taskProgress)
+      .values({
+        taskId,
+        enrollmentId: enrollment.id,
+        status: 'completed',
+        startedAt: new Date(),
+        completedAt: new Date(),
+        pointsEarned: task.task.points,
+        submissionData,
+      })
+      .onConflictDoUpdate({
+        target: [taskProgress.taskId, taskProgress.enrollmentId],
+        set: {
+          status: 'completed',
+          completedAt: new Date(),
+          pointsEarned: task.task.points,
+          submissionData,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+
+    // Check if all tasks for the parent lesson are now completed
+    await checkLessonTaskCompletion(task.task.lessonId, enrollment.id, task.lesson.points);
+
+    return c.json({ data: progress });
+  }
+);
+
+/**
+ * POST /api/tenants/:tenantId/programs/:programId/tasks/:taskId/submit
+ * Submit a task for approval
+ */
+progressRoutes.post(
+  '/tasks/:taskId/submit',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_VIEW),
+  zValidator('json', submitTaskSchema),
+  async (c) => {
+    const tenant = c.get('tenant')!;
+    const user = c.get('user');
+    const { programId, taskId } = c.req.param();
+    const { submissionText, submissionData } = c.req.valid('json');
+
+    // Get user's enrollment
+    const [enrollment] = await db
+      .select()
+      .from(enrollments)
+      .where(
+        and(
+          eq(enrollments.programId, programId),
+          eq(enrollments.userId, user.id),
+          eq(enrollments.role, 'learner')
+        )
+      )
+      .limit(1);
+
+    if (!enrollment) {
+      throw new ForbiddenError('You are not enrolled as a learner in this program');
+    }
+
+    // Verify task exists and requires approval
+    const [task] = await db
+      .select()
+      .from(lessonTasks)
+      .innerJoin(lessons, eq(lessonTasks.lessonId, lessons.id))
+      .innerJoin(modules, eq(lessons.moduleId, modules.id))
+      .innerJoin(programs, eq(modules.programId, programs.id))
+      .where(
+        and(
+          eq(lessonTasks.id, taskId),
+          eq(programs.id, programId),
+          eq(programs.tenantId, tenant.id)
+        )
+      )
+      .limit(1);
+
+    if (!task) {
+      throw new NotFoundError('Task', taskId);
+    }
+
+    const approvalRequired = task.lesson_tasks.approvalRequired;
+    if (!approvalRequired || approvalRequired === 'none') {
+      throw new BadRequestError(
+        'This task does not require approval. Use the complete endpoint instead.'
+      );
+    }
+
+    // Determine which reviewer roles are needed
+    const rolesToSubmit: ('mentor' | 'facilitator')[] =
+      approvalRequired === 'both'
+        ? ['mentor', 'facilitator']
+        : [approvalRequired as 'mentor' | 'facilitator'];
+
+    // Create approval submissions for each required role (task-level)
+    const submissions = [];
+    for (const role of rolesToSubmit) {
+      const [submission] = await db
+        .insert(approvalSubmissions)
+        .values({
+          lessonId: task.lesson_tasks.lessonId,
+          taskId,
+          enrollmentId: enrollment.id,
+          reviewerRole: role,
+          submissionText,
+          status: 'pending',
+        })
+        .onConflictDoUpdate({
+          target: [
+            approvalSubmissions.lessonId,
+            approvalSubmissions.enrollmentId,
+            approvalSubmissions.reviewerRole,
+          ],
+          set: {
+            taskId,
+            submissionText,
+            submittedAt: new Date(),
+            status: 'pending',
+            reviewedBy: null,
+            reviewedAt: null,
+            feedback: null,
+            updatedAt: new Date(),
+          },
+        })
+        .returning();
+      submissions.push(submission);
+    }
+
+    // Mark task progress as in_progress
+    await db
+      .insert(taskProgress)
+      .values({
+        taskId,
+        enrollmentId: enrollment.id,
+        status: 'in_progress',
+        startedAt: new Date(),
+        submissionData,
+      })
+      .onConflictDoUpdate({
+        target: [taskProgress.taskId, taskProgress.enrollmentId],
+        set: {
+          status: 'in_progress',
+          submissionData,
+          updatedAt: new Date(),
+        },
+      });
+
+    // Also ensure lesson progress is at least in_progress
+    await db
+      .insert(lessonProgress)
+      .values({
+        enrollmentId: enrollment.id,
+        lessonId: task.lesson_tasks.lessonId,
+        status: 'in_progress',
+        startedAt: new Date(),
+      })
+      .onConflictDoNothing();
+
+    return c.json({ data: submissions }, 201);
+  }
+);
+
+/**
+ * POST /api/tenants/:tenantId/programs/:programId/tasks/:taskId/approve
+ * Approve or reject a task submission
+ */
+progressRoutes.post(
+  '/tasks/:taskId/approve',
+  requireTenantAccess(),
+  requirePermission([PERMISSIONS.MENTORING_MANAGE, PERMISSIONS.PROGRAMS_MANAGE]),
+  zValidator('json', reviewTaskSchema),
+  async (c) => {
+    const tenant = c.get('tenant')!;
+    const user = c.get('user');
+    const { programId, taskId } = c.req.param();
+    const { status, reviewerRole, feedback } = c.req.valid('json');
+
+    const enrollmentId = c.req.query('enrollmentId');
+    if (!enrollmentId) {
+      throw new BadRequestError('enrollmentId query parameter is required');
+    }
+
+    // Verify reviewer has the appropriate role
+    const [reviewerEnrollment] = await db
+      .select()
+      .from(enrollments)
+      .where(
+        and(
+          eq(enrollments.programId, programId),
+          eq(enrollments.userId, user.id),
+          eq(enrollments.role, reviewerRole)
+        )
+      )
+      .limit(1);
+
+    if (!reviewerEnrollment) {
+      const [facilitatorEnrollment] = await db
+        .select()
+        .from(enrollments)
+        .where(
+          and(
+            eq(enrollments.programId, programId),
+            eq(enrollments.userId, user.id),
+            eq(enrollments.role, 'facilitator')
+          )
+        )
+        .limit(1);
+
+      if (!facilitatorEnrollment) {
+        throw new ForbiddenError(
+          `You must be enrolled as a ${reviewerRole} or facilitator to approve`
+        );
+      }
+    }
+
+    // Find the approval submission for this task
+    const [submission] = await db
+      .select()
+      .from(approvalSubmissions)
+      .innerJoin(enrollments, eq(approvalSubmissions.enrollmentId, enrollments.id))
+      .innerJoin(programs, eq(enrollments.programId, programs.id))
+      .where(
+        and(
+          eq(approvalSubmissions.taskId, taskId),
+          eq(approvalSubmissions.enrollmentId, enrollmentId),
+          eq(approvalSubmissions.reviewerRole, reviewerRole),
+          eq(programs.id, programId),
+          eq(programs.tenantId, tenant.id)
+        )
+      )
+      .limit(1);
+
+    if (!submission) {
+      throw new NotFoundError('Submission');
+    }
+
+    // Update submission
+    const [updated] = await db
+      .update(approvalSubmissions)
+      .set({
+        status,
+        feedback,
+        reviewedBy: user.id,
+        reviewedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(approvalSubmissions.id, submission.approval_submissions.id))
+      .returning();
+
+    // If approved, check if task is fully approved
+    if (status === 'approved') {
+      // Get the task to check approvalRequired
+      const [task] = await db
+        .select()
+        .from(lessonTasks)
+        .where(eq(lessonTasks.id, taskId))
+        .limit(1);
+
+      if (task) {
+        let fullyApproved = true;
+
+        if (task.approvalRequired === 'both') {
+          const allSubmissions = await db
+            .select()
+            .from(approvalSubmissions)
+            .where(
+              and(
+                eq(approvalSubmissions.taskId, taskId),
+                eq(approvalSubmissions.enrollmentId, enrollmentId)
+              )
+            );
+          fullyApproved = allSubmissions.every((s) => s.status === 'approved');
+        }
+
+        if (fullyApproved) {
+          // Mark task as completed
+          await db
+            .update(taskProgress)
+            .set({
+              status: 'completed',
+              completedAt: new Date(),
+              pointsEarned: task.points,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(taskProgress.taskId, taskId),
+                eq(taskProgress.enrollmentId, enrollmentId)
+              )
+            );
+
+          // Check if all tasks for the parent lesson are now completed
+          const [lesson] = await db
+            .select()
+            .from(lessons)
+            .where(eq(lessons.id, task.lessonId))
+            .limit(1);
+
+          if (lesson) {
+            await checkLessonTaskCompletion(task.lessonId, enrollmentId, lesson.points);
+          }
+        }
+      }
+    }
+
+    return c.json({ data: updated });
+  }
+);
+
+/**
+ * GET /api/tenants/:tenantId/programs/:programId/enrollments/:enrollmentId/task-progress
+ * Get all task progress for an enrollment
+ */
+progressRoutes.get(
+  '/enrollments/:enrollmentId/task-progress',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_VIEW),
+  async (c) => {
+    const tenant = c.get('tenant')!;
+    const user = c.get('user');
+    const { programId, enrollmentId } = c.req.param();
+
+    // Verify enrollment exists
+    const [enrollment] = await db
+      .select()
+      .from(enrollments)
+      .innerJoin(programs, eq(enrollments.programId, programs.id))
+      .where(
+        and(
+          eq(enrollments.id, enrollmentId),
+          eq(enrollments.programId, programId),
+          eq(programs.tenantId, tenant.id)
+        )
+      )
+      .limit(1);
+
+    if (!enrollment) {
+      throw new NotFoundError('Enrollment', enrollmentId);
+    }
+
+    // Check access
+    const canView =
+      enrollment.enrollments.userId === user.id ||
+      user.permissions.includes(PERMISSIONS.MENTORING_VIEW_ALL) ||
+      user.permissions.includes(PERMISSIONS.PROGRAMS_MANAGE);
+
+    if (!canView) {
+      throw new ForbiddenError('You do not have access to view this enrollment');
+    }
+
+    // Get all tasks for this program
+    const allTasks = await db
+      .select({
+        id: lessonTasks.id,
+        lessonId: lessonTasks.lessonId,
+        title: lessonTasks.title,
+        responseType: lessonTasks.responseType,
+        approvalRequired: lessonTasks.approvalRequired,
+        points: lessonTasks.points,
+        order: lessonTasks.order,
+      })
+      .from(lessonTasks)
+      .innerJoin(lessons, eq(lessonTasks.lessonId, lessons.id))
+      .innerJoin(modules, eq(lessons.moduleId, modules.id))
+      .where(eq(modules.programId, programId))
+      .orderBy(asc(modules.order), asc(lessons.order), asc(lessonTasks.order));
+
+    // Get task progress for this enrollment
+    const progress = await db
+      .select()
+      .from(taskProgress)
+      .where(eq(taskProgress.enrollmentId, enrollmentId));
+
+    const progressMap = new Map(progress.map((p) => [p.taskId, p]));
+
+    const tasksWithProgress = allTasks.map((task) => {
+      const prog = progressMap.get(task.id);
+      return {
+        ...task,
+        status: prog?.status || 'not_started',
+        startedAt: prog?.startedAt,
+        completedAt: prog?.completedAt,
+        pointsEarned: prog?.pointsEarned || 0,
+        submissionData: prog?.submissionData,
+      };
+    });
+
+    return c.json({ data: tasksWithProgress });
+  }
+);
+
+/**
+ * Helper: Check if all tasks in a lesson are completed and auto-complete the lesson
+ */
+async function checkLessonTaskCompletion(
+  lessonId: string,
+  enrollmentId: string,
+  lessonPoints: number
+) {
+  // Get all tasks for this lesson
+  const allLessonTasks = await db
+    .select({ id: lessonTasks.id })
+    .from(lessonTasks)
+    .where(eq(lessonTasks.lessonId, lessonId));
+
+  if (allLessonTasks.length === 0) return;
+
+  // Get completed task count
+  const taskIds = allLessonTasks.map((t) => t.id);
+  const [{ completedCount }] = await db
+    .select({
+      completedCount: sql<number>`count(*) filter (where ${taskProgress.status} = 'completed')`,
+    })
+    .from(taskProgress)
+    .where(
+      and(
+        eq(taskProgress.enrollmentId, enrollmentId),
+        sql`${taskProgress.taskId} IN ${taskIds}`
+      )
+    );
+
+  const allCompleted = Number(completedCount) >= allLessonTasks.length;
+
+  if (allCompleted) {
+    // Auto-complete the lesson
+    await db
+      .insert(lessonProgress)
+      .values({
+        enrollmentId,
+        lessonId,
+        status: 'completed',
+        startedAt: new Date(),
+        completedAt: new Date(),
+        pointsEarned: lessonPoints,
+      })
+      .onConflictDoUpdate({
+        target: [lessonProgress.enrollmentId, lessonProgress.lessonId],
+        set: {
+          status: 'completed',
+          completedAt: new Date(),
+          pointsEarned: lessonPoints,
+          updatedAt: new Date(),
+        },
+      });
+
+    await updateEnrollmentProgress(enrollmentId);
+  } else {
+    // Ensure lesson is at least in_progress
+    await db
+      .insert(lessonProgress)
+      .values({
+        enrollmentId,
+        lessonId,
+        status: 'in_progress',
+        startedAt: new Date(),
+      })
+      .onConflictDoNothing();
+  }
+}
 
 // Helper function to update enrollment progress
 async function updateEnrollmentProgress(enrollmentId: string) {

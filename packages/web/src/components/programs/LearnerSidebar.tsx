@@ -17,6 +17,7 @@ import {
   ClipboardList,
   CheckSquare,
   MessageSquare,
+  Calendar,
   X,
 } from 'lucide-react';
 
@@ -40,6 +41,8 @@ interface ModuleData {
   title: string;
   status: 'completed' | 'in-progress' | 'locked';
   lessons: LessonData[];
+  isEvent?: boolean;
+  eventConfig?: { date?: string; startTime?: string; endTime?: string };
 }
 
 interface LearnerSidebarProps {
@@ -226,10 +229,44 @@ export const LearnerSidebar = memo(function LearnerSidebar({
               const isExpanded = expandedModules.has(module.id);
               const completedLessonsCount = module.lessons.filter(l => l.completed).length;
               const remainingCount = module.lessons.filter(l => !l.completed).length;
-              const progress = Math.round((completedLessonsCount / module.lessons.length) * 100);
+              const progress = module.lessons.length > 0 ? Math.round((completedLessonsCount / module.lessons.length) * 100) : 0;
 
-              // In "remaining" mode, hide fully completed modules
-              if (filterMode === 'remaining' && remainingCount === 0) return null;
+              // In "remaining" mode, hide fully completed modules (events always show)
+              if (filterMode === 'remaining' && remainingCount === 0 && !module.isEvent) return null;
+
+              // Event rendering
+              if (module.isEvent) {
+                const isCurrentModule = moduleIndex === currentModuleIndex && currentLessonIndex === 0;
+                return (
+                  <li
+                    key={module.id}
+                    className="border-b border-border"
+                  >
+                    <button
+                      onClick={() => onSelectLesson(moduleIndex, 0)}
+                      className={`w-full p-4 text-left hover:bg-blue-50/50 transition-colors focus:outline-none focus:bg-blue-50/50 ${
+                        isCurrentModule ? 'bg-blue-50/50 border-l-2 border-l-blue-500' : ''
+                      }`}
+                      aria-label={`Event: ${module.title}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5">
+                          <Calendar className={`w-5 h-5 ${isCurrentModule ? 'text-blue-500' : 'text-blue-400'}`} aria-hidden="true" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[10px] font-semibold uppercase tracking-wider text-blue-500 mb-0.5">Event</div>
+                          <div className={`text-sm font-medium truncate ${isCurrentModule ? 'text-blue-600' : 'text-sidebar-foreground'}`}>
+                            {module.title}
+                          </div>
+                          {module.eventConfig?.date && (
+                            <div className="text-xs text-muted-foreground mt-0.5">{module.eventConfig.date}</div>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  </li>
+                );
+              }
 
               return (
                 <li

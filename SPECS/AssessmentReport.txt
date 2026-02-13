@@ -1,0 +1,183 @@
+LeaderShift™ PDF Design Spec (Minimal Version)
+Color Palette
+
+Black (primary text)
+
+White (background)
+
+One brand accent color (deep navy or charcoal blue recommended)
+
+Avoid:
+
+Gradients
+
+Shadows
+
+Decorative elements
+
+Multiple colors per band
+
+The color bands in the radar can use muted tones — but everything else stays restrained.
+
+Typography
+
+Two fonts max:
+
+Strong sans-serif headline (e.g., Montserrat / Helvetica / Inter)
+
+Clean body font (same family, lighter weight)
+
+Hierarchy:
+
+LeaderShift™ – Bold
+Leadership Capacity Stress Test – Medium
+Created by The Oxley Group – Small caps or subtle
+
+White space is authority.
+
+Radar Design
+
+Thin axis lines
+
+Clean grid
+
+Subtle band shading
+
+Solid Self line
+
+Dashed Boss line
+
+No drop shadows
+
+No 3D effects
+
+Flat. Modern. Executive.
+
+Constraint Section
+
+Large bold heading:
+
+CURRENT CEILING
+
+One short paragraph below.
+
+No boxes.
+No heavy graphics.
+Let the words carry weight.
+
+CCI Gauge
+
+Simple horizontal bar.
+
+Label:
+Coaching Capacity Index
+
+Numeric score on left.
+Band label on right.
+
+Minimalist.
+
+Overall Feel
+
+It should look like:
+
+A private board-level document
+
+Something a CEO would bring to an offsite
+
+Something that belongs in a board book
+
+Not like an HR survey printout.
+
+Final Recommendation Before You Build
+
+When you mock this:
+
+Do not try to make it impressive.
+
+Make it calm.
+
+If it looks calm and confident, the content feels serious.
+
+
+
+==================================================================================
+Sample Assessment.
+
+
+Final Scale (Frequency-Based)
+1 = Never
+2 = Rarely
+3 = Sometimes
+4 = Frequently
+5 = Consistently
+Now every statement reads as a behavioral pattern under load.
+Below is the finalized Version 1.0 wording using frequency framing.
+________________________________________
+VISION
+Direction Must Hold Under Pressure
+1.	This leader maintains clear long-term direction even when under significant pressure.
+2.	Strategic priorities remain aligned with a defined future state.
+3.	The team confidently articulates where the organization is headed and why.
+4.	Decisions reflect long-term intent over short-term relief.
+5.	Direction remains steady when challenged or resisted.
+6.	Daily execution measurably advances a defined future state.
+7.	This leader challenges others to think strategically about long-term impact. (CCI)
+8.	Strategic direction shifts when short-term pressure increases. [R]
+________________________________________
+CLARITY
+Structure Must Reduce Friction
+1.	Role accountabilities are explicit and outcome-based.
+2.	The 3–5 core results of each role are clearly defined and documented.
+3.	Performance metrics are visible and actively reviewed.
+4.	Ownership of results is unmistakable.
+5.	Performance discussions are grounded in measurable outcomes.
+6.	This leader eliminates ambiguity that slows execution.
+7.	This leader requires team members to define clear success criteria before action. (CCI)
+8.	Role ambiguity contributes to execution delays. [R]
+________________________________________
+TEAMWORK
+Tension Must Improve Performance
+1.	Leadership team members demonstrate trust under pressure.
+2.	Difficult issues are addressed directly and in the room.
+3.	Productive conflict strengthens decisions.
+4.	Enterprise results outweigh departmental preferences.
+5.	Cross-functional coordination is disciplined and reliable.
+6.	Feedback is exchanged without political consequence.
+7.	This leader elevates the level of dialogue during disagreement. (CCI)
+8.	Significant issues are discussed outside formal forums rather than openly. [R]
+________________________________________
+CANDOR
+Standards Must Be Protected
+1.	Underperformance is addressed promptly and clearly.
+2.	Expectations and standards are explicit and reinforced.
+3.	Feedback is precise and tied to measurable outcomes.
+4.	Difficult truths are communicated regardless of hierarchy.
+5.	Performance data is openly visible and discussed.
+6.	Mediocrity is corrected before it becomes normalized.
+7.	This leader requires others to confront the gap between intent and impact. (CCI)
+8.	Poor performance is excused to avoid discomfort. [R]
+________________________________________
+ACCOUNTABILITY
+Commitments Must Mean Something
+1.	Commitments include clear deadlines and measurable outcomes.
+2.	Coaching conversations include defined follow-up checkpoints.
+3.	Progress toward goals is reviewed on a disciplined cadence.
+4.	Missed commitments trigger corrective action.
+5.	This leader takes full responsibility for results in their scope.
+6.	Repeated underperformance leads to visible consequences.
+7.	This leader requires others to state explicit commitments before closing discussions. (CCI)
+8.	Missed commitments are tolerated without meaningful follow-up. [R]
+________________________________________
+CHANGE
+Improvement Must Be Continuous
+1.	The leader updates thinking when evidence warrants it.
+2.	Underperforming systems are redesigned without delay.
+3.	Change initiatives are structured and completed.
+4.	Performance improves quarter over quarter.
+5.	Experimentation is encouraged when results plateau.
+6.	The status quo is challenged when it limits growth.
+7.	During change, this leader pushes others to generate forward-thinking solutions. (CCI)
+8.	Existing systems are defended despite declining results. [R]
+
+

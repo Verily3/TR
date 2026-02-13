@@ -10,7 +10,7 @@ import { PERMISSIONS } from '@tr/shared';
 import type { Variables } from '../types/context.js';
 import type { PaginationMeta } from '@tr/shared';
 
-const { agencies, tenants, users, programs, modules, lessons, enrollments, roles, userRoles } = schema;
+const { agencies, tenants, users, programs, modules, lessons, enrollments, roles, userRoles, lessonTasks } = schema;
 
 export const agenciesRoutes = new Hono<{ Variables: Variables }>();
 
@@ -92,49 +92,40 @@ agenciesRoutes.put(
  */
 agenciesRoutes.get('/me/stats', requireAgencyAccess(), async (c) => {
   const user = c.get('user');
+  const agencyId = user.agencyId!;
 
-  // Count tenants
-  const [{ totalTenants }] = await db
-    .select({ totalTenants: sql<number>`count(*)` })
+  // Single query combining all stats (was 4 separate round-trips)
+  const [tenantStats] = await db
+    .select({
+      totalTenants: sql<number>`count(*)`,
+      activeTenants: sql<number>`count(*) FILTER (WHERE ${tenants.status} = 'active')`,
+    })
     .from(tenants)
-    .where(
-      and(eq(tenants.agencyId, user.agencyId!), isNull(tenants.deletedAt))
-    );
+    .where(and(eq(tenants.agencyId, agencyId), isNull(tenants.deletedAt)));
 
-  const [{ activeTenants }] = await db
-    .select({ activeTenants: sql<number>`count(*)` })
-    .from(tenants)
+  const [userStats] = await db
+    .select({
+      totalUsers: sql<number>`count(*) FILTER (WHERE ${users.tenantId} IS NOT NULL)`,
+      agencyUsers: sql<number>`count(*) FILTER (WHERE ${users.agencyId} = ${agencyId})`,
+    })
+    .from(users)
+    .leftJoin(tenants, eq(users.tenantId, tenants.id))
     .where(
       and(
-        eq(tenants.agencyId, user.agencyId!),
-        eq(tenants.status, 'active'),
-        isNull(tenants.deletedAt)
+        isNull(users.deletedAt),
+        or(
+          eq(users.agencyId, agencyId),
+          eq(tenants.agencyId, agencyId)
+        )
       )
-    );
-
-  // Count users across all tenants
-  const [{ totalUsers }] = await db
-    .select({ totalUsers: sql<number>`count(*)` })
-    .from(users)
-    .innerJoin(tenants, eq(users.tenantId, tenants.id))
-    .where(
-      and(eq(tenants.agencyId, user.agencyId!), isNull(users.deletedAt))
-    );
-
-  // Count agency staff
-  const [{ agencyUsers }] = await db
-    .select({ agencyUsers: sql<number>`count(*)` })
-    .from(users)
-    .where(
-      and(eq(users.agencyId, user.agencyId!), isNull(users.deletedAt))
     );
 
   return c.json({
     data: {
-      totalTenants: Number(totalTenants),
-      activeTenants: Number(activeTenants),
-      totalUsers: Number(totalUsers),
-      agencyUsers: Number(agencyUsers),
+      totalTenants: Number(tenantStats.totalTenants),
+      activeTenants: Number(tenantStats.activeTenants),
+      totalUsers: Number(userStats.totalUsers),
+      agencyUsers: Number(userStats.agencyUsers),
     },
   });
 });
@@ -673,6 +664,16 @@ agenciesRoutes.get(
       )
       .orderBy(asc(lessons.order));
 
+    // Get tasks for all lessons
+    const lessonIds = moduleLessons.map((l) => l.id);
+    const allTasks = lessonIds.length > 0
+      ? await db
+          .select()
+          .from(lessonTasks)
+          .where(sql`${lessonTasks.lessonId} IN ${lessonIds}`)
+          .orderBy(asc(lessonTasks.order))
+      : [];
+
     // Get enrollment stats
     const [stats] = await db
       .select({
@@ -693,10 +694,15 @@ agenciesRoutes.get(
       .where(eq(enrollments.programId, programId))
       .groupBy(enrollments.tenantId);
 
-    // Organize lessons by module
+    // Organize lessons by module, with tasks nested in lessons
     const modulesWithLessons = programModules.map((mod) => ({
       ...mod,
-      lessons: moduleLessons.filter((l) => l.moduleId === mod.id),
+      lessons: moduleLessons
+        .filter((l) => l.moduleId === mod.id)
+        .map((l) => ({
+          ...l,
+          tasks: allTasks.filter((t) => t.lessonId === l.id),
+        })),
     }));
 
     return c.json({
@@ -817,11 +823,26 @@ agenciesRoutes.delete(
 // AGENCY PROGRAM MODULE ROUTES
 // ============================================
 
+const agencyEventConfigSchema = z.object({
+  date: z.string().optional(),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
+  timezone: z.string().optional(),
+  location: z.string().optional(),
+  zoomLink: z.string().optional(),
+  meetingId: z.string().optional(),
+  meetingPassword: z.string().optional(),
+  description: z.string().optional(),
+  videoUrl: z.string().optional(),
+});
+
 const agencyModuleSchema = z.object({
   title: z.string().min(1).max(255),
   description: z.string().optional(),
   parentModuleId: z.string().uuid().optional(),
   order: z.number().int().optional(),
+  type: z.enum(['module', 'event']).default('module'),
+  eventConfig: agencyEventConfigSchema.optional(),
   dripType: z
     .enum(['immediate', 'days_after_enrollment', 'days_after_previous', 'on_date'])
     .default('immediate'),
@@ -864,6 +885,38 @@ const agencyReorderSchema = z.object({
     })
   ),
 });
+
+const agencyTaskConfigSchema = z.object({
+  formPrompt: z.string().optional(),
+  minLength: z.number().optional(),
+  maxLength: z.number().optional(),
+  enableDiscussion: z.boolean().optional(),
+  goalPrompt: z.string().optional(),
+  requireMetrics: z.boolean().optional(),
+  requireActionSteps: z.boolean().optional(),
+  metricsGuidance: z.string().optional(),
+  actionStepsGuidance: z.string().optional(),
+  submissionTypes: z.array(z.enum(['text', 'file_upload', 'url', 'video', 'presentation', 'spreadsheet'])).optional(),
+  maxFileSize: z.number().optional(),
+  allowedFileTypes: z.array(z.string()).optional(),
+  instructions: z.string().optional(),
+  questions: z.array(z.string()).optional(),
+});
+
+const agencyCreateTaskSchema = z.object({
+  title: z.string().min(1).max(255),
+  description: z.string().optional(),
+  order: z.number().int().optional(),
+  responseType: z.enum(['text', 'file_upload', 'goal', 'completion_click', 'discussion']).default('completion_click'),
+  approvalRequired: z.enum(['none', 'mentor', 'facilitator', 'both']).default('none'),
+  dueDate: z.string().datetime().optional(),
+  dueDaysOffset: z.number().int().optional(),
+  points: z.number().int().default(0),
+  config: agencyTaskConfigSchema.optional(),
+  status: z.enum(['draft', 'active']).default('draft'),
+});
+
+const agencyUpdateTaskSchema = agencyCreateTaskSchema.partial();
 
 /**
  * POST /api/agencies/me/programs/:programId/modules
@@ -929,6 +982,8 @@ agenciesRoutes.post(
         description: body.description,
         order,
         depth,
+        type: body.type,
+        eventConfig: body.eventConfig,
         dripType: body.dripType,
         dripValue: body.dripValue,
         dripDate: body.dripDate ? new Date(body.dripDate) : null,
@@ -1209,6 +1264,183 @@ agenciesRoutes.put(
         .update(lessons)
         .set({ order: item.order, updatedAt: new Date() })
         .where(and(eq(lessons.id, item.id), eq(lessons.moduleId, moduleId)));
+    }
+
+    return c.json({ data: { success: true } });
+  }
+);
+
+// ============================================
+// AGENCY PROGRAM TASK ROUTES
+// ============================================
+
+/**
+ * POST /api/agencies/me/programs/:programId/lessons/:lessonId/tasks
+ * Create a task within a lesson in an agency program
+ */
+agenciesRoutes.post(
+  '/me/programs/:programId/lessons/:lessonId/tasks',
+  requireAgencyAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', agencyCreateTaskSchema),
+  async (c) => {
+    const user = c.get('user');
+    const { programId, lessonId } = c.req.param();
+    const body = c.req.valid('json');
+
+    // Verify lesson exists in an agency program
+    const [lesson] = await db
+      .select()
+      .from(lessons)
+      .innerJoin(modules, eq(lessons.moduleId, modules.id))
+      .innerJoin(programs, eq(modules.programId, programs.id))
+      .where(
+        and(
+          eq(lessons.id, lessonId),
+          eq(programs.id, programId),
+          eq(programs.agencyId, user.agencyId!)
+        )
+      )
+      .limit(1);
+
+    if (!lesson) {
+      throw new NotFoundError('Lesson', lessonId);
+    }
+
+    let order = body.order;
+    if (order === undefined) {
+      const [{ maxOrder }] = await db
+        .select({ maxOrder: sql<number>`coalesce(max(${lessonTasks.order}), -1)` })
+        .from(lessonTasks)
+        .where(eq(lessonTasks.lessonId, lessonId));
+      order = Number(maxOrder) + 1;
+    }
+
+    const [task] = await db
+      .insert(lessonTasks)
+      .values({
+        lessonId,
+        title: body.title,
+        description: body.description,
+        order,
+        responseType: body.responseType,
+        approvalRequired: body.approvalRequired,
+        dueDate: body.dueDate ? new Date(body.dueDate) : null,
+        dueDaysOffset: body.dueDaysOffset,
+        points: body.points,
+        config: body.config,
+        status: body.status,
+      })
+      .returning();
+
+    return c.json({ data: task }, 201);
+  }
+);
+
+/**
+ * PATCH /api/agencies/me/programs/:programId/lessons/:lessonId/tasks/:taskId
+ * Update a task in an agency program
+ */
+agenciesRoutes.patch(
+  '/me/programs/:programId/lessons/:lessonId/tasks/:taskId',
+  requireAgencyAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', agencyUpdateTaskSchema),
+  async (c) => {
+    const user = c.get('user');
+    const { programId, lessonId, taskId } = c.req.param();
+    const body = c.req.valid('json');
+
+    const [existing] = await db
+      .select()
+      .from(lessonTasks)
+      .innerJoin(lessons, eq(lessonTasks.lessonId, lessons.id))
+      .innerJoin(modules, eq(lessons.moduleId, modules.id))
+      .innerJoin(programs, eq(modules.programId, programs.id))
+      .where(
+        and(
+          eq(lessonTasks.id, taskId),
+          eq(lessonTasks.lessonId, lessonId),
+          eq(programs.id, programId),
+          eq(programs.agencyId, user.agencyId!)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundError('Task', taskId);
+    }
+
+    const [updated] = await db
+      .update(lessonTasks)
+      .set({
+        ...body,
+        dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
+        updatedAt: new Date(),
+      })
+      .where(eq(lessonTasks.id, taskId))
+      .returning();
+
+    return c.json({ data: updated });
+  }
+);
+
+/**
+ * DELETE /api/agencies/me/programs/:programId/lessons/:lessonId/tasks/:taskId
+ * Delete a task from an agency program
+ */
+agenciesRoutes.delete(
+  '/me/programs/:programId/lessons/:lessonId/tasks/:taskId',
+  requireAgencyAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  async (c) => {
+    const user = c.get('user');
+    const { programId, lessonId, taskId } = c.req.param();
+
+    const [existing] = await db
+      .select()
+      .from(lessonTasks)
+      .innerJoin(lessons, eq(lessonTasks.lessonId, lessons.id))
+      .innerJoin(modules, eq(lessons.moduleId, modules.id))
+      .innerJoin(programs, eq(modules.programId, programs.id))
+      .where(
+        and(
+          eq(lessonTasks.id, taskId),
+          eq(lessonTasks.lessonId, lessonId),
+          eq(programs.id, programId),
+          eq(programs.agencyId, user.agencyId!)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundError('Task', taskId);
+    }
+
+    await db.delete(lessonTasks).where(eq(lessonTasks.id, taskId));
+
+    return c.json({ data: { success: true } });
+  }
+);
+
+/**
+ * PUT /api/agencies/me/programs/:programId/lessons/:lessonId/tasks/reorder
+ * Reorder tasks in an agency program lesson
+ */
+agenciesRoutes.put(
+  '/me/programs/:programId/lessons/:lessonId/tasks/reorder',
+  requireAgencyAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', agencyReorderSchema),
+  async (c) => {
+    const { lessonId } = c.req.param();
+    const { items } = c.req.valid('json');
+
+    for (const item of items) {
+      await db
+        .update(lessonTasks)
+        .set({ order: item.order, updatedAt: new Date() })
+        .where(and(eq(lessonTasks.id, item.id), eq(lessonTasks.lessonId, lessonId)));
     }
 
     return c.json({ data: { success: true } });

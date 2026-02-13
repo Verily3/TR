@@ -1,13 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/hooks/use-auth';
+import { useAssessments, useAssessmentStats, useAssessment, useAssessmentResults, useTemplates, useTenants } from '@/hooks/api';
+import type { AssessmentListItem, AssessmentDetail, ComputedAssessmentResults, AssessmentTemplate as APITemplate, AssessmentInvitation } from '@/types/assessments';
+import { DownloadReportButton } from '@/components/assessments/DownloadReportButton';
+import { DevelopmentPlanView } from '@/components/assessments/DevelopmentPlanView';
 import {
   ClipboardList,
   Users,
   CheckCircle2,
   Clock,
   TrendingUp,
-  TrendingDown,
   Plus,
   Calendar,
   AlertCircle,
@@ -230,141 +234,7 @@ const defaultTemplates: AssessmentTemplate[] = [
   },
 ];
 
-const createRaters = (): Rater[] => [
-  {
-    id: 'r1',
-    person: samplePeople[0],
-    type: 'self',
-    status: 'completed',
-    invitedAt: '2025-01-15T10:00:00Z',
-    completedAt: '2025-01-16T14:30:00Z',
-    reminderCount: 0,
-  },
-  {
-    id: 'r2',
-    person: samplePeople[4],
-    type: 'manager',
-    status: 'completed',
-    invitedAt: '2025-01-15T10:00:00Z',
-    completedAt: '2025-01-20T09:15:00Z',
-    reminderCount: 1,
-  },
-  {
-    id: 'r3',
-    person: samplePeople[1],
-    type: 'peer',
-    status: 'completed',
-    invitedAt: '2025-01-15T10:00:00Z',
-    completedAt: '2025-01-18T11:00:00Z',
-    reminderCount: 0,
-  },
-  {
-    id: 'r4',
-    person: samplePeople[2],
-    type: 'peer',
-    status: 'in_progress',
-    invitedAt: '2025-01-15T10:00:00Z',
-    reminderCount: 2,
-  },
-  {
-    id: 'r5',
-    person: samplePeople[5],
-    type: 'direct_report',
-    status: 'completed',
-    invitedAt: '2025-01-15T10:00:00Z',
-    completedAt: '2025-01-17T16:45:00Z',
-    reminderCount: 0,
-  },
-  {
-    id: 'r6',
-    person: samplePeople[6],
-    type: 'direct_report',
-    status: 'pending',
-    invitedAt: '2025-01-15T10:00:00Z',
-    reminderCount: 1,
-  },
-];
-
-const defaultAssessments: Assessment[] = [
-  {
-    id: 'a1',
-    templateId: 't1',
-    templateName: 'Leadership 360',
-    assessmentType: '360',
-    subject: samplePeople[0],
-    status: 'active',
-    createdAt: '2025-01-15T10:00:00Z',
-    dueDate: '2025-02-15',
-    raters: createRaters(),
-    responseRate: 67,
-    hasResults: false,
-  },
-  {
-    id: 'a2',
-    templateId: 't1',
-    templateName: 'Leadership 360',
-    assessmentType: '360',
-    subject: samplePeople[1],
-    status: 'completed',
-    createdAt: '2024-11-01T10:00:00Z',
-    dueDate: '2024-12-01',
-    completedAt: '2024-11-28T15:00:00Z',
-    raters: [
-      { id: 'r7', person: samplePeople[1], type: 'self', status: 'completed', invitedAt: '2024-11-01T10:00:00Z', completedAt: '2024-11-05T10:00:00Z', reminderCount: 0 },
-      { id: 'r8', person: samplePeople[4], type: 'manager', status: 'completed', invitedAt: '2024-11-01T10:00:00Z', completedAt: '2024-11-10T10:00:00Z', reminderCount: 0 },
-      { id: 'r9', person: samplePeople[0], type: 'peer', status: 'completed', invitedAt: '2024-11-01T10:00:00Z', completedAt: '2024-11-12T10:00:00Z', reminderCount: 0 },
-      { id: 'r10', person: samplePeople[2], type: 'peer', status: 'completed', invitedAt: '2024-11-01T10:00:00Z', completedAt: '2024-11-15T10:00:00Z', reminderCount: 1 },
-    ],
-    responseRate: 100,
-    hasResults: true,
-  },
-  {
-    id: 'a3',
-    templateId: 't2',
-    templateName: 'Manager Effectiveness',
-    assessmentType: '360',
-    subject: samplePeople[2],
-    status: 'draft',
-    createdAt: '2025-01-28T10:00:00Z',
-    dueDate: '2025-03-01',
-    raters: [],
-    responseRate: 0,
-    hasResults: false,
-  },
-  {
-    id: 'a4',
-    templateId: 't2',
-    templateName: 'Manager Effectiveness',
-    assessmentType: '180',
-    subject: samplePeople[3],
-    status: 'active',
-    createdAt: '2025-01-20T10:00:00Z',
-    dueDate: '2025-02-20',
-    raters: [
-      { id: 'r11', person: samplePeople[3], type: 'self', status: 'completed', invitedAt: '2025-01-20T10:00:00Z', completedAt: '2025-01-22T09:00:00Z', reminderCount: 0 },
-      { id: 'r12', person: samplePeople[4], type: 'manager', status: 'in_progress', invitedAt: '2025-01-20T10:00:00Z', reminderCount: 1 },
-    ],
-    responseRate: 50,
-    hasResults: false,
-  },
-  {
-    id: 'a5',
-    templateId: 't1',
-    templateName: 'Leadership 360',
-    assessmentType: '180',
-    subject: samplePeople[6],
-    status: 'completed',
-    createdAt: '2024-12-01T10:00:00Z',
-    dueDate: '2024-12-31',
-    completedAt: '2024-12-20T14:00:00Z',
-    raters: [
-      { id: 'r13', person: samplePeople[6], type: 'self', status: 'completed', invitedAt: '2024-12-01T10:00:00Z', completedAt: '2024-12-05T10:00:00Z', reminderCount: 0 },
-      { id: 'r14', person: samplePeople[2], type: 'manager', status: 'completed', invitedAt: '2024-12-01T10:00:00Z', completedAt: '2024-12-15T10:00:00Z', reminderCount: 1 },
-    ],
-    responseRate: 100,
-    hasResults: true,
-  },
-];
+// Mock assessments removed — now using real API data
 
 const defaultAssessmentStats: AssessmentStats = {
   totalAssessments: 5,
@@ -1149,7 +1019,7 @@ function CompetencyScoreRow({ score }: { score: CompetencyScore }) {
 
 // ─── ResultsView ───────────────────────────────────────────────────────────────
 
-function ResultsView({ results }: { results: AssessmentResults }) {
+function ResultsView({ results, apiResults }: { results: AssessmentResults; apiResults?: ComputedAssessmentResults }) {
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
@@ -1379,18 +1249,139 @@ function ResultsView({ results }: { results: AssessmentResults }) {
           })}
         </div>
       </div>
+
+      {/* Current Ceiling */}
+      {apiResults?.currentCeiling && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 tracking-wide mb-1">
+            CURRENT CEILING
+          </h3>
+          <p className="text-sm text-[#1B3A5C] font-medium mb-4">
+            {apiResults.currentCeiling.competencyName}
+            {apiResults.currentCeiling.subtitle && (
+              <span className="text-gray-500 font-normal"> — {apiResults.currentCeiling.subtitle}</span>
+            )}
+          </p>
+          <p className="text-sm text-gray-600 leading-relaxed max-w-2xl">
+            {apiResults.currentCeiling.narrative}
+          </p>
+          <div className="mt-4 flex items-center gap-3">
+            <span className="text-xs text-gray-500">Score</span>
+            <span className="text-lg font-bold text-[#1B3A5C]">
+              {apiResults.currentCeiling.score.toFixed(2)}
+            </span>
+            <span className="text-xs text-gray-500">/ 5.0</span>
+          </div>
+        </div>
+      )}
+
+      {/* Coaching Capacity Index (CCI) */}
+      {apiResults?.cciResult && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Coaching Capacity Index</h3>
+          <div className="flex items-center gap-6 mb-6">
+            <div>
+              <span className="text-3xl font-bold text-[#1B3A5C]">
+                {apiResults.cciResult.score.toFixed(2)}
+              </span>
+              <span className="text-sm text-gray-500 ml-2">/ 5.0</span>
+            </div>
+            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+              apiResults.cciResult.band === 'Very High' ? 'bg-green-100 text-green-700' :
+              apiResults.cciResult.band === 'High' ? 'bg-blue-100 text-blue-700' :
+              apiResults.cciResult.band === 'Moderate' ? 'bg-yellow-100 text-yellow-700' :
+              'bg-red-100 text-red-700'
+            }`}>
+              {apiResults.cciResult.band}
+            </span>
+          </div>
+
+          {/* CCI Gauge Bar */}
+          <div className="w-full h-4 bg-gray-100 rounded-full overflow-hidden mb-6">
+            <div
+              className="h-full rounded-full bg-[#1B3A5C] transition-all"
+              style={{ width: `${(apiResults.cciResult.score / 5) * 100}%` }}
+            />
+          </div>
+
+          {/* CCI Item Breakdown */}
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium text-gray-700 mb-2">Item Breakdown</h4>
+            {apiResults.cciResult.items.map((item) => (
+              <div key={`${item.competencyId}-${item.questionId}`} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                <div className="flex-1">
+                  <span className="text-xs font-medium text-[#1B3A5C]">{item.competencyName}</span>
+                  <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{item.questionText}</p>
+                </div>
+                <span className="text-sm font-medium text-gray-900 ml-4">
+                  {item.effectiveScore.toFixed(2)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Trend Comparison */}
+      {apiResults?.trend && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Trend Comparison</h3>
+          <p className="text-sm text-gray-500 mb-6">
+            Compared with assessment completed on {formatDate(apiResults.trend.previousCompletedAt)}
+          </p>
+
+          <div className="flex items-center gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+            <span className="text-sm text-gray-500">Overall Direction</span>
+            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+              apiResults.trend.overallDirection === 'improved' ? 'bg-green-100 text-green-700' :
+              apiResults.trend.overallDirection === 'declined' ? 'bg-red-100 text-red-700' :
+              'bg-gray-100 text-gray-700'
+            }`}>
+              {apiResults.trend.overallDirection === 'improved' ? '↑' :
+               apiResults.trend.overallDirection === 'declined' ? '↓' : '→'}{' '}
+              {apiResults.trend.overallDirection.charAt(0).toUpperCase() + apiResults.trend.overallDirection.slice(1)}
+              {apiResults.trend.overallChange !== 0 && (
+                <span className="ml-1">
+                  ({apiResults.trend.overallChange > 0 ? '+' : ''}{apiResults.trend.overallChange.toFixed(2)})
+                </span>
+              )}
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {apiResults.trend.competencyChanges.map((change) => (
+              <div key={change.competencyId} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                <span className="text-sm text-gray-900">{change.competencyName}</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-gray-500">{change.previousScore.toFixed(2)}</span>
+                  <span className="text-xs text-gray-400">→</span>
+                  <span className="text-xs text-gray-900 font-medium">{change.currentScore.toFixed(2)}</span>
+                  <span className={`text-xs font-medium ${
+                    change.direction === 'improved' ? 'text-green-600' :
+                    change.direction === 'declined' ? 'text-red-600' :
+                    'text-gray-500'
+                  }`}>
+                    {change.change > 0 ? '+' : ''}{change.change.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── AssessmentDetailView ──────────────────────────────────────────────────────
 
-type DetailTab = 'overview' | 'raters' | 'results' | 'settings';
+type DetailTab = 'overview' | 'raters' | 'results' | 'development' | 'settings';
 
 const detailTabs: { id: DetailTab; label: string; icon: React.ReactNode }[] = [
   { id: 'overview', label: 'Overview', icon: <FileText className="w-4 h-4" /> },
   { id: 'raters', label: 'Raters', icon: <Users className="w-4 h-4" /> },
   { id: 'results', label: 'Results', icon: <BarChart3 className="w-4 h-4" /> },
+  { id: 'development', label: 'Development', icon: <Target className="w-4 h-4" /> },
   { id: 'settings', label: 'Settings', icon: <Settings className="w-4 h-4" /> },
 ];
 
@@ -1399,11 +1390,15 @@ function AssessmentDetailView({
   template,
   results,
   onBack,
+  tenantId,
+  apiResults,
 }: {
   assessment: Assessment;
   template: AssessmentTemplate;
   results: AssessmentResults;
   onBack: () => void;
+  tenantId?: string;
+  apiResults?: ComputedAssessmentResults;
 }) {
   const [activeTab, setActiveTab] = useState<DetailTab>('overview');
 
@@ -1493,6 +1488,13 @@ function AssessmentDetailView({
 
           {/* Actions */}
           <div className="flex items-center gap-2">
+            {assessment.hasResults && tenantId && (
+              <DownloadReportButton
+                tenantId={tenantId}
+                assessmentId={assessment.id}
+                assessmentName={`${assessment.subject.name} - ${assessment.templateName}`}
+              />
+            )}
             {assessment.status === 'active' && (
               <button className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm hover:bg-blue-200 transition-colors flex items-center gap-2">
                 <Send className="w-4 h-4" />
@@ -1721,7 +1723,7 @@ function AssessmentDetailView({
       {activeTab === 'results' && (
         <div>
           {assessment.hasResults ? (
-            <ResultsView results={results} />
+            <ResultsView results={results} apiResults={apiResults} />
           ) : (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="text-center py-12">
@@ -1734,6 +1736,30 @@ function AssessmentDetailView({
                   Current progress: {assessment.responseRate}% ({completedRaters}/{totalRaters}{' '}
                   responses)
                 </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab Content: Development */}
+      {activeTab === 'development' && (
+        <div>
+          {assessment.hasResults && tenantId && apiResults ? (
+            <DevelopmentPlanView
+              tenantId={tenantId}
+              assessmentId={assessment.id}
+              results={apiResults}
+              subjectName={assessment.subject.name}
+            />
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="text-center py-12">
+                <Target className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+                <h3 className="text-gray-900 mb-2">Development Plan Not Available</h3>
+                <p className="text-sm text-gray-500">
+                  Complete the assessment and compute results to generate a development plan.
+                </p>
               </div>
             </div>
           )}
@@ -1803,15 +1829,194 @@ const typeFilterOptions: { id: FilterType; label: string }[] = [
 
 // ─── Main Page Component ───────────────────────────────────────────────────────
 
+// ─── API Data Adapters ──────────────────────────────────────────────────────
+
+function adaptAssessmentListItem(item: AssessmentListItem): Assessment {
+  const subjectPerson: Person = item.subject
+    ? {
+        id: item.subject.id,
+        name: `${item.subject.firstName} ${item.subject.lastName}`,
+        email: item.subject.email,
+        role: item.subject.title ?? undefined,
+        avatar: item.subject.avatar ?? undefined,
+      }
+    : { id: '', name: 'Unknown', email: '' };
+
+  // Map API status to page status ('open' -> 'active')
+  const statusMap: Record<string, AssessmentStatus> = {
+    draft: 'draft',
+    open: 'active',
+    closed: 'completed',
+    completed: 'completed',
+  };
+
+  return {
+    id: item.id,
+    templateId: item.templateId,
+    templateName: item.template?.name || 'Unknown Template',
+    assessmentType: (item.template?.assessmentType || '360') as AssessmentType,
+    subject: subjectPerson,
+    status: statusMap[item.status] || 'draft',
+    createdAt: item.createdAt,
+    dueDate: item.closeDate || '',
+    completedAt: item.status === 'completed' ? item.updatedAt : undefined,
+    raters: [],
+    responseRate: item.responseRate,
+    hasResults: item.computedResults != null,
+  };
+}
+
+function adaptTemplate(tmpl: APITemplate): AssessmentTemplate {
+  return {
+    id: tmpl.id,
+    name: tmpl.name,
+    description: tmpl.description ?? undefined,
+    competencies: tmpl.config.competencies.map((c) => ({
+      id: c.id,
+      name: c.name,
+      description: c.description,
+      questions: c.questions.map((q) => ({ id: q.id, text: q.text })),
+    })),
+    scale: {
+      min: tmpl.config.scaleMin,
+      max: tmpl.config.scaleMax,
+      labels: tmpl.config.scaleLabels,
+    },
+    allowComments: tmpl.config.allowComments,
+    requireComments: tmpl.config.requireComments,
+    anonymizeResponses: tmpl.config.anonymizeResponses,
+  };
+}
+
+function adaptDetailToAssessment(detail: AssessmentDetail): Assessment {
+  const subjectPerson: Person = detail.subject
+    ? {
+        id: detail.subject.id,
+        name: `${detail.subject.firstName} ${detail.subject.lastName}`,
+        email: detail.subject.email,
+        role: detail.subject.title ?? undefined,
+        avatar: detail.subject.avatar ?? undefined,
+      }
+    : { id: '', name: 'Unknown', email: '' };
+
+  const statusMap: Record<string, AssessmentStatus> = {
+    draft: 'draft',
+    open: 'active',
+    closed: 'completed',
+    completed: 'completed',
+  };
+
+  const raters: Rater[] = (detail.invitations || []).map((inv: AssessmentInvitation) => {
+    const statusInvMap: Record<string, RaterStatus> = {
+      pending: 'pending',
+      sent: 'pending',
+      viewed: 'pending',
+      started: 'in_progress',
+      completed: 'completed',
+      declined: 'declined',
+      expired: 'declined',
+    };
+
+    return {
+      id: inv.id,
+      person: {
+        id: inv.raterId,
+        name: `${inv.rater.firstName || ''} ${inv.rater.lastName || ''}`.trim() || 'Unknown',
+        email: inv.rater.email || '',
+        avatar: inv.rater.avatar ?? undefined,
+      },
+      type: inv.raterType as RaterType,
+      status: statusInvMap[inv.status] || 'pending',
+      invitedAt: inv.sentAt || detail.createdAt,
+      completedAt: inv.completedAt ?? undefined,
+      reminderCount: parseInt(inv.reminderCount || '0', 10),
+    };
+  });
+
+  return {
+    id: detail.id,
+    templateId: detail.templateId,
+    templateName: detail.template?.name || 'Unknown Template',
+    assessmentType: (detail.template?.assessmentType || '360') as AssessmentType,
+    subject: subjectPerson,
+    status: statusMap[detail.status] || 'draft',
+    createdAt: detail.createdAt,
+    dueDate: detail.closeDate || '',
+    completedAt: detail.status === 'completed' ? detail.updatedAt : undefined,
+    raters,
+    responseRate: detail.responseRate,
+    hasResults: detail.computedResults != null,
+  };
+}
+
+function adaptComputedResults(results: ComputedAssessmentResults, subjectName: string): AssessmentResults {
+  return {
+    assessmentId: '',
+    subjectName,
+    completedAt: results.computedAt,
+    totalResponses: Object.values(results.responseRateByType).reduce((sum, r) => sum + r.completed, 0),
+    responsesByType: Object.fromEntries(
+      Object.entries(results.responseRateByType).map(([type, data]) => [type, data.completed])
+    ) as Record<RaterType, number>,
+    competencyScores: results.competencyScores.map((c) => ({
+      competencyId: c.competencyId,
+      competencyName: c.competencyName,
+      selfScore: c.selfScore ?? undefined,
+      managerScore: c.scores.manager,
+      peerScore: c.scores.peer,
+      directReportScore: c.scores.direct_report,
+      averageScore: c.overallAverage,
+      gap: c.gap,
+    })),
+    overallScore: results.overallScore,
+    strengths: results.strengths,
+    developmentAreas: results.developmentAreas,
+  };
+}
+
 export default function AssessmentsPage() {
+  const { user } = useAuth();
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   const [activeTypeFilter, setActiveTypeFilter] = useState<FilterType>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
 
-  const assessments = defaultAssessments;
-  const stats = defaultAssessmentStats;
-  const templates = defaultTemplates;
+  // Determine tenant
+  const { data: tenants } = useTenants();
+  const isAgencyUser = user?.agencyId && !user?.tenantId;
+  const activeTenantId = isAgencyUser ? selectedTenantId : user?.tenantId;
+
+  useEffect(() => {
+    if (isAgencyUser && tenants && tenants.length > 0 && !selectedTenantId) {
+      setSelectedTenantId(tenants[0].id);
+    }
+  }, [isAgencyUser, tenants, selectedTenantId]);
+
+  // Fetch assessments and stats from API
+  const { data: assessmentsData, isLoading: assessmentsLoading } = useAssessments(activeTenantId ?? undefined);
+  const { data: statsData } = useAssessmentStats(activeTenantId ?? undefined);
+  const { data: templatesData } = useTemplates({ status: 'published' });
+
+  // Fetch selected assessment detail
+  const { data: assessmentDetail } = useAssessment(
+    activeTenantId ?? undefined,
+    selectedAssessmentId ?? undefined
+  );
+
+  // Fetch results if assessment is completed
+  const { data: resultsData } = useAssessmentResults(
+    activeTenantId ?? undefined,
+    assessmentDetail?.status === 'completed' ? selectedAssessmentId ?? undefined : undefined
+  );
+
+  // Adapt API data to page types
+  const assessments: Assessment[] = (assessmentsData?.assessments || []).map(adaptAssessmentListItem);
+  const stats: AssessmentStats = statsData || defaultAssessmentStats;
+  const templates: AssessmentTemplate[] = (templatesData?.templates || []).map(adaptTemplate);
+
+  // Use fallback mock templates if API returns empty (for non-agency users)
+  const displayTemplates = templates.length > 0 ? templates : defaultTemplates;
 
   const filteredAssessments = assessments.filter((a) => {
     const matchesStatus = activeFilter === 'all' || a.status === activeFilter;
@@ -1820,17 +2025,24 @@ export default function AssessmentsPage() {
   });
 
   // If an assessment is selected, show the detail view
-  const selectedAssessment = assessments.find((a) => a.id === selectedAssessmentId);
-  if (selectedAssessment) {
+  if (selectedAssessmentId && assessmentDetail) {
+    const selectedAssessment = adaptDetailToAssessment(assessmentDetail);
     const template =
-      templates.find((t) => t.id === selectedAssessment.templateId) || templates[0];
+      displayTemplates.find((t) => t.id === selectedAssessment.templateId) || displayTemplates[0];
+
+    const results = resultsData
+      ? adaptComputedResults(resultsData, selectedAssessment.subject.name)
+      : sampleResults;
+
     return (
       <div className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8">
         <AssessmentDetailView
           assessment={selectedAssessment}
-          template={template}
-          results={sampleResults}
+          template={template || displayTemplates[0]}
+          results={results}
           onBack={() => setSelectedAssessmentId(null)}
+          tenantId={activeTenantId ?? undefined}
+          apiResults={resultsData ?? undefined}
         />
       </div>
     );
@@ -1945,7 +2157,17 @@ export default function AssessmentsPage() {
       </div>
 
       {/* Assessments List */}
-      {filteredAssessments.length > 0 ? (
+      {assessmentsLoading ? (
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-pulse">
+              <div className="h-5 bg-gray-200 rounded w-1/3 mb-3"></div>
+              <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
+              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+            </div>
+          ))}
+        </div>
+      ) : filteredAssessments.length > 0 ? (
         <div className="space-y-4">
           {filteredAssessments.map((assessment) => (
             <AssessmentCard
@@ -1981,7 +2203,7 @@ export default function AssessmentsPage() {
       <CreateAssessmentModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        templates={templates}
+        templates={displayTemplates}
       />
     </div>
   );

@@ -62,6 +62,7 @@ usersRoutes.get(
       .where(and(...conditions));
 
     // Get paginated results with role info
+    // Single subquery returning row(slug, name, level) instead of 3 separate subqueries
     const results = await db
       .select({
         id: users.id,

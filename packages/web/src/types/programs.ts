@@ -20,6 +20,9 @@ export type ModuleDripType = 'immediate' | 'days_after_enrollment' | 'days_after
 export type LessonDripType = 'immediate' | 'sequential' | 'days_after_module_start' | 'on_date';
 export type LessonStatus = 'draft' | 'active';
 export type ApprovalRequired = 'none' | 'mentor' | 'facilitator' | 'both';
+export type TaskResponseType = 'text' | 'file_upload' | 'goal' | 'completion_click' | 'discussion';
+export type TaskProgressStatus = 'not_started' | 'in_progress' | 'completed';
+export type ModuleType = 'module' | 'event';
 
 export interface ProgramConfig {
   sequentialAccess?: boolean;
@@ -111,6 +114,66 @@ export interface LessonContent {
   };
 }
 
+export interface EventConfig {
+  date?: string;
+  startTime?: string;
+  endTime?: string;
+  timezone?: string;
+  location?: string;
+  zoomLink?: string;
+  meetingId?: string;
+  meetingPassword?: string;
+  description?: string;
+  videoUrl?: string;
+}
+
+export interface TaskConfig {
+  formPrompt?: string;
+  minLength?: number;
+  maxLength?: number;
+  enableDiscussion?: boolean;
+  goalPrompt?: string;
+  requireMetrics?: boolean;
+  requireActionSteps?: boolean;
+  metricsGuidance?: string;
+  actionStepsGuidance?: string;
+  submissionTypes?: ('text' | 'file_upload' | 'url' | 'video' | 'presentation' | 'spreadsheet')[];
+  maxFileSize?: number;
+  allowedFileTypes?: string[];
+  instructions?: string;
+  questions?: string[];
+}
+
+export interface LessonTask {
+  id: string;
+  lessonId: string;
+  title: string;
+  description: string | null;
+  order: number;
+  responseType: TaskResponseType;
+  approvalRequired: ApprovalRequired;
+  dueDate: string | null;
+  dueDaysOffset: number | null;
+  points: number;
+  config: TaskConfig | null;
+  status: LessonStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskProgressData {
+  id: string;
+  taskId: string;
+  enrollmentId: string;
+  status: TaskProgressStatus;
+  startedAt: string | null;
+  completedAt: string | null;
+  pointsEarned: number;
+  submissionData: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Lesson {
   id: string;
   moduleId: string;
@@ -128,6 +191,7 @@ export interface Lesson {
   status: LessonStatus;
   createdAt: string;
   updatedAt: string;
+  tasks?: LessonTask[];
 }
 
 export interface Module {
@@ -138,6 +202,8 @@ export interface Module {
   description: string | null;
   order: number;
   depth: number;
+  type: ModuleType;
+  eventConfig: EventConfig | null;
   dripType: ModuleDripType;
   dripValue: number | null;
   dripDate: string | null;
@@ -254,6 +320,8 @@ export interface CreateModuleInput {
   description?: string;
   parentModuleId?: string;
   order?: number;
+  type?: ModuleType;
+  eventConfig?: EventConfig;
   dripType?: ModuleDripType;
   dripValue?: number;
   dripDate?: string;
@@ -263,6 +331,8 @@ export interface UpdateModuleInput {
   title?: string;
   description?: string;
   order?: number;
+  type?: ModuleType;
+  eventConfig?: EventConfig;
   dripType?: ModuleDripType;
   dripValue?: number;
   dripDate?: string;
@@ -404,6 +474,7 @@ export type ReviewerRole = 'mentor' | 'facilitator';
 export interface ApprovalSubmission {
   id: string;
   lessonId: string;
+  taskId: string | null;
   enrollmentId: string;
   reviewerRole: ReviewerRole;
   submissionText: string;
@@ -414,6 +485,49 @@ export interface ApprovalSubmission {
   feedback: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// Task CRUD types
+export interface CreateTaskInput {
+  title: string;
+  description?: string;
+  order?: number;
+  responseType?: TaskResponseType;
+  approvalRequired?: ApprovalRequired;
+  dueDate?: string;
+  dueDaysOffset?: number;
+  points?: number;
+  config?: TaskConfig;
+  status?: LessonStatus;
+}
+
+export interface UpdateTaskInput {
+  title?: string;
+  description?: string;
+  order?: number;
+  responseType?: TaskResponseType;
+  approvalRequired?: ApprovalRequired;
+  dueDate?: string;
+  dueDaysOffset?: number;
+  points?: number;
+  config?: TaskConfig;
+  status?: LessonStatus;
+}
+
+// Task progress with task info (returned by task-progress endpoint)
+export interface TaskWithProgress {
+  id: string;
+  lessonId: string;
+  title: string;
+  responseType: TaskResponseType;
+  approvalRequired: ApprovalRequired;
+  points: number;
+  order: number;
+  status: TaskProgressStatus;
+  startedAt: string | null;
+  completedAt: string | null;
+  pointsEarned: number;
+  submissionData: Record<string, unknown> | null;
 }
 
 // Discussion types

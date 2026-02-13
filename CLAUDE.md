@@ -275,8 +275,9 @@ The assessments module has two levels:
 **Tenant Level (Assessments):**
 - Assessments are created from templates for specific subjects
 - API routes at `/tenants/:tenantId/assessments`
-- Hooks: `useAssessments`, `useAssessment`, `useCreateAssessment`, etc.
-- Supports invitations, rater responses, and results aggregation
+- Full CRUD + invitations, rater responses, result computation, PDF generation, benchmarks
+- Hooks: `useAssessments`, `useAssessment`, `useAssessmentStats`, `useAssessmentResults`, `useCreateAssessment`, `useUpdateAssessment`, `useDeleteAssessment`, `useAddInvitations`, `useRemoveInvitation`, `useSendReminders`, `useCloseAssessment`, `useComputeResults`, `useDownloadReport`, `useAssessmentBenchmarks`, `useAssessmentGoals`, `useCreateGoalsFromAssessment`
+- Pages: `/assessments` (list with filter tabs, detail view with Overview/Raters/Results/Development/Settings tabs)
 
 **Template Structure (JSONB):**
 ```typescript
@@ -285,16 +286,46 @@ The assessments module has two levels:
     id: string,
     name: string,
     description?: string,
-    questions: [{ id: string, text: string }]
+    subtitle?: string,        // e.g., "Direction Must Hold Under Pressure"
+    questions: [{
+      id: string,
+      text: string,
+      type?: 'rating' | 'text' | 'multiple_choice',
+      required?: boolean,
+      reverseScored?: boolean, // [R] items — score inverted during computation
+      isCCI?: boolean,         // Coaching Capacity Index item (one per competency)
+    }]
   }],
   scaleMin: number,
   scaleMax: number,
   scaleLabels: string[],
   allowComments: boolean,
   requireComments: boolean,
-  anonymizeResponses: boolean
+  anonymizeResponses: boolean,
+  raterTypes: ('self' | 'manager' | 'peer' | 'direct_report')[],
 }
 ```
+
+**Assessment Engine** (`packages/api/src/lib/assessment-engine.ts`):
+- `computeAssessmentResults(assessmentId)` — computes all scores, gaps, CCI, ceiling, trend
+- Reverse scoring: `effectiveRating = scaleMax + scaleMin - rawRating` for `[R]` items
+- CCI (Coaching Capacity Index): average of `isCCI`-tagged questions, bands: Low/Moderate/High/Very High
+- Current Ceiling: lowest-scoring competency with generated constraint narrative
+- Trend comparison: calls `computeTrend()` from `trend-engine.ts` for sequential assessments
+- Gap analysis with Johari Window classification (blind_spot, hidden_strength, aligned)
+
+**PDF Report** (`packages/api/src/lib/pdf/`):
+- `report-generator.tsx` — 16-section LeaderShift™ report using `@react-pdf/renderer`
+- `svg-charts.ts` — Adaptive radar (180 Self vs Boss, 360 multi-rater), CCI gauge, distribution histograms, gap divergence
+- `shared-styles.ts` — Minimal executive palette: Deep Navy `#1B3A5C` + grayscale, Helvetica typography
+- Design: "A private board-level document" — no gradients, shadows, or decorative elements
+
+**Assessment Components** (`packages/web/src/components/assessments/`):
+- `DownloadReportButton` — PDF download button
+- `RaterResponseForm` — Public rater response form
+- `DevelopmentPlanView` — Post-assessment development planning
+- `GoalSuggestions` — AI-generated goal suggestions from results
+- `MentoringGuide` — Mentoring recommendations based on results
 
 ## Development Commands
 
@@ -402,7 +433,7 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
   - Scorecard (`/scorecard`) - Role/Mission, KPIs, Competencies
   - Planning & Goals (`/planning`) - Quarterly planning, goal management
   - Mentoring (`/mentoring`) - Sessions, relationships, action items
-  - Assessments (`/assessments`) - 180 and 360 assessment types with filter tabs, type badges, detail view
+  - Assessments (`/assessments`) - 180/360 types, filter tabs, detail view with Results/Development tabs, CCI + Current Ceiling display
   - People (`/people`) - User directory with grid/list views
   - Analytics (`/analytics`) - Charts and metrics dashboard
   - Settings (`/settings`) - Profile (connected to real API), Notifications, Security, Integrations, Account
@@ -438,9 +469,25 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
   - Help & Support (knowledge base, FAQs, ticket system)
   - Search (command palette Cmd+K + full search page)
   - **Responsive/Mobile layouts** for all pages
+- **Assessment Module (full stack, end-to-end):**
+  - DB schema: `assessment_templates`, `assessments`, `assessment_invitations`, `assessment_responses`, `assessment_benchmarks`
+  - Assessment API routes (CRUD, invitations, responses, close, compute results, PDF generation, benchmarks)
+  - Assessment engine: score computation, gap analysis, Johari window, top/bottom items
+  - Reverse-scored questions (`[R]` items) with automatic score inversion
+  - Coaching Capacity Index (CCI): composite of `isCCI`-tagged questions with band classification
+  - Current Ceiling: lowest competency with generated constraint narrative
+  - Trend engine: comparison of sequential assessments for same subject/template
+  - PDF report generator: 16-section LeaderShift™ executive report (`@react-pdf/renderer`)
+  - Adaptive radar chart: 180 (Self vs Boss solid/dashed) and 360 (multi-rater overlay)
+  - Minimal executive aesthetic: Deep Navy `#1B3A5C` + grayscale, Helvetica typography
+  - Web results view: competency scores, gap analysis, CCI gauge, Current Ceiling, trend comparison
+  - Rater response form (public token-based access)
+  - Development plan view, goal suggestions, mentoring guide from results
+  - PDF download button with streaming
+  - 17 React Query hooks for full assessment lifecycle
+  - Seed data: 4 templates (Leadership 360, Manager 180, LeaderShift 360, LeaderShift 180), 5 assessments with realistic responses
 
 ### In Progress
-- Connect tenant assessment UI to real API (pages built with mock data)
 - Specialized content type editors (quiz builder, form builder)
 - Connect Programs UI to real enrollment/progress data (currently using mock data)
 
@@ -448,18 +495,14 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
 - Scorecard - no API routes, no DB schema
 - Planning & Goals - DB schema exists (planning/), no API routes
 - Mentoring - DB schema exists (mentoring/), no API routes
-- Assessments (tenant-level) - DB schema exists (assessments/), no API routes
 - Analytics - no API routes, no DB schema
 - Notifications - no API routes, no DB schema
 - Help & Support - static content, no API needed
 
 ### Not Yet Implemented
-- API routes for: Mentoring, Assessments (tenant), Planning, Scorecard, Analytics, Notifications
+- API routes for: Mentoring, Planning, Scorecard, Analytics, Notifications
 - Session prep form (edit mode)
 - Mentoring relationship management UI
-- Assessment response collection UI (public rater form)
-- Results visualization charts
-- Goal suggestion generation from assessments
 - Real Firebase integration
 - Program templates and duplication
 - Certificate/diploma generation
@@ -484,7 +527,7 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
 4. **Imports**: Absolute imports using `@/` alias
 5. **State**: Zustand for global state, React Query for server state
 6. **API calls**: Use the API client from `@/lib/api.ts`
-7. **Hooks**: Use hooks from `@/hooks/api/` for data fetching (usePrograms, useGoals, useTenants, useMentoringSessions, useActionItems, useTemplates, useAssessments, useAgencyPrograms, useAgencyUserSearch, useMyProfile, useImpersonate, etc.)
+7. **Hooks**: Use hooks from `@/hooks/api/` for data fetching (usePrograms, useGoals, useTenants, useMentoringSessions, useActionItems, useTemplates, useAssessments, useAssessmentResults, useComputeResults, useDownloadReport, useAssessmentBenchmarks, useAgencyPrograms, useAgencyUserSearch, useMyProfile, useImpersonate, etc.)
 
 ## UI Prototype (components/)
 

@@ -8,13 +8,15 @@ import {
   useMyEnrollment,
   useLearnerProgress,
   useCompleteLesson,
+  useCompleteTask,
+  useTaskProgress,
   useApprovalSubmission,
   useSubmitForApproval,
   useLessonDiscussions,
   useCreateDiscussionPost,
 } from '@/hooks/api/usePrograms';
 import { useTenants } from '@/hooks/api/useTenants';
-import type { ContentType, LessonContent, LessonProgressStatus, ApprovalRequired, EnrollmentRole, ApprovalSubmission, DiscussionPost } from '@/types/programs';
+import type { ContentType, LessonContent, LessonProgressStatus, ApprovalRequired, EnrollmentRole, ApprovalSubmission, DiscussionPost, EventConfig, LessonTask, TaskWithProgress } from '@/types/programs';
 import {
   Award,
   CheckCircle2,
@@ -41,6 +43,8 @@ import {
   QuizContent,
   ApprovalContent,
   DiscussionContent,
+  EventContent,
+  TaskList,
 } from '@/components/programs';
 
 // ============================================
@@ -59,6 +63,7 @@ interface LessonData {
   completed: boolean;
   content: LessonContent;
   approvalRequired: ApprovalRequired;
+  tasks: LessonTask[];
 }
 
 interface ModuleData {
@@ -67,6 +72,8 @@ interface ModuleData {
   title: string;
   status: 'completed' | 'in-progress' | 'locked';
   lessons: LessonData[];
+  isEvent?: boolean;
+  eventConfig?: EventConfig;
 }
 
 // Resolve role-specific content based on enrollment role
@@ -286,6 +293,14 @@ export default function ModuleViewLMS() {
   // Complete lesson mutation
   const completeLessonMutation = useCompleteLesson(activeTenantId || undefined, programId);
 
+  // Task completion and progress
+  const completeTaskMutation = useCompleteTask(activeTenantId || undefined, programId);
+  const { data: taskProgressData, refetch: refetchTaskProgress } = useTaskProgress(
+    activeTenantId || undefined,
+    programId,
+    myEnrollment?.id
+  );
+
   // User's enrollment role for visibility filtering (previewRole overrides for builder preview)
   const userRole = queryPreviewRole || (myEnrollment?.role as EnrollmentRole | undefined);
 
@@ -311,6 +326,21 @@ export default function ModuleViewLMS() {
       .filter((m) => m.depth === 0) // Only top-level modules
       .sort((a, b) => a.order - b.order)
       .map((module, index) => {
+        const isEvent = module.type === 'event';
+
+        // Events don't have lessons — they render event content directly
+        if (isEvent) {
+          return {
+            id: module.id,
+            number: index + 1,
+            title: module.title,
+            status: 'in-progress' as const,
+            lessons: [],
+            isEvent: true,
+            eventConfig: module.eventConfig || undefined,
+          };
+        }
+
         const allLessons = (module.lessons || []).sort((a, b) => a.order - b.order);
 
         // Filter lessons by role visibility
@@ -371,6 +401,7 @@ export default function ModuleViewLMS() {
               completed: lessonProgressMap.get(l.id) === 'completed',
               content: resolved,
               approvalRequired: l.approvalRequired || 'none',
+              tasks: l.tasks || [],
             };
           }),
         };
@@ -432,6 +463,16 @@ export default function ModuleViewLMS() {
     if (!currentLesson) return;
     createDiscussionMutation.mutate({ lessonId: currentLesson.id, content });
   }, [currentLesson, createDiscussionMutation]);
+
+  const handleCompleteTask = useCallback(async (taskId: string) => {
+    try {
+      await completeTaskMutation.mutateAsync({ taskId });
+      await refetchTaskProgress();
+      await refetchProgress();
+    } catch {
+      // Error handled by mutation state
+    }
+  }, [completeTaskMutation, refetchTaskProgress, refetchProgress]);
 
   // Close sidebar on navigation (mobile)
   useEffect(() => {
@@ -558,12 +599,30 @@ export default function ModuleViewLMS() {
     );
   }
 
-  // Safety check for current module/lesson
-  if (!currentModule || !currentLesson) {
+  // Safety check for current module
+  if (!currentModule) {
     return (
       <div className="flex h-screen items-center justify-center" role="status">
         <div className="text-center">
           <p className="text-muted-foreground mb-4">No lessons available in this program yet.</p>
+          <a href={`/programs/${programId}`} className="text-accent hover:underline">
+            Back to Program
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // Check if current module is an event
+  const isEventView = currentModule.isEvent;
+  const hasTasks = currentLesson?.tasks && currentLesson.tasks.length > 0;
+
+  // Safety check: non-event modules need a current lesson
+  if (!isEventView && !currentLesson) {
+    return (
+      <div className="flex h-screen items-center justify-center" role="status">
+        <div className="text-center">
+          <p className="text-muted-foreground mb-4">No lessons available in this module.</p>
           <a href={`/programs/${programId}`} className="text-accent hover:underline">
             Back to Program
           </a>
@@ -612,44 +671,59 @@ export default function ModuleViewLMS() {
                 <Menu className="w-5 h-5" aria-hidden="true" />
               </button>
               <div className="min-w-0">
-                <div className="text-xs text-muted-foreground mb-0.5">
-                  Module {currentModule?.number} &bull; Lesson {currentLessonIndex + 1} of {currentModule?.lessons.length}
-                </div>
+                {isEventView ? (
+                  <div className="text-xs text-blue-600 font-medium mb-0.5">Program Event</div>
+                ) : (
+                  <div className="text-xs text-muted-foreground mb-0.5">
+                    Module {currentModule?.number} &bull; Lesson {currentLessonIndex + 1} of {currentModule?.lessons.length}
+                  </div>
+                )}
                 <h1 className="text-sm sm:text-base font-semibold text-sidebar-foreground truncate">
-                  {currentLesson?.title}
+                  {isEventView ? currentModule.title : currentLesson?.title}
                 </h1>
               </div>
             </div>
-            <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
-              {/* Points Badge */}
-              <div
-                className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-accent rounded-full"
-                role="status"
-                aria-label={`${currentLesson?.points} points available for this lesson`}
-              >
-                <Award className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-accent-foreground" aria-hidden="true" />
-                <span className="text-xs sm:text-sm font-medium text-accent-foreground">{currentLesson?.points} points</span>
-              </div>
-
-              {/* Completed Badge */}
-              {currentLesson?.completed && (
+            {!isEventView && (
+              <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+                {/* Points Badge */}
                 <div
-                  className="flex items-center gap-1.5 text-sm text-accent font-medium"
+                  className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-accent rounded-full"
                   role="status"
-                  aria-label="Lesson completed"
+                  aria-label={`${currentLesson?.points} points available for this lesson`}
                 >
-                  <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
-                  <span>Done</span>
+                  <Award className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-accent-foreground" aria-hidden="true" />
+                  <span className="text-xs sm:text-sm font-medium text-accent-foreground">{currentLesson?.points} points</span>
                 </div>
-              )}
-            </div>
+
+                {/* Completed Badge */}
+                {currentLesson?.completed && (
+                  <div
+                    className="flex items-center gap-1.5 text-sm text-accent font-medium"
+                    role="status"
+                    aria-label="Lesson completed"
+                  >
+                    <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
+                    <span>Done</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </header>
 
-        {/* Lesson Content (Scrollable) */}
+        {/* Content (Scrollable) */}
         <div className="flex-1 overflow-auto">
           <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
-            {currentLesson && currentModule && (
+            {/* Event Content */}
+            {isEventView && currentModule.eventConfig && (
+              <EventContent
+                title={currentModule.title}
+                eventConfig={currentModule.eventConfig}
+              />
+            )}
+
+            {/* Lesson Content */}
+            {!isEventView && currentLesson && currentModule && (
               <LessonContentRenderer
                 lessonType={currentLesson.type}
                 contentType={currentLesson.contentType}
@@ -671,8 +745,18 @@ export default function ModuleViewLMS() {
               />
             )}
 
-            {/* Task Section */}
-            {currentLesson?.content?.taskTitle && (
+            {/* Tasks Section (new task-based system) */}
+            {!isEventView && hasTasks && currentLesson && (
+              <TaskList
+                tasks={currentLesson.tasks}
+                taskProgress={taskProgressData as TaskWithProgress[] | undefined}
+                onCompleteTask={handleCompleteTask}
+                isCompleting={completeTaskMutation.isPending}
+              />
+            )}
+
+            {/* Legacy Task Section (old single-task-in-content approach) */}
+            {!isEventView && !hasTasks && currentLesson?.content?.taskTitle && (
               <div className="mt-8 p-5 sm:p-6 bg-gradient-to-br from-accent/5 to-accent/10 border border-accent/30 rounded-xl">
                 <div className="flex items-start gap-3 sm:gap-4">
                   <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center flex-shrink-0" aria-hidden="true">
@@ -738,59 +822,65 @@ export default function ModuleViewLMS() {
           </div>
         </div>
 
-        {/* Bottom Navigation Bar */}
-        <footer className="flex-shrink-0 border-t border-border bg-card px-4 sm:px-8 py-3 sm:py-4">
-          <nav className="flex items-center justify-between" aria-label="Lesson navigation">
-            {/* Previous Button */}
-            <button
-              onClick={goToPrevious}
-              disabled={isFirstLesson}
-              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 text-sm text-muted-foreground hover:text-sidebar-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed group focus:outline-none focus:text-sidebar-foreground"
-              aria-label="Go to previous lesson"
-            >
-              <ChevronLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" aria-hidden="true" />
-              <span className="hidden sm:inline">Previous</span>
-            </button>
-
-            {/* Lesson Counter */}
-            <div className="text-xs sm:text-sm text-muted-foreground" role="status">
-              <span className="hidden sm:inline">Lesson </span>{currentLessonIndex + 1} of {currentModule?.lessons.length}
-            </div>
-
-            {/* Next / Mark Complete Button */}
-            {currentLesson?.completed ? (
+        {/* Bottom Navigation Bar (hidden for events) */}
+        {!isEventView && (
+          <footer className="flex-shrink-0 border-t border-border bg-card px-4 sm:px-8 py-3 sm:py-4">
+            <nav className="flex items-center justify-between" aria-label="Lesson navigation">
+              {/* Previous Button */}
               <button
-                onClick={goToNext}
-                disabled={isLastLesson}
-                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-all hover:shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed group focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
-                aria-label="Go to next lesson"
+                onClick={goToPrevious}
+                disabled={isFirstLesson}
+                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 text-sm text-muted-foreground hover:text-sidebar-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed group focus:outline-none focus:text-sidebar-foreground"
+                aria-label="Go to previous lesson"
               >
-                <span>Next</span>
-                <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+                <ChevronLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" aria-hidden="true" />
+                <span className="hidden sm:inline">Previous</span>
               </button>
-            ) : isApprovalLesson && primaryApprovalSubmission?.status === 'pending' ? (
-              <div className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm text-muted-foreground">
-                <Clock className="w-4 h-4" aria-hidden="true" />
-                <span className="hidden sm:inline">Awaiting Review</span>
-                <span className="sm:hidden">Pending</span>
+
+              {/* Lesson Counter */}
+              <div className="text-xs sm:text-sm text-muted-foreground" role="status">
+                <span className="hidden sm:inline">Lesson </span>{currentLessonIndex + 1} of {currentModule?.lessons.length}
               </div>
-            ) : isApprovalLesson && !primaryApprovalSubmission ? (
-              <div className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm text-muted-foreground">
-                <span>Submit above to continue</span>
-              </div>
-            ) : (
-              <button
-                onClick={handleMarkComplete}
-                className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-all hover:shadow-lg active:scale-[0.98] group focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
-                aria-label={`Mark lesson complete and earn ${currentLesson?.points} points`}
-              >
-                <span className="hidden sm:inline">Mark Complete &amp; Continue</span>
-                <span className="sm:hidden">Complete</span>
-                <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
-              </button>
-            )}
-          </nav>
-        </footer>
+
+              {/* Next / Mark Complete Button */}
+              {currentLesson?.completed ? (
+                <button
+                  onClick={goToNext}
+                  disabled={isLastLesson}
+                  className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-all hover:shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed group focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+                  aria-label="Go to next lesson"
+                >
+                  <span>Next</span>
+                  <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+                </button>
+              ) : hasTasks ? (
+                <div className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm text-muted-foreground">
+                  <span>Complete all tasks to finish</span>
+                </div>
+              ) : isApprovalLesson && primaryApprovalSubmission?.status === 'pending' ? (
+                <div className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm text-muted-foreground">
+                  <Clock className="w-4 h-4" aria-hidden="true" />
+                  <span className="hidden sm:inline">Awaiting Review</span>
+                  <span className="sm:hidden">Pending</span>
+                </div>
+              ) : isApprovalLesson && !primaryApprovalSubmission ? (
+                <div className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm text-muted-foreground">
+                  <span>Submit above to continue</span>
+                </div>
+              ) : (
+                <button
+                  onClick={handleMarkComplete}
+                  className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-all hover:shadow-lg active:scale-[0.98] group focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+                  aria-label={`Mark lesson complete and earn ${currentLesson?.points} points`}
+                >
+                  <span className="hidden sm:inline">Mark Complete &amp; Continue</span>
+                  <span className="sm:hidden">Complete</span>
+                  <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+                </button>
+              )}
+            </nav>
+          </footer>
+        )}
       </main>
 
       {/* Completion Modal */}

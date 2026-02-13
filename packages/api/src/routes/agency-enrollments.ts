@@ -3,6 +3,7 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { eq, and, or, isNull, sql, desc, ilike } from 'drizzle-orm';
 import { hash } from 'argon2';
+import crypto from 'node:crypto';
 import { db, schema } from '@tr/db';
 import { requireAgencyAccess, requirePermission } from '../middleware/permissions.js';
 import { NotFoundError, BadRequestError, ConflictError } from '../lib/errors.js';
@@ -352,7 +353,9 @@ agencyEnrollmentsRoutes.post(
           enrollTenantId = existingUser.tenantId;
         } else {
           // Create new user
-          const passwordHash = await hash('password123'); // Default password
+          // Generate a random secure password - user must reset on first login
+          const randomPassword = crypto.randomUUID() + crypto.randomUUID();
+          const passwordHash = await hash(randomPassword);
           const [newUser] = await db
             .insert(users)
             .values({
@@ -362,7 +365,7 @@ agencyEnrollmentsRoutes.post(
               passwordHash,
               tenantId: participant.tenantId || null,
               agencyId: participant.tenantId ? null : user.agencyId!,
-              status: 'active',
+              status: 'pending', // Pending until password is set
             })
             .returning();
 
