@@ -94,7 +94,6 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # 1) Copy Next.js standalone output (creates base directory structure + server.js)
 COPY --from=builder /app/packages/web/.next/standalone ./
 COPY --from=builder /app/packages/web/.next/static ./packages/web/.next/static
-COPY --from=builder /app/packages/web/public ./packages/web/public
 
 # 2) Copy built workspace packages
 COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
