@@ -490,7 +490,7 @@ async function seedData(db: any) {
   console.log(`  ✓ Created 3 lessons for Module 2`);
 
   // Create lessons for Module 3
-  const _module3Lessons = await db.insert(schema.lessons).values([
+  await db.insert(schema.lessons).values([
     {
       moduleId: module1_3.id,
       title: 'Team Dynamics',
@@ -570,7 +570,7 @@ async function seedData(db: any) {
     })
     .returning();
 
-  const _prog2Lessons = await db.insert(schema.lessons).values([
+  await db.insert(schema.lessons).values([
     {
       moduleId: module2_1.id,
       title: 'The Eisenhower Matrix',
@@ -748,7 +748,7 @@ async function seedData(db: any) {
   console.log('  ✓ Added 2 goal reviews (40% progress)');
 
   // Jane's goal (on her enrollment, different unique key)
-  const [_janeGoal] = await db.insert(schema.goalResponses).values({
+  await db.insert(schema.goalResponses).values({
     lessonId: module1Lessons[2].id,
     enrollmentId: janeEnrollment.id,
     statement: 'Build stronger cross-functional relationships by scheduling monthly 1:1s with peers from other departments',
