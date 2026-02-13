@@ -95,7 +95,7 @@ impersonationRoutes.post(
       .insert(impersonationSessions)
       .values({
         adminUserId: adminUser.id,
-        adminSessionId: adminSession!.id,
+        adminSessionId: adminUser.sessionId,
         targetUserId,
         tokenHash,
         reason,
