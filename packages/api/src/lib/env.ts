@@ -7,6 +7,8 @@ const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(32, 'JWT_REFRESH_SECRET must be at least 32 characters'),
   WEB_URL: z.string().default('http://localhost:3003'),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  ADMIN_SECRET: z.string().optional(),
+  AUTO_MIGRATE: z.string().default('false'),
 });
 
 function validateEnv() {

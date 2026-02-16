@@ -25,6 +25,10 @@ export { schema };
 // Export types
 export type Database = typeof db;
 
+// Export migration runner
+export { runMigrations } from './migrate.js';
+export type { MigrationResult } from './migrate.js';
+
 // Graceful shutdown: close all database connections
 export async function closeDatabase() {
   await client.end();

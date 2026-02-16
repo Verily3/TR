@@ -21,6 +21,7 @@ import { agencyTemplatesRoutes } from './routes/agency-templates.js';
 import { assessmentsRoutes } from './routes/assessments.js';
 import { assessmentResponseRoutes, publicAssessmentRoutes } from './routes/assessment-responses.js';
 import { assessmentBenchmarksRoutes } from './routes/assessment-benchmarks.js';
+import { adminDbRoutes } from './routes/admin/db.js';
 import type { Variables } from './types/context.js';
 
 // Create Hono app with typed variables
@@ -63,6 +64,9 @@ app.get('/health', (c) =>
 
 // Auth routes (no auth required for login/register)
 app.route('/api/auth', authRoutes);
+
+// Admin DB routes (no JWT — secured by admin secret, must work before DB is ready)
+app.route('/admin/db', adminDbRoutes);
 
 // Public assessment response routes (token-based, no auth required)
 app.route('/api/assessments/respond', publicAssessmentRoutes);
