@@ -66,7 +66,7 @@ app.get('/health', (c) =>
 app.route('/api/auth', authRoutes);
 
 // Admin DB routes (no JWT — secured by admin secret, must work before DB is ready)
-app.route('/admin/db', adminDbRoutes);
+app.route('/api/admin/db', adminDbRoutes);
 
 // Public assessment response routes (token-based, no auth required)
 app.route('/api/assessments/respond', publicAssessmentRoutes);

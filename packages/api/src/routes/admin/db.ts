@@ -124,7 +124,7 @@ function renderHtml(result: MigrationResult): string {
 
   <footer>
     Transformation OS &mdash; Admin Database Management<br>
-    Endpoint: GET /admin/db/migrate?secret=...
+    Endpoint: GET /api/admin/db/migrate?secret=...
   </footer>
 </div>
 </body>
