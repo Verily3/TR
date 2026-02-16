@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { runMigrations, type MigrationResult } from '@tr/db';
+import { sql } from 'drizzle-orm';
 
 const adminDbRoutes = new Hono();
 
@@ -196,6 +197,135 @@ adminDbRoutes.get('/status', async (c) => {
       status: 'error',
       timestamp: new Date().toISOString(),
       error: err.message,
+    }, 500);
+  }
+});
+
+/**
+ * POST /admin/db/verify
+ *
+ * Validates an admin secret. Used by the frontend to check the secret
+ * before storing it in sessionStorage.
+ */
+adminDbRoutes.post('/verify', async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const secret = body.secret || c.req.header('X-Admin-Secret');
+  return c.json({ data: { valid: verifySecret(secret) } });
+});
+
+/**
+ * GET /admin/db/health?secret=YOUR_SECRET
+ *
+ * Returns comprehensive database health information without modifying anything.
+ * Includes connection status, PostgreSQL version, table list with row counts,
+ * and migration status (applied vs available).
+ */
+adminDbRoutes.get('/health', async (c) => {
+  const secret = c.req.query('secret') || c.req.header('X-Admin-Secret');
+
+  if (!verifySecret(secret)) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  const start = Date.now();
+
+  try {
+    const { db } = await import('@tr/db');
+
+    // Test connection + measure latency
+    const connStart = Date.now();
+    await db.execute(sql`SELECT 1`);
+    const latencyMs = Date.now() - connStart;
+
+    // PostgreSQL version
+    let postgresVersion = 'unknown';
+    try {
+      const versionRows = await db.execute(sql`SHOW server_version`);
+      if (versionRows.length > 0) {
+        postgresVersion = (versionRows[0] as any).server_version || 'unknown';
+      }
+    } catch {}
+
+    // Table list with estimated row counts
+    let tables: { schema: string; name: string; estimatedRows: number }[] = [];
+    try {
+      const tableRows = await db.execute(sql`
+        SELECT schemaname as schema, relname as name, n_live_tup as estimated_rows
+        FROM pg_stat_user_tables
+        ORDER BY schemaname, relname
+      `);
+      tables = tableRows.map((r: any) => ({
+        schema: r.schema,
+        name: r.name,
+        estimatedRows: Number(r.estimated_rows) || 0,
+      }));
+    } catch {}
+
+    // Applied migrations
+    let appliedList: { hash: string; createdAt: string }[] = [];
+    try {
+      const migRows = await db.execute(
+        sql`SELECT hash, created_at FROM drizzle.__drizzle_migrations ORDER BY created_at ASC`
+      );
+      appliedList = migRows.map((r: any) => ({
+        hash: String(r.hash),
+        createdAt: String(r.created_at),
+      }));
+    } catch {}
+
+    // Available migration files from disk
+    let availableFiles: string[] = [];
+    try {
+      const { resolveMigrationsFolder, listMigrationFiles } = await import('@tr/db');
+      const folder = resolveMigrationsFolder();
+      availableFiles = listMigrationFiles(folder);
+    } catch {
+      // Fallback: count from _journal.json is fine, files just won't be listed
+    }
+
+    // Masked database URL
+    let databaseUrl = '(unknown)';
+    try {
+      const rawUrl = process.env.DATABASE_URL || '';
+      const u = new URL(rawUrl);
+      if (u.password) u.password = '****';
+      databaseUrl = u.toString();
+    } catch {
+      databaseUrl = (process.env.DATABASE_URL || '').replace(/:[^@]+@/, ':****@');
+    }
+
+    return c.json({
+      data: {
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        durationMs: Date.now() - start,
+        connection: {
+          connected: true,
+          latencyMs,
+          postgresVersion,
+          databaseUrl,
+        },
+        tables,
+        migrations: {
+          applied: appliedList.length,
+          available: availableFiles.length,
+          pending: Math.max(0, availableFiles.length - appliedList.length),
+          appliedList,
+          availableFiles,
+        },
+      },
+    });
+  } catch (err: any) {
+    return c.json({
+      data: {
+        status: 'error',
+        timestamp: new Date().toISOString(),
+        durationMs: Date.now() - start,
+        connection: { connected: false, latencyMs: 0, postgresVersion: 'unknown', databaseUrl: '(error)' },
+        tables: [],
+        migrations: { applied: 0, available: 0, pending: 0, appliedList: [], availableFiles: [] },
+        error: err.message,
+      },
     }, 500);
   }
 });

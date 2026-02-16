@@ -25,8 +25,8 @@ export { schema };
 // Export types
 export type Database = typeof db;
 
-// Export migration runner
-export { runMigrations } from './migrate.js';
+// Export migration runner and helpers
+export { runMigrations, resolveMigrationsFolder, listMigrationFiles } from './migrate.js';
 export type { MigrationResult } from './migrate.js';
 
 // Graceful shutdown: close all database connections

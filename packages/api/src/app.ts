@@ -47,7 +47,7 @@ app.use(
     ],
     credentials: true,
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID', 'X-Impersonation-Token'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID', 'X-Impersonation-Token', 'X-Admin-Secret'],
   })
 );
 

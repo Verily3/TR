@@ -18,7 +18,8 @@ class ApiClient {
   private async request<T>(
     method: string,
     path: string,
-    body?: unknown
+    body?: unknown,
+    extraHeaders?: Record<string, string>
   ): Promise<{ data: T }> {
     const token = typeof window !== 'undefined'
       ? localStorage.getItem('accessToken')
@@ -40,6 +41,10 @@ class ApiClient {
       headers['X-Impersonation-Token'] = impersonationToken;
     }
 
+    if (extraHeaders) {
+      Object.assign(headers, extraHeaders);
+    }
+
     const response = await fetch(`${this.baseUrl}${path}`, {
       method,
       headers,
@@ -56,12 +61,12 @@ class ApiClient {
     return data;
   }
 
-  async get<T>(path: string): Promise<{ data: T }> {
-    return this.request<T>('GET', path);
+  async get<T>(path: string, extraHeaders?: Record<string, string>): Promise<{ data: T }> {
+    return this.request<T>('GET', path, undefined, extraHeaders);
   }
 
-  async post<T>(path: string, body?: unknown): Promise<{ data: T }> {
-    return this.request<T>('POST', path, body);
+  async post<T>(path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<{ data: T }> {
+    return this.request<T>('POST', path, body, extraHeaders);
   }
 
   async put<T>(path: string, body?: unknown): Promise<{ data: T }> {

@@ -29,7 +29,7 @@ export interface MigrationResult {
  * Works whether running from src/ (tsx) or dist/ (compiled).
  * Both resolve to packages/db/drizzle/ via ../drizzle from __dirname.
  */
-function resolveMigrationsFolder(): string {
+export function resolveMigrationsFolder(): string {
   // __dirname is packages/db/src or packages/db/dist
   const folder = path.resolve(__dirname, '..', 'drizzle');
   if (fs.existsSync(folder)) return folder;
@@ -53,7 +53,7 @@ function maskUrl(url: string): string {
   }
 }
 
-function listSqlFiles(folder: string): string[] {
+export function listMigrationFiles(folder: string): string[] {
   try {
     return fs
       .readdirSync(folder)
@@ -111,7 +111,7 @@ export async function runMigrations(databaseUrl?: string): Promise<MigrationResu
     migrationsFolder = resolveMigrationsFolder();
     logs.push(`Migrations folder: ${migrationsFolder}`);
 
-    const availableMigrations = listSqlFiles(migrationsFolder);
+    const availableMigrations = listMigrationFiles(migrationsFolder);
     logs.push(`Available migration files: ${availableMigrations.length}`);
 
     // Create dedicated migration connection (max 1)
@@ -172,7 +172,7 @@ export async function runMigrations(databaseUrl?: string): Promise<MigrationResu
       appliedBefore,
       appliedAfter: appliedBefore,
       newlyApplied: [],
-      availableMigrations: listSqlFiles(migrationsFolder),
+      availableMigrations: listMigrationFiles(migrationsFolder),
       pending: [],
       logs,
       error: err.message,

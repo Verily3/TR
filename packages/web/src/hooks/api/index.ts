@@ -10,3 +10,4 @@ export * from './useTenants';
 export * from './useUsers';
 export * from './useAssessments';
 export * from './useTemplates';
+export * from './useAdminDb';
