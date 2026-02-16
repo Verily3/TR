@@ -6,7 +6,7 @@ import { UnauthorizedError } from '../lib/errors.js';
 import { db, schema } from '@tr/db';
 import type { Variables } from '../types/context.js';
 
-const { users, userRoles, impersonationSessions } = schema;
+const { users, roles, userRoles, impersonationSessions } = schema;
 
 /**
  * Auth middleware - verifies JWT access token and sets user context.
@@ -69,11 +69,12 @@ export function authMiddleware() {
           // Get target user's role
           const [role] = await db
             .select({
-              slug: userRoles.slug,
-              level: userRoles.level,
+              slug: roles.slug,
+              level: roles.level,
             })
             .from(userRoles)
-            .where(eq(userRoles.id, targetUser.roleId))
+            .innerJoin(roles, eq(userRoles.roleId, roles.id))
+            .where(eq(userRoles.userId, targetUser.id))
             .limit(1);
 
           c.set('user', {

@@ -115,7 +115,7 @@ export interface AgencyUserSearchResult {
   roleSlug: string | null;
 }
 
-export function useAgencyUserSearch(search: string) {
+export function useAgencyImpersonationSearch(search: string) {
   return useQuery({
     queryKey: ['agencyUserSearch', search],
     queryFn: async () => {

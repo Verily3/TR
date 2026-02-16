@@ -10,7 +10,7 @@ import { PERMISSIONS } from '@tr/shared';
 import type { Variables } from '../types/context.js';
 import type { PaginationMeta, ApiResponse } from '@tr/shared';
 
-const { users, userRoles, roles, tenants } = schema;
+const { users, userRoles, roles } = schema;
 
 export const usersRoutes = new Hono<{ Variables: Variables }>();
 
@@ -290,7 +290,7 @@ usersRoutes.post(
       .from(users)
       .where(and(eq(users.tenantId, tenantId), isNull(users.deletedAt)));
 
-    const tenant = c.get('tenant');
+    const tenant = c.get('tenant')!;
     if (Number(userCount) >= tenant.usersLimit) {
       throw new BadRequestError(`User limit reached (${tenant.usersLimit}). Cannot add more users.`);
     }

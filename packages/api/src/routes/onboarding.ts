@@ -6,7 +6,7 @@ import { db, schema } from '@tr/db';
 import { NotFoundError } from '../lib/errors.js';
 import type { Variables } from '../types/context.js';
 
-const { onboardingProgress, enrollments, programs, users } = schema;
+const { onboardingProgress, enrollments } = schema;
 
 export const onboardingRoutes = new Hono<{ Variables: Variables }>();
 
@@ -58,7 +58,7 @@ type OnboardingType = keyof typeof ONBOARDING_STEPS;
  */
 async function determineOnboardingType(
   userId: string,
-  tenantId?: string,
+  _tenantId?: string,
   programId?: string
 ): Promise<OnboardingType> {
   // If specific program, use program-only flow

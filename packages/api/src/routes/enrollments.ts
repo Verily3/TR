@@ -9,7 +9,7 @@ import { PERMISSIONS } from '@tr/shared';
 import type { Variables } from '../types/context.js';
 import type { PaginationMeta } from '@tr/shared';
 
-const { programs, enrollments, enrollmentMentorships, users, tenants } = schema;
+const { programs, enrollments, enrollmentMentorships, users } = schema;
 
 /**
  * Helper: check if a tenant has access to a program.
@@ -68,7 +68,7 @@ enrollmentsRoutes.get(
   async (c) => {
     const tenant = c.get('tenant')!;
     const user = c.get('user');
-    const programId = c.req.param('programId');
+    const programId = c.req.param('programId')!;
     const { page, limit, role, status } = c.req.valid('query');
 
     // Verify program exists and tenant has access
@@ -167,7 +167,7 @@ enrollmentsRoutes.post(
   zValidator('json', createEnrollmentSchema),
   async (c) => {
     const tenant = c.get('tenant')!;
-    const programId = c.req.param('programId');
+    const programId = c.req.param('programId')!;
     const { userId, role } = c.req.valid('json');
 
     // Verify program exists and tenant has access
@@ -254,7 +254,8 @@ enrollmentsRoutes.get(
   requirePermission(PERMISSIONS.PROGRAMS_VIEW),
   async (c) => {
     const tenant = c.get('tenant')!;
-    const { programId, enrollmentId } = c.req.param();
+    const enrollmentId = c.req.param('enrollmentId')!;
+    const programId = c.req.param('programId')!;
 
     const [enrollment] = await db
       .select({
@@ -329,7 +330,8 @@ enrollmentsRoutes.put(
   zValidator('json', updateEnrollmentSchema),
   async (c) => {
     const tenant = c.get('tenant')!;
-    const { programId, enrollmentId } = c.req.param();
+    const enrollmentId = c.req.param('enrollmentId')!;
+    const programId = c.req.param('programId')!;
     const body = c.req.valid('json');
 
     const [existing] = await db
@@ -379,7 +381,8 @@ enrollmentsRoutes.delete(
   requirePermission(PERMISSIONS.PROGRAMS_ENROLL),
   async (c) => {
     const tenant = c.get('tenant')!;
-    const { programId, enrollmentId } = c.req.param();
+    const enrollmentId = c.req.param('enrollmentId')!;
+    const programId = c.req.param('programId')!;
 
     const [existing] = await db
       .select()
@@ -419,7 +422,7 @@ enrollmentsRoutes.get(
   requirePermission(PERMISSIONS.PROGRAMS_VIEW),
   async (c) => {
     const tenant = c.get('tenant')!;
-    const programId = c.req.param('programId');
+    const programId = c.req.param('programId')!;
 
     // Verify program exists and tenant has access
     const [program] = await db
@@ -465,7 +468,7 @@ enrollmentsRoutes.post(
   zValidator('json', assignMentorSchema),
   async (c) => {
     const tenant = c.get('tenant')!;
-    const programId = c.req.param('programId');
+    const programId = c.req.param('programId')!;
     const { enrollmentId, mentorUserId } = c.req.valid('json');
 
     // Verify program exists and tenant has access
@@ -552,7 +555,8 @@ enrollmentsRoutes.delete(
   requirePermission(PERMISSIONS.MENTORING_MANAGE),
   async (c) => {
     const tenant = c.get('tenant')!;
-    const { programId, mentorshipId } = c.req.param();
+    const mentorshipId = c.req.param('mentorshipId')!;
+    const programId = c.req.param('programId')!;
 
     // Verify mentorship exists and tenant has access to the program
     const [existing] = await db

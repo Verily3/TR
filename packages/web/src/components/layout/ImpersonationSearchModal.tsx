@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, X, LogIn, AlertTriangle, Loader2, Users } from 'lucide-react';
-import { useAgencyUserSearch, type AgencyUserSearchResult } from '@/hooks/api/useAgency';
+import { useAgencyImpersonationSearch, type AgencyUserSearchResult } from '@/hooks/api/useAgency';
 import { useStartImpersonation } from '@/hooks/api/useImpersonate';
 
 const ROLE_COLORS: Record<string, string> = {
@@ -41,7 +41,7 @@ export function ImpersonationSearchModal({ open, onClose }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const startImpersonation = useStartImpersonation();
 
-  const { data: users, isLoading, isFetching } = useAgencyUserSearch(debouncedSearch);
+  const { data: users, isLoading, isFetching } = useAgencyImpersonationSearch(debouncedSearch);
 
   // Debounce search input
   useEffect(() => {

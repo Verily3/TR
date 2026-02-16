@@ -20,7 +20,7 @@ import {
   Building2,
   Heart,
 } from 'lucide-react';
-import { useAuth } from '@/hooks/use-auth';
+
 
 // ============================================
 // Types
@@ -28,11 +28,6 @@ import { useAuth } from '@/hooks/use-auth';
 type TimeRange = '7d' | '30d' | '90d' | '12m';
 type MetricTrend = 'up' | 'down' | 'stable';
 type Tab = 'overview' | 'programs' | 'assessments' | 'team' | 'goals';
-
-interface TimeSeriesData {
-  date: string;
-  value: number;
-}
 
 interface ChartDataPoint {
   label: string;
@@ -240,7 +235,6 @@ function SimpleBarChart({
 function SimpleLineChart({
   data,
   color = 'accent',
-  suffix = '',
 }: {
   data: { label: string; value: number }[];
   color?: 'accent' | 'blue' | 'green' | 'purple';
@@ -373,7 +367,6 @@ function getTrendColor(trend: MetricTrend, positive = true) {
 // Main Page Component
 // ============================================
 export default function AnalyticsPage() {
-  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
 

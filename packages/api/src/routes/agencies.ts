@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { eq, and, isNull, sql, desc, asc, or, arrayContains } from 'drizzle-orm';
+import { eq, and, isNull, sql, desc, asc, or } from 'drizzle-orm';
 import { hash } from 'argon2';
 import { db, schema } from '@tr/db';
 import { requireAgencyAccess, requirePermission } from '../middleware/permissions.js';
@@ -1175,7 +1175,7 @@ agenciesRoutes.put(
   zValidator('json', agencyLessonSchema.partial()),
   async (c) => {
     const user = c.get('user');
-    const { programId, moduleId, lessonId } = c.req.param();
+    const { moduleId, lessonId } = c.req.param();
     const body = c.req.valid('json');
 
     const [existing] = await db
@@ -1220,7 +1220,7 @@ agenciesRoutes.delete(
   requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
   async (c) => {
     const user = c.get('user');
-    const { programId, moduleId, lessonId } = c.req.param();
+    const { moduleId, lessonId } = c.req.param();
 
     const [existing] = await db
       .select()

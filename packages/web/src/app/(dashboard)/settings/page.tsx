@@ -8,7 +8,6 @@ import {
   Shield,
   Puzzle,
   Building2,
-  Camera,
   Save,
   Mail,
   Smartphone,
@@ -352,7 +351,6 @@ function Toggle({
 // ============================================
 
 export default function SettingsPage() {
-  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('profile');
 
   return (
@@ -405,7 +403,7 @@ export default function SettingsPage() {
 // ============================================
 
 function ProfileTab() {
-  const { user: authUser, refreshUser } = useAuth();
+  const { refreshUser } = useAuth();
   const { data: profile, isLoading: profileLoading } = useMyProfile();
   const updateProfile = useUpdateMyProfile();
 

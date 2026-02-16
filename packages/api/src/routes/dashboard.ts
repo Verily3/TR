@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { eq, and, desc, inArray, ne, sql } from 'drizzle-orm';
+import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { db, schema } from '@tr/db';
 import { requireTenantAccess } from '../middleware/permissions.js';
 import type { Variables } from '../types/context.js';
@@ -11,7 +11,6 @@ const {
   enrollments,
   lessonProgress,
   goalResponses,
-  goalReviews,
   approvalSubmissions,
   lessonDiscussions,
   users,

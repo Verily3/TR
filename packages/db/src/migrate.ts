@@ -186,3 +186,32 @@ export async function runMigrations(databaseUrl?: string): Promise<MigrationResu
     }
   }
 }
+
+// CLI support: run directly with `tsx src/migrate.ts`
+const isDirectRun =
+  process.argv[1] &&
+  (process.argv[1].endsWith('migrate.ts') || process.argv[1].endsWith('migrate.js'));
+
+if (isDirectRun) {
+  console.log('Running database migrations...');
+  runMigrations()
+    .then((result) => {
+      if (result.success) {
+        console.log(`Migrations completed successfully (${result.durationMs}ms)`);
+        if (result.newlyApplied.length > 0) {
+          console.log(`Applied ${result.newlyApplied.length} new migration(s):`);
+          result.newlyApplied.forEach((m) => console.log(`  + ${m}`));
+        } else {
+          console.log('Database is up to date.');
+        }
+      } else {
+        console.error('Migration failed:', result.error);
+        if (result.errorStack) console.error(result.errorStack);
+        process.exit(1);
+      }
+    })
+    .catch((err) => {
+      console.error('Migration failed:', err);
+      process.exit(1);
+    });
+}

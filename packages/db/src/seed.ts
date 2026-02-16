@@ -490,7 +490,7 @@ async function seedData(db: any) {
   console.log(`  ✓ Created 3 lessons for Module 2`);
 
   // Create lessons for Module 3
-  const module3Lessons = await db.insert(schema.lessons).values([
+  await db.insert(schema.lessons).values([
     {
       moduleId: module1_3.id,
       title: 'Team Dynamics',
@@ -570,7 +570,7 @@ async function seedData(db: any) {
     })
     .returning();
 
-  const prog2Lessons = await db.insert(schema.lessons).values([
+  await db.insert(schema.lessons).values([
     {
       moduleId: module2_1.id,
       title: 'The Eisenhower Matrix',
@@ -704,7 +704,7 @@ async function seedData(db: any) {
   const johnCompletedLessons = 5; // 4 from module1 + 1 from module2
   const johnTotalLessons = 10; // 4 + 3 + 3
   const johnProgress = Math.round((johnCompletedLessons / johnTotalLessons) * 100);
-  const johnPoints = module1Lessons.reduce((s, l) => s + l.points, 0) + module2Lessons[0].points;
+  const johnPoints = module1Lessons.reduce((s: number, l: { points: number }) => s + l.points, 0) + module2Lessons[0].points;
   await db.update(schema.enrollments)
     .set({ progress: johnProgress, pointsEarned: johnPoints, startedAt: new Date('2026-02-03') })
     .where(eq(schema.enrollments.id, johnEnrollment.id));
@@ -748,7 +748,7 @@ async function seedData(db: any) {
   console.log('  ✓ Added 2 goal reviews (40% progress)');
 
   // Jane's goal (on her enrollment, different unique key)
-  const [janeGoal] = await db.insert(schema.goalResponses).values({
+  await db.insert(schema.goalResponses).values({
     lessonId: module1Lessons[2].id,
     enrollmentId: janeEnrollment.id,
     statement: 'Build stronger cross-functional relationships by scheduling monthly 1:1s with peers from other departments',

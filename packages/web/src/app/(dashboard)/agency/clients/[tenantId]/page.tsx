@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 import { useTenant, useTenantStats, useUpdateTenant } from '@/hooks/api/useTenants';
@@ -14,7 +14,6 @@ import { ImpersonateUserModal } from '@/components/agency/ImpersonateUserModal';
 
 export default function ClientDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const { user } = useAuth();
   const tenantId = params.tenantId as string;
 
