@@ -148,7 +148,7 @@ function LessonContentRenderer({
         <SubmissionContent
           title={lessonTitle}
           introduction={content.introduction}
-          description={content.formPrompt || content.instructions}
+          description={content.prompt || content.formPrompt || content.instructions}
           reflectionPrompts={content.reflectionPrompts}
           minCharacters={content.minLength}
           maxCharacters={content.maxLength}
@@ -159,11 +159,12 @@ function LessonContentRenderer({
         <AssignmentContent
           title={lessonTitle}
           introduction={content.introduction}
-          description={content.instructions}
-          questions={content.questions?.map((q, i) => ({
-            question: q,
-            hint: content.reflectionPrompts?.[i] || '',
-          }))}
+          description={content.description || content.instructions}
+          questions={content.questions?.map((q: { text?: string; hint?: string } | string) =>
+            typeof q === 'string'
+              ? { question: q, hint: '' }
+              : { question: q.text ?? '', hint: q.hint ?? '' }
+          )}
         />
       );
     case 'goal':
