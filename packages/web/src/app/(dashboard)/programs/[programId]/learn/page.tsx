@@ -10,19 +10,16 @@ import {
   useCompleteLesson,
   useCompleteTask,
   useTaskProgress,
-  useApprovalSubmission,
-  useSubmitForApproval,
   useLessonDiscussions,
   useCreateDiscussionPost,
 } from '@/hooks/api/usePrograms';
 import { useTenants } from '@/hooks/api/useTenants';
-import type { ContentType, LessonContent, LessonProgressStatus, ApprovalRequired, EnrollmentRole, ApprovalSubmission, DiscussionPost, EventConfig, LessonTask, TaskWithProgress } from '@/types/programs';
+import type { ContentType, LessonContent, LessonProgressStatus, ApprovalRequired, EnrollmentRole, DiscussionPost, EventConfig, LessonTask, TaskWithProgress } from '@/types/programs';
 import {
   Award,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Clock,
   Menu,
   FileText,
   ExternalLink,
@@ -36,12 +33,10 @@ import {
   CompletionModal,
   ReadingContent,
   VideoContent,
-  MeetingContent,
   SubmissionContent,
   AssignmentContent,
   GoalContent,
   QuizContent,
-  ApprovalContent,
   DiscussionContent,
   EventContent,
   TaskList,
@@ -51,7 +46,7 @@ import {
 // Types & Constants
 // ============================================
 
-type LessonType = 'reading' | 'video' | 'meeting' | 'submission' | 'assignment' | 'goal' | 'quiz' | 'approval' | 'discussion';
+type LessonType = 'reading' | 'video' | 'submission' | 'assignment' | 'goal' | 'quiz' | 'discussion';
 
 interface LessonData {
   id: string;
@@ -89,21 +84,14 @@ const contentTypeToLessonType = (contentType: ContentType, content?: LessonConte
   switch (contentType) {
     case 'lesson':
       return content?.videoUrl ? 'video' : 'reading';
-    case 'sub_module':
-      return 'reading';
     case 'quiz':
       return 'quiz';
     case 'assignment':
       return 'assignment';
-    case 'mentor_meeting':
-      return 'meeting';
     case 'text_form':
       return content?.enableDiscussion ? 'discussion' : 'submission';
     case 'goal':
       return 'goal';
-    case 'mentor_approval':
-    case 'facilitator_approval':
-      return 'approval';
     default:
       return 'reading';
   }
@@ -121,12 +109,6 @@ interface LessonContentRendererProps {
   content: LessonContent;
   lessonTitle: string;
   durationMinutes?: number;
-  enrollmentRole?: EnrollmentRole;
-  mentorNames?: string[];
-  // Approval props
-  approvalSubmission?: ApprovalSubmission | null;
-  onSubmitApproval?: (text: string) => void;
-  isSubmittingApproval?: boolean;
   // Discussion props
   discussionPosts?: DiscussionPost[];
   isLoadingDiscussions?: boolean;
@@ -143,11 +125,6 @@ function LessonContentRenderer({
   content,
   lessonTitle,
   durationMinutes,
-  enrollmentRole,
-  mentorNames,
-  approvalSubmission,
-  onSubmitApproval,
-  isSubmittingApproval,
   discussionPosts,
   isLoadingDiscussions,
   currentUserId,
@@ -165,14 +142,6 @@ function LessonContentRenderer({
       );
     case 'video':
       return <VideoContent content={content} durationMinutes={durationMinutes} />;
-    case 'meeting':
-      return (
-        <MeetingContent
-          content={content}
-          mentorNames={mentorNames}
-          enrollmentRole={enrollmentRole}
-        />
-      );
     case 'submission':
       return (
         <SubmissionContent
@@ -208,17 +177,6 @@ function LessonContentRenderer({
         <QuizContent
           content={content}
           lessonTitle={lessonTitle}
-        />
-      );
-    case 'approval':
-      return (
-        <ApprovalContent
-          lessonTitle={lessonTitle}
-          contentType={contentType as 'mentor_approval' | 'facilitator_approval'}
-          instructions={content.instructions || content.mainContent}
-          submission={approvalSubmission}
-          onSubmit={onSubmitApproval || (() => {})}
-          isSubmitting={isSubmittingApproval}
         />
       );
     case 'discussion':
@@ -304,10 +262,6 @@ export default function ModuleViewLMS() {
   // User's enrollment role for visibility filtering (previewRole overrides for builder preview)
   const userRole = queryPreviewRole || (myEnrollment?.role as EnrollmentRole | undefined);
 
-  // Mentor names for meeting content
-  const mentorNames = useMemo(() => {
-    return myEnrollment?.mentors?.map((m) => [m.firstName, m.lastName].filter(Boolean).join(' ')).filter(Boolean) || [];
-  }, [myEnrollment?.mentors]);
 
   // Transform API data to ModuleData format
   const modulesData: ModuleData[] = useMemo(() => {
@@ -320,7 +274,9 @@ export default function ModuleViewLMS() {
     });
 
     let foundInProgress = false;
-    const isSequential = program.config?.sequentialAccess !== false;
+    // In preview mode or when user has no enrollment (admin/builder viewing), unlock all modules
+    const isPreview = !!queryPreviewRole || !myEnrollment;
+    const isSequential = !isPreview && program.config?.sequentialAccess !== false;
 
     return program.modules
       .filter((m) => m.depth === 0) // Only top-level modules
@@ -406,7 +362,7 @@ export default function ModuleViewLMS() {
           }),
         };
       });
-  }, [program?.modules, program?.config?.sequentialAccess, progressData?.lessons, userRole]);
+  }, [program?.modules, program?.config?.sequentialAccess, progressData?.lessons, userRole, myEnrollment, queryPreviewRole]);
 
   // Find the first incomplete lesson and set initial state (only once)
   useEffect(() => {
@@ -431,25 +387,8 @@ export default function ModuleViewLMS() {
   const currentModule = modulesData[currentModuleIndex];
   const currentLesson = currentModule?.lessons[currentLessonIndex];
 
-  // Determine if current lesson is approval or discussion type
-  const isApprovalLesson = currentLesson?.type === 'approval';
+  // Determine if current lesson is discussion type
   const isDiscussionLesson = currentLesson?.type === 'discussion';
-
-  // Approval submission data
-  const { data: approvalSubmissions } = useApprovalSubmission(
-    activeTenantId || undefined,
-    programId,
-    isApprovalLesson ? currentLesson?.id : undefined
-  );
-  const submitApprovalMutation = useSubmitForApproval(activeTenantId || undefined, programId);
-
-  // The primary submission (first one returned — for single-reviewer lessons)
-  const primaryApprovalSubmission = approvalSubmissions?.[0] ?? null;
-
-  const handleSubmitApproval = useCallback((text: string) => {
-    if (!currentLesson) return;
-    submitApprovalMutation.mutate({ lessonId: currentLesson.id, submissionText: text });
-  }, [currentLesson, submitApprovalMutation]);
 
   // Discussion data
   const { data: discussionPosts, isLoading: isLoadingDiscussions } = useLessonDiscussions(
@@ -732,11 +671,6 @@ export default function ModuleViewLMS() {
                 content={currentLesson.content}
                 lessonTitle={currentLesson.title}
                 durationMinutes={currentLesson.duration}
-                enrollmentRole={userRole}
-                mentorNames={mentorNames}
-                approvalSubmission={primaryApprovalSubmission}
-                onSubmitApproval={handleSubmitApproval}
-                isSubmittingApproval={submitApprovalMutation.isPending}
                 discussionPosts={discussionPosts || []}
                 isLoadingDiscussions={isLoadingDiscussions}
                 currentUserId={user?.id}
@@ -856,16 +790,6 @@ export default function ModuleViewLMS() {
               ) : hasTasks ? (
                 <div className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm text-muted-foreground">
                   <span>Complete all tasks to finish</span>
-                </div>
-              ) : isApprovalLesson && primaryApprovalSubmission?.status === 'pending' ? (
-                <div className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm text-muted-foreground">
-                  <Clock className="w-4 h-4" aria-hidden="true" />
-                  <span className="hidden sm:inline">Awaiting Review</span>
-                  <span className="sm:hidden">Pending</span>
-                </div>
-              ) : isApprovalLesson && !primaryApprovalSubmission ? (
-                <div className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm text-muted-foreground">
-                  <span>Submit above to continue</span>
                 </div>
               ) : (
                 <button

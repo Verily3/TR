@@ -27,8 +27,6 @@ const contentTypeIcons: Record<string, typeof ClipboardList> = {
   assignment: ClipboardList,
   goal: Target,
   text_form: FileCheck,
-  mentor_approval: FileCheck,
-  facilitator_approval: FileCheck,
 };
 
 export function WeekAtAGlance({
@@ -40,7 +38,7 @@ export function WeekAtAGlance({
   const [activeTab, setActiveTab] = useState<TabId>('assignments');
 
   const assignments = upcomingItems.filter((item) =>
-    ['assignment', 'text_form', 'mentor_approval', 'facilitator_approval'].includes(item.contentType)
+    ['assignment', 'text_form'].includes(item.contentType)
   );
 
   const tabs: { id: TabId; label: string; count: number; icon: typeof ClipboardList }[] = [

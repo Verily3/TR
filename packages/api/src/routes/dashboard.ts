@@ -206,9 +206,6 @@ dashboardRoutes.get(
           inArray(modules.programId, programIds),
           inArray(lessons.contentType, [
             'assignment',
-            'mentor_meeting',
-            'mentor_approval',
-            'facilitator_approval',
             'goal',
             'text_form',
           ]),

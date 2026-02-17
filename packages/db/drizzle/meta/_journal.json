@@ -71,6 +71,13 @@
       "when": 1771353814403,
       "tag": "0009_curved_polaris",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1771359727491,
+      "tag": "0010_careful_maddog",
+      "breakpoints": true
     }
   ]
 }

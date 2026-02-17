@@ -8,14 +8,10 @@ export type EnrollmentRole = 'learner' | 'mentor' | 'facilitator';
 export type EnrollmentStatus = 'active' | 'completed' | 'dropped';
 export type ContentType =
   | 'lesson'
-  | 'sub_module'
   | 'quiz'
   | 'assignment'
-  | 'mentor_meeting'
   | 'text_form'
-  | 'goal'
-  | 'mentor_approval'
-  | 'facilitator_approval';
+  | 'goal';
 export type ModuleDripType = 'immediate' | 'days_after_enrollment' | 'days_after_previous' | 'on_date';
 export type LessonDripType = 'immediate' | 'sequential' | 'days_after_module_start' | 'on_date';
 export type LessonStatus = 'draft' | 'active';

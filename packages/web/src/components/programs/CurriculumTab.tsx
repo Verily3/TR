@@ -83,14 +83,10 @@ type ContentTypeConfig = {
 
 const CONTENT_TYPE_CONFIG: Partial<Record<ContentType, ContentTypeConfig>> = {
   lesson: { icon: BookOpen, label: 'Reading', color: 'text-blue-600' },
-  sub_module: { icon: FolderOpen, label: 'Sub-Module', color: 'text-gray-600' },
   quiz: { icon: HelpCircle, label: 'Quiz', color: 'text-purple-600' },
   assignment: { icon: ClipboardList, label: 'Assignment', color: 'text-orange-600' },
-  mentor_meeting: { icon: Users, label: 'Meeting', color: 'text-green-600' },
   text_form: { icon: FileText, label: 'Text Form', color: 'text-cyan-600' },
   goal: { icon: Target, label: 'Goal', color: 'text-yellow-600' },
-  mentor_approval: { icon: ShieldCheck, label: 'Mentor Approval', color: 'text-amber-600' },
-  facilitator_approval: { icon: ShieldCheck, label: 'Facilitator Approval', color: 'text-teal-600' },
 };
 
 // ============================================
@@ -776,90 +772,6 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
           </div>
         );
 
-      case 'mentor_meeting':
-        return (
-          <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Introduction</label>
-              <textarea
-                value={editContent.introduction || ''}
-                onChange={(e) => setEditContent({ ...editContent, introduction: e.target.value })}
-                rows={4}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none resize-none bg-gray-50"
-                placeholder="Introduce the lesson and its importance..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Meeting Agenda</label>
-              <textarea
-                value={editContent.agenda || ''}
-                onChange={(e) => setEditContent({ ...editContent, agenda: e.target.value })}
-                rows={5}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none resize-none bg-gray-50"
-                placeholder="Outline the key topics to cover in this mentor meeting..."
-              />
-            </div>
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <label className="text-sm font-medium text-gray-700">Discussion Questions</label>
-                <button
-                  onClick={() => setEditContent({ ...editContent, discussionQuestions: [...(editContent.discussionQuestions || []), ''] })}
-                  className="text-sm text-red-600 hover:text-red-700 font-medium"
-                >
-                  + Add Question
-                </button>
-              </div>
-              {(editContent.discussionQuestions || []).map((q, i) => (
-                <div key={i} className="flex items-center gap-2 mb-2">
-                  <span className="text-xs text-gray-400 w-6 text-right">{i + 1}.</span>
-                  <input
-                    type="text"
-                    value={q}
-                    onChange={(e) => {
-                      const qs = [...(editContent.discussionQuestions || [])];
-                      qs[i] = e.target.value;
-                      setEditContent({ ...editContent, discussionQuestions: qs });
-                    }}
-                    className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
-                  />
-                  <button
-                    onClick={() => setEditContent({ ...editContent, discussionQuestions: (editContent.discussionQuestions || []).filter((_, idx) => idx !== i) })}
-                    className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Preparation Instructions</label>
-              <textarea
-                value={editContent.preparationInstructions || ''}
-                onChange={(e) => setEditContent({ ...editContent, preparationInstructions: e.target.value })}
-                rows={4}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none resize-none bg-gray-50"
-                placeholder="What should participants prepare before the meeting..."
-              />
-            </div>
-
-            {/* AI Content Generator */}
-            <div className="bg-red-50 border border-red-100 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <Sparkles className="w-5 h-5 text-red-500 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">AI Content Generator</p>
-                  <p className="text-xs text-gray-600 mt-0.5">
-                    Generate lesson content based on learning objectives and L&D best practices
-                  </p>
-                  <button className="text-sm text-red-600 hover:text-red-700 font-medium mt-2">
-                    Generate Content &rarr;
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-
       case 'quiz':
         return (
           <div className="bg-gray-50 rounded-lg p-8 text-center">
@@ -1046,69 +958,6 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
           </div>
         );
 
-      case 'mentor_approval':
-        return (
-          <div className="space-y-6">
-            <div className="bg-amber-50 border border-amber-100 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <ShieldCheck className="w-5 h-5 text-amber-500 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Mentor Approval Lesson</p>
-                  <p className="text-xs text-gray-600 mt-0.5">
-                    The learner will write a submission and submit it for mentor review.
-                    The assigned mentor can then approve or reject with feedback.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Instructions</label>
-              <RichTextEditor
-                value={editContent.instructions || ''}
-                onChange={(html) => setEditContent({ ...editContent, instructions: html })}
-                placeholder="Describe what the learner needs to do before submitting for mentor approval..."
-              />
-            </div>
-          </div>
-        );
-
-      case 'facilitator_approval':
-        return (
-          <div className="space-y-6">
-            <div className="bg-teal-50 border border-teal-100 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <ShieldCheck className="w-5 h-5 text-teal-500 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">Facilitator Approval Lesson</p>
-                  <p className="text-xs text-gray-600 mt-0.5">
-                    The learner will click &quot;Mark as Done&quot; after completing the described activity.
-                    The facilitator can then verify and approve completion.
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Instructions</label>
-              <RichTextEditor
-                value={editContent.instructions || ''}
-                onChange={(html) => setEditContent({ ...editContent, instructions: html })}
-                placeholder="Describe the activity the learner should complete before marking as done..."
-              />
-            </div>
-          </div>
-        );
-
-      case 'sub_module':
-        return (
-          <div className="bg-gray-50 rounded-lg p-8 text-center">
-            <FolderOpen className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-            <h4 className="text-base font-medium text-gray-900 mb-1">Sub-Module Container</h4>
-            <p className="text-sm text-gray-500">
-              Sub-modules act as containers for grouping related lessons.
-            </p>
-          </div>
-        );
-
       default:
         return null;
     }
@@ -1245,16 +1094,6 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                             </p>
                             <p className="text-xs text-gray-400">
                               {lesson.points} pts
-                              {lesson.contentType === 'mentor_meeting' && (
-                                <span className="ml-1.5 inline-flex items-center">
-                                  &bull; <Users className="w-3 h-3 ml-1 text-blue-400" />
-                                </span>
-                              )}
-                              {lesson.approvalRequired && lesson.approvalRequired !== 'none' && (
-                                <span className="ml-1.5 inline-flex items-center">
-                                  &bull; <ShieldCheck className="w-3 h-3 ml-1 text-amber-500" />
-                                </span>
-                              )}
                             </p>
                           </div>
                         </button>

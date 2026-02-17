@@ -9,14 +9,10 @@ import { pgEnum } from 'drizzle-orm/pg-core';
  */
 export const contentTypeEnum = pgEnum('content_type', [
   'lesson',
-  'sub_module',
   'quiz',
   'assignment',
-  'mentor_meeting',
   'text_form',
   'goal',
-  'mentor_approval',
-  'facilitator_approval',
 ]);
 
 /**

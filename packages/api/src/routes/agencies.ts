@@ -883,10 +883,7 @@ const agencyModuleSchema = z.object({
 const agencyLessonSchema = z.object({
   title: z.string().min(1).max(255),
   contentType: z
-    .enum([
-      'lesson', 'sub_module', 'quiz', 'assignment', 'mentor_meeting',
-      'text_form', 'goal', 'mentor_approval', 'facilitator_approval',
-    ])
+    .enum(['lesson', 'quiz', 'assignment', 'text_form', 'goal'])
     .default('lesson'),
   content: z.record(z.unknown()).optional(),
   order: z.number().int().optional(),
