@@ -64,6 +64,13 @@
       "when": 1770991161611,
       "tag": "0008_elite_silver_samurai",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1771353814403,
+      "tag": "0009_curved_polaris",
+      "breakpoints": true
     }
   ]
 }

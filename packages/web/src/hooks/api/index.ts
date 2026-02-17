@@ -11,3 +11,4 @@ export * from './useUsers';
 export * from './useAssessments';
 export * from './useTemplates';
 export * from './useAdminDb';
+export * from './useNotifications';

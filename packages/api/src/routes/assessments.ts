@@ -11,6 +11,9 @@ import {
 } from 'drizzle-orm';
 import { db, schema } from '@tr/db';
 import { NotFoundError, BadRequestError } from '../lib/errors.js';
+import { sendAssessmentInvitation, sendAssessmentReminder } from '../lib/email.js';
+import { createNotification } from '../lib/notifications.js';
+import { env } from '../lib/env.js';
 import { computeAssessmentResults } from '../lib/assessment-engine.js';
 import { generateAssessmentReport } from '../lib/pdf/report-generator.js';
 import type { ComputedAssessmentResults } from '@tr/db/schema';
@@ -556,6 +559,46 @@ assessmentsRoutes.post(
       .values(values)
       .returning();
 
+    // Send invitation emails + create in-app notifications
+    const raterIds = inserted.map((inv) => inv.raterId);
+    const raters = raterIds.length > 0
+      ? await db.select({ id: users.id, email: users.email, firstName: users.firstName, lastName: users.lastName })
+          .from(users)
+          .where(inArray(users.id, raterIds))
+      : [];
+
+    const raterMap = new Map(raters.map((r) => [r.id, r]));
+
+    await Promise.allSettled(
+      inserted.map(async (inv) => {
+        const rater = raterMap.get(inv.raterId);
+        if (!rater) return;
+        const respondUrl = `${env.APP_URL}/respond/${inv.accessToken}`;
+        await sendAssessmentInvitation({
+          to: rater.email,
+          name: rater.firstName,
+          assessorName: assessment.name,
+          assessmentName: assessment.name,
+          respondUrl,
+        });
+        await createNotification({
+          userId: rater.id,
+          type: 'assessment_invite',
+          title: 'Assessment invitation',
+          message: `You've been invited to complete the "${assessment.name}" assessment.`,
+          actionUrl: respondUrl,
+          actionLabel: 'Start Assessment',
+        });
+      })
+    );
+
+    // Mark all inserted as 'sent'
+    if (inserted.length > 0) {
+      await db.update(assessmentInvitations)
+        .set({ status: 'sent', sentAt: new Date() })
+        .where(inArray(assessmentInvitations.id, inserted.map((i) => i.id)));
+    }
+
     return c.json({ data: inserted }, 201);
   }
 );
@@ -646,18 +689,51 @@ assessmentsRoutes.post('/:assessmentId/invitations/remind', async (c) => {
       )
     );
 
-  // Update reminder counts
-  for (const inv of pending) {
-    await db
-      .update(assessmentInvitations)
-      .set({
-        reminderCount: String(parseInt(inv.reminderCount || '0', 10) + 1),
-        lastReminderAt: new Date(),
-        // Mark as sent if still pending
-        ...(inv.status === 'pending' ? { status: 'sent', sentAt: new Date() } : {}),
-      })
-      .where(eq(assessmentInvitations.id, inv.id));
+  if (pending.length === 0) {
+    return c.json({ data: { reminded: 0 } });
   }
+
+  // Bulk update: increment reminder count, set timestamps
+  await db.update(assessmentInvitations)
+    .set({
+      lastReminderAt: new Date(),
+      status: 'sent',
+      sentAt: new Date(),
+      reminderCount: sql`(COALESCE(${assessmentInvitations.reminderCount}::int, 0) + 1)::text`,
+    })
+    .where(inArray(assessmentInvitations.id, pending.map((i) => i.id)));
+
+  // Fetch assessment name for email subject
+  const [assessment] = await db
+    .select({ name: assessments.name })
+    .from(assessments)
+    .where(eq(assessments.id, assessmentId))
+    .limit(1);
+
+  // Send reminder emails
+  const raterIds = pending.map((inv) => inv.raterId);
+  const raters = await db
+    .select({ id: users.id, email: users.email, firstName: users.firstName })
+    .from(users)
+    .where(inArray(users.id, raterIds));
+
+  const raterMap = new Map(raters.map((r) => [r.id, r]));
+
+  await Promise.allSettled(
+    pending.map(async (inv) => {
+      const rater = raterMap.get(inv.raterId);
+      if (!rater) return;
+      const reminderCount = parseInt(inv.reminderCount || '0', 10) + 1;
+      await sendAssessmentReminder({
+        to: rater.email,
+        name: rater.firstName,
+        assessorName: assessment?.name ?? 'Assessment',
+        assessmentName: assessment?.name ?? 'Assessment',
+        respondUrl: `${env.APP_URL}/respond/${inv.accessToken}`,
+        reminderCount,
+      });
+    })
+  );
 
   return c.json({ data: { reminded: pending.length } });
 });

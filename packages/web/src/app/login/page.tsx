@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 
 export default function LoginPage() {
@@ -82,13 +83,21 @@ export default function LoginPage() {
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full py-2 px-4 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLoading ? 'Signing in...' : 'Sign in'}
-          </button>
+          <div className="flex items-center justify-between">
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="flex-1 py-2 px-4 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? 'Signing in...' : 'Sign in'}
+            </button>
+          </div>
+
+          <div className="text-center">
+            <Link href="/forgot-password" className="text-sm text-gray-500 hover:text-red-600 transition-colors">
+              Forgot your password?
+            </Link>
+          </div>
         </form>
 
         <div className="text-center text-sm text-gray-500">

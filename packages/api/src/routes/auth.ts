@@ -2,13 +2,15 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { eq, and, isNull, gt } from 'drizzle-orm';
-import { verify } from 'argon2';
+import { verify, hash } from 'argon2';
 import crypto from 'node:crypto';
 import { db, schema } from '@tr/db';
 import { jwtService } from '../lib/jwt.js';
 import { sessionManager } from '../lib/session.js';
-import { UnauthorizedError, NotFoundError } from '../lib/errors.js';
+import { UnauthorizedError, NotFoundError, BadRequestError } from '../lib/errors.js';
 import type { LoginResponse, RefreshResponse } from '@tr/shared';
+import { sendPasswordReset } from '../lib/email.js';
+import { env } from '../lib/env.js';
 
 const { users, impersonationSessions } = schema;
 
@@ -251,4 +253,87 @@ authRoutes.get('/me', async (c) => {
       isImpersonating,
     },
   });
+});
+
+// ─── Password Reset ───────────────────────────────────────────────────────────
+
+const forgotPasswordSchema = z.object({
+  email: z.string().email(),
+});
+
+/**
+ * POST /api/auth/forgot-password
+ * Generate a password reset token and send email. Always returns 200 to prevent email enumeration.
+ */
+authRoutes.post('/forgot-password', zValidator('json', forgotPasswordSchema), async (c) => {
+  const { email } = c.req.valid('json');
+
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(and(eq(users.email, email), isNull(users.deletedAt)))
+    .limit(1);
+
+  if (user && user.status === 'active') {
+    const token = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    await db
+      .update(users)
+      .set({ passwordResetToken: token, passwordResetExpiresAt: expiresAt })
+      .where(eq(users.id, user.id));
+
+    const resetUrl = `${env.APP_URL}/reset-password?token=${token}`;
+    await sendPasswordReset({
+      to: user.email,
+      name: user.firstName,
+      resetUrl,
+    });
+  }
+
+  // Always 200 to prevent email enumeration
+  return c.json({ data: { success: true } });
+});
+
+const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+});
+
+/**
+ * POST /api/auth/reset-password
+ * Validate reset token, update password, clear token.
+ */
+authRoutes.post('/reset-password', zValidator('json', resetPasswordSchema), async (c) => {
+  const { token, password } = c.req.valid('json');
+
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(
+      and(
+        eq(users.passwordResetToken, token),
+        isNull(users.deletedAt),
+        gt(users.passwordResetExpiresAt, new Date())
+      )
+    )
+    .limit(1);
+
+  if (!user) {
+    throw new BadRequestError('Invalid or expired reset token');
+  }
+
+  const passwordHash = await hash(password);
+
+  await db
+    .update(users)
+    .set({
+      passwordHash,
+      passwordResetToken: null,
+      passwordResetExpiresAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, user.id));
+
+  return c.json({ data: { success: true } });
 });

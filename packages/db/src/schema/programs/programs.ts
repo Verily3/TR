@@ -31,6 +31,15 @@ export const programStatusEnum = pgEnum('program_status', [
 /**
  * Program configuration stored as JSONB
  */
+export interface ProgramEmailSettings {
+  welcome?: boolean;
+  weeklyDigest?: boolean;
+  weeklyDigestDay?: number; // 0=Sun, 1=Mon, ...
+  inactivityReminders?: boolean;
+  kickoff?: boolean;
+  milestones?: boolean;
+}
+
 export interface ProgramConfig {
   sequentialAccess?: boolean;
   trackInScorecard?: boolean;
@@ -44,6 +53,8 @@ export interface ProgramConfig {
   // Multi-tenant settings
   allowCrossTenantEnrollment?: boolean;
   requireMentor?: boolean;
+  // Email / notification configuration
+  emailSettings?: ProgramEmailSettings;
 }
 
 /**

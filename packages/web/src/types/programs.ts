@@ -237,6 +237,7 @@ export interface Program {
   enrollmentCount?: number;
   learnerCount?: number;
   moduleCount?: number;
+  eventCount?: number;
   lessonCount?: number;
   totalPoints?: number;
   avgProgress?: number;

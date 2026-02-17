@@ -253,6 +253,12 @@ programsRoutes.get(
         moduleCount: sql<number>`(
           SELECT count(*) FROM "modules" m
           WHERE m."program_id" = "programs"."id"
+          AND m."type" = 'module'
+        )`,
+        eventCount: sql<number>`(
+          SELECT count(*) FROM "modules" m
+          WHERE m."program_id" = "programs"."id"
+          AND m."type" = 'event'
         )`,
         lessonCount: sql<number>`(
           SELECT count(*) FROM "lessons" l

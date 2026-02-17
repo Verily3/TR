@@ -7,6 +7,9 @@ import { requireTenantAccess, requirePermission } from '../middleware/permission
 import { NotFoundError, BadRequestError, ForbiddenError } from '../lib/errors.js';
 import { PERMISSIONS } from '@tr/shared';
 import type { Variables } from '../types/context.js';
+import { sendMilestoneCelebration, sendProgramCompletion } from '../lib/email.js';
+import { createNotification } from '../lib/notifications.js';
+import { env } from '../lib/env.js';
 
 const {
   programs,
@@ -1489,7 +1492,7 @@ async function checkLessonTaskCompletion(
   }
 }
 
-// Helper function to update enrollment progress
+// Helper function to update enrollment progress + send lifecycle emails
 async function updateEnrollmentProgress(enrollmentId: string) {
   const [{ completed, total }] = await db
     .select({
@@ -1502,11 +1505,83 @@ async function updateEnrollmentProgress(enrollmentId: string) {
   const percentage =
     Number(total) > 0 ? Math.round((Number(completed) / Number(total)) * 100) : 0;
 
+  // Fetch current enrollment to detect milestone crossings
+  const [enrollment] = await db
+    .select({
+      id: enrollments.id,
+      progress: enrollments.progress,
+      completedAt: enrollments.completedAt,
+      userId: enrollments.userId,
+      programId: enrollments.programId,
+    })
+    .from(enrollments)
+    .where(eq(enrollments.id, enrollmentId))
+    .limit(1);
+
+  const prevProgress = Number(enrollment?.progress ?? 0);
+  const isNowComplete = percentage >= 100 && !enrollment?.completedAt;
+
   await db
     .update(enrollments)
     .set({
       progress: percentage,
+      ...(isNowComplete ? { completedAt: new Date(), status: 'completed' } : {}),
       updatedAt: new Date(),
     })
     .where(eq(enrollments.id, enrollmentId));
+
+  // Send lifecycle emails (fire-and-forget)
+  if (enrollment) {
+    const [user] = await db
+      .select({ id: users.id, email: users.email, firstName: users.firstName })
+      .from(users)
+      .where(eq(users.id, enrollment.userId))
+      .limit(1);
+
+    const [program] = await db
+      .select({ id: programs.id, name: programs.name })
+      .from(programs)
+      .where(eq(programs.id, enrollment.programId))
+      .limit(1);
+
+    if (user && program) {
+      const programUrl = `${env.APP_URL}/programs/${program.id}`;
+
+      // Milestone emails — fire once when crossing 25/50/75/100%
+      const milestones = [25, 50, 75, 100] as const;
+      for (const m of milestones) {
+        if (prevProgress < m && percentage >= m) {
+          await sendMilestoneCelebration({
+            to: user.email,
+            name: user.firstName,
+            programName: program.name,
+            milestone: m,
+            programUrl,
+          }).catch(() => {});
+
+          await createNotification({
+            userId: user.id,
+            type: 'achievement',
+            title: `You've reached ${m}% in ${program.name}!`,
+            message: m === 100
+              ? `Congratulations! You've completed ${program.name}.`
+              : `Keep it up — you're ${m}% of the way through ${program.name}.`,
+            actionUrl: `/programs/${program.id}`,
+            actionLabel: m === 100 ? 'View Certificate' : 'Continue Learning',
+            priority: m === 100 ? 'high' : 'medium',
+          });
+        }
+      }
+
+      // Completion email
+      if (isNowComplete) {
+        await sendProgramCompletion({
+          to: user.email,
+          name: user.firstName,
+          programName: program.name,
+          programUrl,
+        }).catch(() => {});
+      }
+    }
+  }
 }

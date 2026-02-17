@@ -9,6 +9,9 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   ADMIN_SECRET: z.string().optional(),
   AUTO_MIGRATE: z.string().default('false'),
+  RESEND_API_KEY: z.string().optional(),
+  APP_URL: z.string().default('http://localhost:3003'),
+  CRON_SECRET: z.string().optional(),
 });
 
 function validateEnv() {

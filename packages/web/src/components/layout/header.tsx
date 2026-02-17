@@ -4,8 +4,9 @@ import { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Menu, LogOut, Settings, UserRoundCog, ChevronDown } from 'lucide-react';
+import { Menu, LogOut, Settings, UserRoundCog, ChevronDown, Bell } from 'lucide-react';
 import { ImpersonationSearchModal } from './ImpersonationSearchModal';
+import { useUnreadCount } from '@/hooks/api/useNotifications';
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -17,6 +18,7 @@ export const Header = memo(function Header({ onMenuClick }: HeaderProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showImpersonateModal, setShowImpersonateModal] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const { data: unreadCount = 0 } = useUnreadCount();
 
   const handleLogout = useCallback(async () => {
     setDropdownOpen(false);
@@ -64,6 +66,20 @@ export const Header = memo(function Header({ onMenuClick }: HeaderProps) {
             </div>
           </div>
         )}
+
+        {/* Notification bell */}
+        <button
+          onClick={() => router.push('/notifications')}
+          className="relative p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors mr-1"
+          aria-label="Notifications"
+        >
+          <Bell className="w-5 h-5" />
+          {unreadCount > 0 && (
+            <span className="absolute top-1 right-1 w-4 h-4 bg-red-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </button>
 
         {/* User dropdown */}
         <div className="relative ml-auto" ref={dropdownRef}>

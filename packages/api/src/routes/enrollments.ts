@@ -8,6 +8,9 @@ import { NotFoundError, BadRequestError, ConflictError } from '../lib/errors.js'
 import { PERMISSIONS } from '@tr/shared';
 import type { Variables } from '../types/context.js';
 import type { PaginationMeta } from '@tr/shared';
+import { sendProgramWelcome } from '../lib/email.js';
+import { createNotification } from '../lib/notifications.js';
+import { env } from '../lib/env.js';
 
 const { programs, enrollments, enrollmentMentorships, users } = schema;
 
@@ -239,6 +242,37 @@ enrollmentsRoutes.post(
         role,
       })
       .returning();
+
+    // Send welcome email + in-app notification for learner enrollments
+    if (role === 'learner') {
+      const emailSettings = program.config?.emailSettings;
+      const welcomeEnabled = !emailSettings || emailSettings?.welcome !== false;
+
+      if (welcomeEnabled) {
+        const startDate = program.startDate
+          ? new Date(program.startDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+          : undefined;
+        const programUrl = `${env.APP_URL}/programs/${program.id}`;
+
+        await sendProgramWelcome({
+          to: enrollUser.email,
+          name: enrollUser.firstName,
+          programName: program.name,
+          startDate,
+          programUrl,
+        });
+      }
+
+      await createNotification({
+        userId: enrollUser.id,
+        type: 'enrollment',
+        title: `You've been enrolled in ${program.name}`,
+        message: `You have been enrolled as a learner in ${program.name}.`,
+        actionUrl: `/programs/${program.id}`,
+        actionLabel: 'View Program',
+        priority: 'medium',
+      });
+    }
 
     return c.json({ data: enrollment }, 201);
   }

@@ -305,10 +305,15 @@ function ProgramTable({
 
               {/* Structure */}
               <div>
-                {Number(program.moduleCount || 0) > 0 ? (
+                {Number(program.moduleCount || 0) > 0 || Number(program.eventCount || 0) > 0 ? (
                   <>
                     <p className="text-sm font-medium text-gray-900">
-                      {Number(program.moduleCount)} module{Number(program.moduleCount) !== 1 ? 's' : ''}
+                      {Number(program.moduleCount || 0)} module{Number(program.moduleCount || 0) !== 1 ? 's' : ''}
+                      {Number(program.eventCount || 0) > 0 && (
+                        <span className="text-gray-400 font-normal">
+                          {' '}&bull; {Number(program.eventCount)} event{Number(program.eventCount) !== 1 ? 's' : ''}
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-gray-400">
                       {Number(program.lessonCount || 0) > 0

@@ -3,12 +3,15 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { eq, and, isNull, sql, desc, asc, or } from 'drizzle-orm';
 import { hash } from 'argon2';
+import crypto from 'node:crypto';
 import { db, schema } from '@tr/db';
 import { requireAgencyAccess, requirePermission } from '../middleware/permissions.js';
 import { NotFoundError, BadRequestError, ConflictError, ForbiddenError } from '../lib/errors.js';
 import { PERMISSIONS } from '@tr/shared';
 import type { Variables } from '../types/context.js';
 import type { PaginationMeta } from '@tr/shared';
+import { sendUserWelcome } from '../lib/email.js';
+import { env } from '../lib/env.js';
 
 const { agencies, tenants, users, programs, modules, lessons, enrollments, roles, userRoles, lessonTasks } = schema;
 
@@ -361,6 +364,13 @@ agenciesRoutes.post(
 
     const passwordHash = body.password ? await hash(body.password) : null;
 
+    // Generate a set-password token if no password provided (welcome email flow)
+    const needsSetPassword = !body.password;
+    const passwordResetToken = needsSetPassword ? crypto.randomUUID() : null;
+    const passwordResetExpiresAt = needsSetPassword
+      ? new Date(Date.now() + 72 * 60 * 60 * 1000)
+      : null;
+
     const result = await db.transaction(async (tx) => {
       const [newUser] = await tx
         .insert(users)
@@ -371,6 +381,8 @@ agenciesRoutes.post(
           lastName: body.lastName,
           passwordHash,
           title: body.title,
+          passwordResetToken,
+          passwordResetExpiresAt,
         })
         .returning();
 
@@ -382,10 +394,22 @@ agenciesRoutes.post(
       return newUser;
     });
 
+    // Send welcome email with set-password link if no initial password was set
+    if (needsSetPassword && passwordResetToken) {
+      const setPasswordUrl = `${env.APP_URL}/reset-password?token=${passwordResetToken}`;
+      await sendUserWelcome({
+        to: result.email,
+        name: result.firstName,
+        setPasswordUrl,
+      });
+    }
+
     return c.json({
       data: {
         ...result,
         passwordHash: undefined,
+        passwordResetToken: undefined,
+        passwordResetExpiresAt: undefined,
         roleSlug: body.role,
         roleName: role.name,
         roleLevel: role.level,
@@ -502,6 +526,12 @@ agenciesRoutes.get(
         moduleCount: sql<number>`(
           SELECT count(*) FROM "modules" m
           WHERE m."program_id" = "programs"."id"
+          AND m."type" = 'module'
+        )`,
+        eventCount: sql<number>`(
+          SELECT count(*) FROM "modules" m
+          WHERE m."program_id" = "programs"."id"
+          AND m."type" = 'event'
         )`,
         lessonCount: sql<number>`(
           SELECT count(*) FROM "lessons" l

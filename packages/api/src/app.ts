@@ -22,6 +22,8 @@ import { assessmentsRoutes } from './routes/assessments.js';
 import { assessmentResponseRoutes, publicAssessmentRoutes } from './routes/assessment-responses.js';
 import { assessmentBenchmarksRoutes } from './routes/assessment-benchmarks.js';
 import { adminDbRoutes } from './routes/admin/db.js';
+import { notificationsRoutes } from './routes/notifications.js';
+import { cronRoutes } from './routes/cron.js';
 import type { Variables } from './types/context.js';
 
 // Create Hono app with typed variables
@@ -68,6 +70,9 @@ app.route('/api/auth', authRoutes);
 // Admin DB routes (no JWT — secured by admin secret, must work before DB is ready)
 app.route('/api/admin/db', adminDbRoutes);
 
+// Cron routes (no JWT — secured by X-Cron-Secret header)
+app.route('/api/cron', cronRoutes);
+
 // Public assessment response routes (token-based, no auth required)
 app.route('/api/assessments/respond', publicAssessmentRoutes);
 
@@ -107,6 +112,9 @@ app.route('/api/admin/impersonate', impersonationRoutes);
 
 // Onboarding routes
 app.route('/api/onboarding', onboardingRoutes);
+
+// Notifications routes
+app.route('/api/notifications', notificationsRoutes);
 
 // 404 handler
 app.notFound((c) =>

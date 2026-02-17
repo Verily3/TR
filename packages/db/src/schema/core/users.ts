@@ -74,6 +74,10 @@ export const users = pgTable(
     lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
     passwordChangedAt: timestamp('password_changed_at', { withTimezone: true }),
 
+    // Password reset
+    passwordResetToken: varchar('password_reset_token', { length: 100 }),
+    passwordResetExpiresAt: timestamp('password_reset_expires_at', { withTimezone: true }),
+
     // Flexible metadata
     metadata: jsonb('metadata').$type<UserMetadata>().default({}),
 
