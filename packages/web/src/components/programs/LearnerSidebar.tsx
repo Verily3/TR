@@ -319,7 +319,7 @@ export const LearnerSidebar = memo(function LearnerSidebar({
                   <ul
                     id={`module-${module.id}-lessons`}
                     className={`overflow-hidden transition-all duration-300 ${
-                      isExpanded && module.status !== 'locked' ? 'max-h-[500px]' : 'max-h-0'
+                      isExpanded && module.status !== 'locked' ? 'max-h-[2000px]' : 'max-h-0'
                     }`}
                     role="list"
                     aria-label={`Lessons in Module ${module.number}`}
