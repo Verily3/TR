@@ -25,7 +25,6 @@ import {
   FileText,
   ExternalLink,
   ClipboardCheck,
-  Download,
   Video as VideoIcon,
   Table2,
 } from 'lucide-react';
@@ -120,7 +119,7 @@ interface LessonContentRendererProps {
 
 function LessonContentRenderer({
   lessonType,
-  contentType,
+  contentType: _contentType,
   moduleNumber,
   moduleTitle,
   content,
@@ -148,7 +147,7 @@ function LessonContentRenderer({
         <SubmissionContent
           title={lessonTitle}
           introduction={content.introduction}
-          description={content.prompt || content.formPrompt || content.instructions}
+          description={content.formPrompt || content.instructions}
           reflectionPrompts={content.reflectionPrompts}
           minCharacters={content.minLength}
           maxCharacters={content.maxLength}
@@ -159,7 +158,7 @@ function LessonContentRenderer({
         <AssignmentContent
           title={lessonTitle}
           introduction={content.introduction}
-          description={content.description || content.instructions}
+          description={content.instructions}
           questions={content.questions?.map((q: { text?: string; hint?: string } | string) =>
             typeof q === 'string'
               ? { question: q, hint: '' }

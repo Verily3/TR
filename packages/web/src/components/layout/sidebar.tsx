@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { getNavigationForRole } from '@tr/shared';
+import { useMyNav } from '@/hooks/api/usePermissions';
 import {
   Home,
   BarChart3,
@@ -47,9 +48,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuth();
 
-  const visibleNavItems = user?.roleSlug
+  // Only call useMyNav for tenant users (not agency users who have no tenantId)
+  const tenantId = user?.tenantId;
+  const { data: effectiveNav } = useMyNav(tenantId ?? '');
+
+  // effectiveNav from API is preferred; fall back to static role mapping until data arrives
+  const visibleNavItems = effectiveNav ?? (user?.roleSlug
     ? getNavigationForRole(user.roleSlug)
-    : ['dashboard'];
+    : ['dashboard']);
 
   const initials = user
     ? `${(user.firstName || '')[0] || ''}${(user.lastName || '')[0] || ''}`.toUpperCase()

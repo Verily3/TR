@@ -31,7 +31,9 @@ import {
   Download,
   Trash2,
   Loader2,
+  ShieldCheck,
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { useMyProfile, useUpdateMyProfile } from '@/hooks/api/useMyProfile';
 
@@ -262,9 +264,9 @@ const planFeatures: Record<string, string[]> = {
 // Tab Types
 // ============================================
 
-type Tab = 'profile' | 'notifications' | 'security' | 'integrations' | 'account';
+type Tab = 'profile' | 'notifications' | 'security' | 'integrations' | 'account' | 'permissions';
 
-const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
+const baseTabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'profile', label: 'Profile', icon: <User className="w-4 h-4" /> },
   { id: 'notifications', label: 'Notifications', icon: <Bell className="w-4 h-4" /> },
   { id: 'security', label: 'Security', icon: <Shield className="w-4 h-4" /> },
@@ -352,6 +354,25 @@ function Toggle({
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('profile');
+  const { user } = useAuth();
+  const router = useRouter();
+  const roleLevel = user?.roleLevel ?? 0;
+
+  // Build tabs — add Permissions only for elevated roles
+  const tabs = [
+    ...baseTabs,
+    ...(roleLevel >= 70
+      ? [{ id: 'permissions' as Tab, label: 'Permissions', icon: <ShieldCheck className="w-4 h-4" /> }]
+      : []),
+  ];
+
+  const handleTabClick = (tabId: Tab) => {
+    if (tabId === 'permissions') {
+      router.push('/settings/permissions');
+      return;
+    }
+    setActiveTab(tabId);
+  };
 
   return (
     <div className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8">
@@ -373,7 +394,7 @@ export default function SettingsPage() {
         {tabs.map((tab) => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => handleTabClick(tab.id)}
             className={`flex items-center gap-2 px-4 py-2 rounded text-sm transition-colors whitespace-nowrap ${
               activeTab === tab.id
                 ? 'bg-red-600 text-white'
