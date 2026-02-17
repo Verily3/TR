@@ -81,6 +81,7 @@ type ContentTypeConfig = {
   color: string;
 };
 
+// Display config — used for showing icons/labels on existing lessons by contentType
 const CONTENT_TYPE_CONFIG: Partial<Record<ContentType, ContentTypeConfig>> = {
   lesson: { icon: BookOpen, label: 'Reading', color: 'text-blue-600' },
   quiz: { icon: HelpCircle, label: 'Quiz', color: 'text-purple-600' },
@@ -88,6 +89,18 @@ const CONTENT_TYPE_CONFIG: Partial<Record<ContentType, ContentTypeConfig>> = {
   text_form: { icon: FileText, label: 'Text Form', color: 'text-cyan-600' },
   goal: { icon: Target, label: 'Goal', color: 'text-yellow-600' },
 };
+
+type AddMenuKey = ContentType | 'video';
+
+// Add menu config — 'reading' and 'video' are separate entries that both create a 'lesson' contentType
+const ADD_MENU_CONFIG: { key: AddMenuKey; icon: React.ComponentType<{ className?: string }>; label: string; color: string }[] = [
+  { key: 'lesson', icon: BookOpen, label: 'Reading', color: 'text-blue-600' },
+  { key: 'video', icon: Video, label: 'Video', color: 'text-indigo-600' },
+  { key: 'quiz', icon: HelpCircle, label: 'Quiz', color: 'text-purple-600' },
+  { key: 'assignment', icon: ClipboardList, label: 'Assignment', color: 'text-orange-600' },
+  { key: 'text_form', icon: FileText, label: 'Text Form', color: 'text-cyan-600' },
+  { key: 'goal', icon: Target, label: 'Goal', color: 'text-yellow-600' },
+];
 
 // ============================================
 // Toggle Switch Component
@@ -353,14 +366,16 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
     setSelectedModuleId(null);
   };
 
-  const handleAddLesson = async (contentType: ContentType) => {
+  const handleAddLesson = async (menuKey: AddMenuKey) => {
     const moduleId = selectedModuleId;
     if (!moduleId) return;
     setShowAddLessonMenu(false);
     setIsCreatingLesson(true);
+    // 'video' is a UI distinction only — both 'reading' and 'video' use the 'lesson' contentType
+    const contentType: ContentType = menuKey === 'video' ? 'lesson' : menuKey;
+    const menuConfig = ADD_MENU_CONFIG.find((c) => c.key === menuKey);
     try {
-      const typeConfig = CONTENT_TYPE_CONFIG[contentType];
-      const title = contentType === 'sub_module' ? 'New Sub-Module' : `New ${typeConfig?.label || 'Lesson'}`;
+      const title = `New ${menuConfig?.label || 'Lesson'}`;
       const basePath = isAgencyContext
         ? `/api/agencies/me/programs/${program.id}/modules/${moduleId}/lessons`
         : `/api/tenants/${tenantId}/programs/${program.id}/modules/${moduleId}/lessons`;
@@ -1075,8 +1090,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                 {isExpanded && (
                   <>
                     {sortedLessons.map((lesson) => {
+                      const isVideo = lesson.contentType === 'lesson' && !!(lesson.content as LessonContent)?.videoUrl;
                       const typeConfig = CONTENT_TYPE_CONFIG[lesson.contentType] || CONTENT_TYPE_CONFIG.lesson!;
-                      const TypeIcon = typeConfig!.icon;
+                      const TypeIcon = isVideo ? Video : typeConfig!.icon;
                       const isLessonSelected = selectedLesson?.id === lesson.id;
 
                       return (
@@ -1125,17 +1141,16 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                             <div className="px-3 py-1.5 text-xs font-medium text-gray-400 uppercase tracking-wider">
                               Content type
                             </div>
-                            {Object.entries(CONTENT_TYPE_CONFIG).map(([key, config]) => {
-                              if (!config) return null;
-                              const TypeIcon = config.icon;
+                            {ADD_MENU_CONFIG.map((item) => {
+                              const TypeIcon = item.icon;
                               return (
                                 <button
-                                  key={key}
-                                  onClick={() => handleAddLesson(key as ContentType)}
+                                  key={item.key}
+                                  onClick={() => handleAddLesson(item.key)}
                                   className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                                 >
-                                  <TypeIcon className={`w-3.5 h-3.5 ${config.color}`} />
-                                  {config.label}
+                                  <TypeIcon className={`w-3.5 h-3.5 ${item.color}`} />
+                                  {item.label}
                                 </button>
                               );
                             })}
@@ -1190,7 +1205,8 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
                   {(() => {
-                    const TypeIcon = CONTENT_TYPE_CONFIG[selectedLesson.contentType]?.icon || BookOpen;
+                    const isVideo = selectedLesson.contentType === 'lesson' && !!(selectedLesson.content as LessonContent)?.videoUrl;
+                    const TypeIcon = isVideo ? Video : (CONTENT_TYPE_CONFIG[selectedLesson.contentType]?.icon || BookOpen);
                     return <TypeIcon className="w-5 h-5 text-red-600" />;
                   })()}
                 </div>
