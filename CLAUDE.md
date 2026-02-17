@@ -224,31 +224,23 @@ Located in `packages/web/src/components/programs/`:
 
 ### Programs Module Architecture
 
-**Content Types** (9 types in `content_type` enum):
-- `lesson` - Rich content with video + text
-- `sub_module` - Container for nested content
+**Content Types** (5 types in `content_type` DB enum):
+- `lesson` - Rich content with video + text (used for both "Reading" and "Video" add-menu entries)
 - `quiz` - Scored questions
 - `assignment` - Work submission
-- `mentor_meeting` - Scheduled 1:1 meeting
 - `text_form` - Multi-line text input
 - `goal` - Goal setting with review workflow
-- `mentor_approval` - Learner submits, mentor/facilitator approves
-- `facilitator_approval` - Simple completion flag
+
+> **Note:** The add menu in the Curriculum Builder shows 6 entries: Reading, Video, Quiz, Assignment, Text Form, Goal. "Reading" and "Video" both create a `lesson` DB record — the distinction is UI-only (video lessons embed a player; reading lessons show rich text).
 
 **Drip Scheduling**:
 - Module-level: `immediate`, `days_after_enrollment`, `days_after_previous`, `on_date`
 - Lesson-level: `immediate`, `sequential`, `days_after_module_start`, `on_date`
 
-**Sub-Module Support**: 2-level nesting (depth 0 = top-level, depth 1 = sub-module)
-
 **Goal Responses** (for `goal` content type):
 - Statement, success metrics, action steps, target date
 - Review frequency (weekly, biweekly, monthly, quarterly)
 - Periodic reviews with progress tracking
-
-**Approval Workflow** (for `mentor_approval` content type):
-- Learner submits description
-- Mentor or facilitator reviews and approves/rejects with feedback
 
 ### Mentoring Components
 
@@ -408,16 +400,17 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
     - Linked Goals section with progress
   - Module View LMS (`/programs/[programId]/learn`) - Full learning interface
     - Left sidebar (w-80) with course outline, expandable modules/lessons
-    - 6 lesson types: reading, video, meeting, submission, assignment, goal
+    - 5 lesson types: reading, video, submission (text_form), assignment, goal
+    - Video resources render as inline iframes (YouTube/Vimeo); other resources open as external links
+    - Preview mode (`?previewRole=learner`) bypasses sequential module locking
     - Top navigation bar (breadcrumb, points badge, completed badge)
     - Bottom navigation bar (Previous/Next, lesson counter)
     - Completion modal for marking lessons done
 - **Program Builder Features:**
-  - 9 content types (lesson, quiz, goal, mentor_approval, etc.)
-  - Sub-module support (2-level nesting)
+  - 5 DB content types (`lesson`, `quiz`, `assignment`, `text_form`, `goal`); 6-entry add menu (Reading + Video both create `lesson`)
+  - Video resources in builder show inline iframe preview (YouTube/Vimeo via `getEmbedUrl`)
   - Drip scheduling (module and lesson level)
   - Goal responses and reviews API
-  - Approval workflow API (mentor/facilitator can approve)
   - Progress tracking with completion marking
   - Module/lesson CRUD, reorder, duplicate
   - 27+ React Query hooks for programs
@@ -446,7 +439,7 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
   - Real Create, Duplicate, Delete actions via mutations
   - 6-step Create Program Wizard matching prototype design
   - Program Builder Editor (`/program-builder/[programId]`) with 6 tabs: Curriculum, Participants, Info, Goals, Resources, Reports
-  - Curriculum tab: content type picker dropdown (9 types), inline lesson editors per type
+  - Curriculum tab: content type picker dropdown (6 add-menu entries), inline lesson editors per type
   - Wizard stores objectives, email settings, reminders, audience in program `config` JSONB
 - **Settings Profile connected to real API:**
   - useMyProfile() → GET /api/users/me (full profile with phone, timezone, metadata)
@@ -487,20 +480,36 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
   - 17 React Query hooks for full assessment lifecycle
   - Seed data: 4 templates (Leadership 360, Manager 180, LeaderShift 360, LeaderShift 180), 5 assessments with realistic responses
 
+- **Email & Notification Infrastructure:**
+  - `packages/db/src/schema/core/notifications.ts` — `notifications` + `notification_preferences` tables
+  - DB migration `0010` applied (also removed 4 deprecated content types)
+  - `packages/api/src/lib/email.ts` — Resend email service (lazy init, 10 typed send helpers)
+  - `packages/api/src/emails/` — 10 React Email templates (assessment invitation/reminder, user welcome, password reset, program welcome/kickoff, weekly digest, inactivity, milestone, completion)
+  - `packages/api/src/lib/notifications.ts` — `createNotification()` helper
+  - `packages/api/src/routes/notifications.ts` — 7 REST routes (list, unread-count, mark read, mark all, archive, preferences CRUD)
+  - `packages/api/src/routes/cron.ts` — `POST /api/cron/notifications` secured by `X-Cron-Secret` (weekly digest, inactivity, due-date jobs)
+  - Transactional emails hooked into: assessment invitations, user creation (agencies), enrollment
+  - Forgot-password / reset-password routes added to `packages/api/src/routes/auth.ts`
+  - `packages/web/src/app/(auth)/forgot-password/page.tsx` + `reset-password/page.tsx`
+  - `packages/web/src/hooks/api/useNotifications.ts` — 7 React Query hooks
+  - Env vars added to `packages/api/src/lib/env.ts`: `RESEND_API_KEY`, `APP_URL`, `CRON_SECRET`
+
 ### In Progress
 - Specialized content type editors (quiz builder, form builder)
 - Connect Programs UI to real enrollment/progress data (currently using mock data)
+- Connect Notifications page to real API (hooks built, page still uses mock data)
 
 ### Pages Using Mock Data (No API Routes Yet)
 - Scorecard - no API routes, no DB schema
 - Planning & Goals - DB schema exists (planning/), no API routes
 - Mentoring - DB schema exists (mentoring/), no API routes
 - Analytics - no API routes, no DB schema
-- Notifications - no API routes, no DB schema
+- Notifications - DB schema + API routes built; frontend page not yet connected to real API
 - Help & Support - static content, no API needed
 
 ### Not Yet Implemented
-- API routes for: Mentoring, Planning, Scorecard, Analytics, Notifications
+- API routes for: Mentoring, Planning, Scorecard, Analytics
+- Connect Notifications page to real API (`/api/notifications` routes exist)
 - Session prep form (edit mode)
 - Mentoring relationship management UI
 - Real Firebase integration
