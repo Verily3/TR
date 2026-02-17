@@ -14,6 +14,7 @@ import {
   useCreateDiscussionPost,
 } from '@/hooks/api/usePrograms';
 import { useTenants } from '@/hooks/api/useTenants';
+import { getEmbedUrl, getVideoProvider } from '@/lib/video-utils';
 import type { ContentType, LessonContent, LessonProgressStatus, ApprovalRequired, EnrollmentRole, DiscussionPost, EventConfig, LessonTask, TaskWithProgress } from '@/types/programs';
 import {
   Award,
@@ -712,10 +713,48 @@ export default function ModuleViewLMS() {
                 <h4 className="text-base font-semibold text-sidebar-foreground mb-3">Resources &amp; Attachments</h4>
                 <div className="space-y-2">
                   {currentLesson.content.resources.map((resource, index) => {
+                    // Video resources render as inline embeds, not download links
+                    if (resource.type === 'video' && resource.url) {
+                      const embedUrl = getEmbedUrl(resource.url);
+                      const provider = getVideoProvider(resource.url);
+                      return (
+                        <div key={index} className="rounded-xl overflow-hidden border border-border">
+                          {embedUrl && provider ? (
+                            <>
+                              <div className="aspect-video bg-black">
+                                <iframe
+                                  src={embedUrl}
+                                  className="w-full h-full"
+                                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                  allowFullScreen
+                                  title={resource.title || 'Video resource'}
+                                />
+                              </div>
+                              <div className="px-4 py-2.5 bg-card border-t border-border flex items-center gap-2">
+                                <div className="w-7 h-7 rounded-lg bg-purple-50 flex items-center justify-center flex-shrink-0">
+                                  <VideoIcon className="w-3.5 h-3.5 text-purple-600" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium text-sidebar-foreground truncate">
+                                    {resource.title || 'Video'}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground capitalize">{provider}</p>
+                                </div>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="p-4 text-sm text-muted-foreground">
+                              Could not load video: {resource.url}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    // All other resource types render as links
                     const iconMap: Record<string, typeof FileText> = {
                       pdf: FileText,
                       doc: FileText,
-                      video: VideoIcon,
                       link: ExternalLink,
                       spreadsheet: Table2,
                     };
@@ -723,7 +762,6 @@ export default function ModuleViewLMS() {
                     const typeColors: Record<string, string> = {
                       pdf: 'bg-red-50 text-red-600',
                       doc: 'bg-blue-50 text-blue-600',
-                      video: 'bg-purple-50 text-purple-600',
                       link: 'bg-gray-100 text-gray-600',
                       spreadsheet: 'bg-green-50 text-green-600',
                     };
@@ -746,7 +784,7 @@ export default function ModuleViewLMS() {
                           </p>
                           <p className="text-xs text-muted-foreground capitalize">{resource.type || 'link'}</p>
                         </div>
-                        <Download className="w-4 h-4 text-muted-foreground group-hover:text-accent transition-colors flex-shrink-0" />
+                        <ExternalLink className="w-4 h-4 text-muted-foreground group-hover:text-accent transition-colors flex-shrink-0" />
                       </a>
                     );
                   })}
