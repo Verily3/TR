@@ -1556,6 +1556,38 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                             <option value="spreadsheet">Spreadsheet</option>
                           </select>
                         </div>
+                        {/* Video preview for video-type resources */}
+                        {res.type === 'video' && res.url && (() => {
+                          const embedUrl = getEmbedUrl(res.url);
+                          const provider = getVideoProvider(res.url);
+                          if (embedUrl && provider) {
+                            return (
+                              <div className="mt-2 rounded-lg overflow-hidden border border-gray-200">
+                                <div className="aspect-video bg-black">
+                                  <iframe
+                                    src={embedUrl}
+                                    className="w-full h-full"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowFullScreen
+                                    title={res.title || 'Video preview'}
+                                  />
+                                </div>
+                                <div className="px-3 py-1.5 bg-gray-50 border-t border-gray-200 flex items-center gap-2">
+                                  <Video className="w-3.5 h-3.5 text-gray-400" />
+                                  <span className="text-xs text-gray-500 capitalize">{provider}</span>
+                                </div>
+                              </div>
+                            );
+                          }
+                          if (res.url) {
+                            return (
+                              <p className="text-xs text-amber-600 mt-1.5">
+                                Could not recognize video URL. Paste a YouTube or Vimeo link.
+                              </p>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
                       <button
                         onClick={() => {
