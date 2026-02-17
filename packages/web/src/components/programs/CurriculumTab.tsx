@@ -30,6 +30,9 @@ import {
   Copy,
   AlertCircle,
   Calendar,
+  Lightbulb,
+  Brain,
+  Layers,
 } from 'lucide-react';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { getEmbedUrl, getVideoProvider } from '@/lib/video-utils';
@@ -90,16 +93,44 @@ const CONTENT_TYPE_CONFIG: Partial<Record<ContentType, ContentTypeConfig>> = {
   goal: { icon: Target, label: 'Goal', color: 'text-yellow-600' },
 };
 
-type AddMenuKey = ContentType | 'video';
+type AddMenuKey =
+  | ContentType
+  | 'video'
+  | 'key_concepts'
+  | 'most_useful_idea'
+  | 'how_you_used'
+  | 'food_for_thought';
 
-// Add menu config — 'reading' and 'video' are separate entries that both create a 'lesson' contentType
-const ADD_MENU_CONFIG: { key: AddMenuKey; icon: React.ComponentType<{ className?: string }>; label: string; color: string }[] = [
-  { key: 'lesson', icon: BookOpen, label: 'Reading', color: 'text-blue-600' },
-  { key: 'video', icon: Video, label: 'Video', color: 'text-indigo-600' },
-  { key: 'quiz', icon: HelpCircle, label: 'Quiz', color: 'text-purple-600' },
-  { key: 'assignment', icon: ClipboardList, label: 'Assignment', color: 'text-orange-600' },
-  { key: 'text_form', icon: FileText, label: 'Text Form', color: 'text-cyan-600' },
-  { key: 'goal', icon: Target, label: 'Goal', color: 'text-yellow-600' },
+// Maps add-menu keys to their DB contentType and default lesson title.
+// Multiple menu entries can share the same DB contentType (e.g. Reading + Video = lesson).
+const ADD_MENU_MAP: Record<AddMenuKey, { contentType: ContentType; defaultTitle: string }> = {
+  lesson:           { contentType: 'lesson',      defaultTitle: 'New Reading'            },
+  video:            { contentType: 'lesson',      defaultTitle: 'New Video'              },
+  key_concepts:     { contentType: 'lesson',      defaultTitle: 'Key Concepts'           },
+  quiz:             { contentType: 'quiz',        defaultTitle: 'New Quiz'               },
+  assignment:       { contentType: 'assignment',  defaultTitle: 'New Assignment'         },
+  food_for_thought: { contentType: 'assignment',  defaultTitle: 'Food for Thought'       },
+  text_form:        { contentType: 'text_form',   defaultTitle: 'New Text Form'          },
+  most_useful_idea: { contentType: 'text_form',   defaultTitle: 'Most Useful Idea'       },
+  how_you_used:     { contentType: 'text_form',   defaultTitle: 'How You Used This Idea' },
+  goal:             { contentType: 'goal',        defaultTitle: 'New Goal'               },
+};
+
+// Add menu config — displayed in the "Add lesson" dropdown in the builder.
+const ADD_MENU_CONFIG: { key: AddMenuKey; icon: React.ComponentType<{ className?: string }>; label: string; color: string; group: string }[] = [
+  // Content
+  { key: 'lesson',           icon: BookOpen,     label: 'Reading',              color: 'text-blue-600',   group: 'Content'      },
+  { key: 'video',            icon: Video,        label: 'Video',                color: 'text-indigo-600', group: 'Content'      },
+  { key: 'key_concepts',     icon: Layers,       label: 'Key Concepts',         color: 'text-violet-600', group: 'Content'      },
+  { key: 'quiz',             icon: HelpCircle,   label: 'Quiz',                 color: 'text-purple-600', group: 'Content'      },
+  // Reflections
+  { key: 'most_useful_idea', icon: Lightbulb,    label: 'Most Useful Idea',     color: 'text-amber-600',  group: 'Reflection'   },
+  { key: 'how_you_used',     icon: GraduationCap,label: 'How You Used This Idea', color: 'text-teal-600', group: 'Reflection'   },
+  { key: 'text_form',        icon: FileText,     label: 'Text Form',            color: 'text-cyan-600',   group: 'Reflection'   },
+  // Activities
+  { key: 'assignment',       icon: ClipboardList,label: 'Assignment',           color: 'text-orange-600', group: 'Activity'     },
+  { key: 'food_for_thought', icon: Brain,        label: 'Food for Thought',     color: 'text-rose-600',   group: 'Activity'     },
+  { key: 'goal',             icon: Target,       label: 'Goal',                 color: 'text-yellow-600', group: 'Activity'     },
 ];
 
 // ============================================
@@ -371,11 +402,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
     if (!moduleId) return;
     setShowAddLessonMenu(false);
     setIsCreatingLesson(true);
-    // 'video' is a UI distinction only — both 'reading' and 'video' use the 'lesson' contentType
-    const contentType: ContentType = menuKey === 'video' ? 'lesson' : menuKey;
-    const menuConfig = ADD_MENU_CONFIG.find((c) => c.key === menuKey);
+    const { contentType, defaultTitle } = ADD_MENU_MAP[menuKey];
     try {
-      const title = `New ${menuConfig?.label || 'Lesson'}`;
+      const title = defaultTitle;
       const basePath = isAgencyContext
         ? `/api/agencies/me/programs/${program.id}/modules/${moduleId}/lessons`
         : `/api/tenants/${tenantId}/programs/${program.id}/modules/${moduleId}/lessons`;
@@ -1137,21 +1166,28 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                       {showAddLessonMenu && selectedModuleId === mod.id && (
                         <>
                           <div className="fixed inset-0 z-10" onClick={() => setShowAddLessonMenu(false)} />
-                          <div className="absolute left-12 top-full mt-0.5 w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20 max-h-64 overflow-y-auto">
-                            <div className="px-3 py-1.5 text-xs font-medium text-gray-400 uppercase tracking-wider">
-                              Content type
-                            </div>
-                            {ADD_MENU_CONFIG.map((item) => {
-                              const TypeIcon = item.icon;
+                          <div className="absolute left-12 top-full mt-0.5 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20 max-h-80 overflow-y-auto">
+                            {(['Content', 'Reflection', 'Activity'] as const).map((group) => {
+                              const items = ADD_MENU_CONFIG.filter((c) => c.group === group);
                               return (
-                                <button
-                                  key={item.key}
-                                  onClick={() => handleAddLesson(item.key)}
-                                  className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                                >
-                                  <TypeIcon className={`w-3.5 h-3.5 ${item.color}`} />
-                                  {item.label}
-                                </button>
+                                <div key={group}>
+                                  <div className="px-3 py-1.5 text-xs font-medium text-gray-400 uppercase tracking-wider">
+                                    {group}
+                                  </div>
+                                  {items.map((item) => {
+                                    const TypeIcon = item.icon;
+                                    return (
+                                      <button
+                                        key={item.key}
+                                        onClick={() => handleAddLesson(item.key)}
+                                        className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                      >
+                                        <TypeIcon className={`w-3.5 h-3.5 ${item.color}`} />
+                                        {item.label}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
                               );
                             })}
                           </div>
