@@ -1,7 +1,11 @@
 import { Resend } from 'resend';
 import { env } from './env.js';
 
-const resend = new Resend(env.RESEND_API_KEY);
+let _resend: Resend | null = null;
+function getResend(): Resend {
+  if (!_resend) _resend = new Resend(env.RESEND_API_KEY);
+  return _resend;
+}
 
 const FROM = 'Transformation OS <noreply@transformingresults.com>';
 
@@ -19,7 +23,7 @@ async function send(options: {
     return;
   }
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await getResend().emails.send({
       from: FROM,
       to: options.to,
       subject: options.subject,
