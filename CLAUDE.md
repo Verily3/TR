@@ -129,6 +129,11 @@ The mentoring module supports ongoing 1:1 mentoring relationships outside of pro
 
 **Session Statuses**: scheduled → prep_in_progress → ready → completed (or cancelled/no_show)
 
+**Role Scoping in Mentoring API**:
+- `mentor` — sees only relationships where they are the mentor (MENTORING_VIEW_ASSIGNED)
+- `facilitator` — sees all mentor-mentee relationships within programs they facilitate (scoped via enrollmentMentorships)
+- `tenant_admin` — sees all relationships in the tenant (MENTORING_VIEW_ALL)
+
 ## Tech Stack Details
 
 | Component | Technology | Notes |
@@ -231,7 +236,12 @@ Located in `packages/web/src/components/programs/`:
 - `text_form` - Multi-line text input
 - `goal` - Goal setting with review workflow
 
-> **Note:** The add menu in the Curriculum Builder shows 6 entries: Reading, Video, Quiz, Assignment, Text Form, Goal. "Reading" and "Video" both create a `lesson` DB record — the distinction is UI-only (video lessons embed a player; reading lessons show rich text).
+> **Note:** The add menu in the Curriculum Builder shows 10 entries grouped into sections:
+> - **Content**: Reading, Video, Key Concepts (all create `lesson` records)
+> - **Reflection**: Quiz, Most Useful Idea, How You Used This Idea, Text Form (latter two create `text_form`)
+> - **Activity**: Assignment, Food for Thought (both create `assignment`), Goal
+>
+> "Reading", "Video", and "Key Concepts" all create a `lesson` DB record. "Most Useful Idea" and "How You Used This Idea" both create `text_form`. "Assignment" and "Food for Thought" both create `assignment`. The add-menu label becomes the lesson title.
 
 **Drip Scheduling**:
 - Module-level: `immediate`, `days_after_enrollment`, `days_after_previous`, `on_date`
@@ -330,10 +340,12 @@ pnpm --filter @tr/api dev
 pnpm --filter @tr/web dev
 
 # Database operations
-pnpm --filter @tr/db db:generate   # Generate migrations
-pnpm --filter @tr/db db:migrate    # Run migrations
-pnpm --filter @tr/db db:seed       # Seed data
-pnpm --filter @tr/db db:studio     # Open Drizzle Studio
+pnpm --filter @tr/db db:generate          # Generate migrations
+pnpm --filter @tr/db db:migrate           # Run migrations
+pnpm --filter @tr/db db:seed              # Seed core data (users, tenants, programs, assessments)
+pnpm --filter @tr/db db:seed-leadershift  # Seed LeaderShift LMS program (separate script)
+pnpm --filter @tr/db db:seed-all          # Run both seeds in sequence
+pnpm --filter @tr/db db:studio            # Open Drizzle Studio
 ```
 
 ## Port Configuration
@@ -350,17 +362,18 @@ pnpm --filter @tr/db db:studio     # Open Drizzle Studio
 ```
 PORT=3002
 DATABASE_URL=postgres://user:pass@localhost:5432/transformation_os
-FIREBASE_PROJECT_ID=...
-FIREBASE_PRIVATE_KEY=...
-FIREBASE_CLIENT_EMAIL=...
+JWT_ACCESS_SECRET=your-access-secret
+JWT_REFRESH_SECRET=your-refresh-secret
+WEB_URL=http://localhost:3003
+NODE_ENV=development
+RESEND_API_KEY=re_...          # Optional — emails silently skipped if unset
+APP_URL=http://localhost:3003
+CRON_SECRET=your-cron-secret   # Secures POST /api/cron/notifications
 ```
 
 ### Web (`packages/web/.env.local`)
 ```
 NEXT_PUBLIC_API_URL=http://localhost:3002
-NEXT_PUBLIC_FIREBASE_API_KEY=...
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
 ```
 
 ## Current Implementation Status
@@ -399,15 +412,15 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
     - Program Overview (What You'll Learn + Program Structure)
     - Linked Goals section with progress
   - Module View LMS (`/programs/[programId]/learn`) - Full learning interface
-    - Left sidebar (w-80) with course outline, expandable modules/lessons
-    - 5 lesson types: reading, video, submission (text_form), assignment, goal
+    - Left sidebar (w-80) with course outline, expandable modules/lessons (max-h-[2000px] to accommodate long lesson lists)
+    - 5 DB content types rendered: reading/video/key_concepts (lesson), submission (text_form), assignment/food_for_thought, goal
     - Video resources render as inline iframes (YouTube/Vimeo); other resources open as external links
     - Preview mode (`?previewRole=learner`) bypasses sequential module locking
     - Top navigation bar (breadcrumb, points badge, completed badge)
     - Bottom navigation bar (Previous/Next, lesson counter)
     - Completion modal for marking lessons done
 - **Program Builder Features:**
-  - 5 DB content types (`lesson`, `quiz`, `assignment`, `text_form`, `goal`); 6-entry add menu (Reading + Video both create `lesson`)
+  - 5 DB content types (`lesson`, `quiz`, `assignment`, `text_form`, `goal`); 10-entry grouped add menu (see Programs Module Architecture above)
   - Video resources in builder show inline iframe preview (YouTube/Vimeo via `getEmbedUrl`)
   - Drip scheduling (module and lesson level)
   - Goal responses and reviews API
@@ -418,18 +431,20 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
   - API: POST /api/admin/impersonate, POST /end, GET /status, GET /history
   - API: GET /api/agencies/me/users/search (cross-tenant user search for impersonation)
   - Header dropdown → "Login As User" → search modal with real-time filtering
-  - ImpersonationSearchModal: search users across tenants, grouped results, confirmation flow
+  - ImpersonationSearchModal: search users across tenants, grouped by client (accordion), all collapsed by default, confirmation flow
   - ImpersonationBanner: amber bar showing "Viewing as [name]" + "Switch Back" button
+  - Header dropdown shows "Return to Agency View" (amber) when impersonating, replacing "Login As User"
   - API client injects X-Impersonation-Token header from sessionStorage
   - Audit logging of all impersonation sessions
+  - `/end` route works while impersonating (no `requireAgencyAccess()` guard — derives admin ID from `impersonatedBy.userId`)
 - **Dashboard Pages (10 pages built):**
   - Scorecard (`/scorecard`) - Role/Mission, KPIs, Competencies
   - Planning & Goals (`/planning`) - Quarterly planning, goal management
-  - Mentoring (`/mentoring`) - Sessions, relationships, action items
+  - Mentoring (`/mentoring`) - Role-aware: mentor sees My Mentees/Sessions/Action Items; facilitator sees Overview/Mentors/Sessions/Action Items (real API data)
   - Assessments (`/assessments`) - 180/360 types, filter tabs, detail view with Results/Development tabs, CCI + Current Ceiling display
   - People (`/people`) - User directory with grid/list views
   - Analytics (`/analytics`) - Charts and metrics dashboard
-  - Settings (`/settings`) - Profile (connected to real API), Notifications, Security, Integrations, Account
+  - Settings (`/settings`) - Profile (connected to real API), Notifications, Security, Integrations, Account; Permissions tab (tenant_admin+) → `/settings/permissions`
   - Notifications (`/notifications`) - Notification center with filters
   - Help & Support (`/help`) - Knowledge base, FAQs, tickets
   - Program Builder (`/program-builder`) - Connected to real programs API
@@ -439,7 +454,7 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
   - Real Create, Duplicate, Delete actions via mutations
   - 6-step Create Program Wizard matching prototype design
   - Program Builder Editor (`/program-builder/[programId]`) with 6 tabs: Curriculum, Participants, Info, Goals, Resources, Reports
-  - Curriculum tab: content type picker dropdown (6 add-menu entries), inline lesson editors per type
+  - Curriculum tab: content type picker dropdown (10 add-menu entries in 3 groups), inline lesson editors per type
   - Wizard stores objectives, email settings, reminders, audience in program `config` JSONB
 - **Settings Profile connected to real API:**
   - useMyProfile() → GET /api/users/me (full profile with phone, timezone, metadata)
@@ -480,6 +495,35 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
   - 17 React Query hooks for full assessment lifecycle
   - Seed data: 4 templates (Leadership 360, Manager 180, LeaderShift 360, LeaderShift 180), 5 assessments with realistic responses
 
+- **Role-Based Navigation & Permission Management (full stack):**
+  - Learner role no longer sees Mentoring in sidebar nav
+  - **Mentoring API** (`packages/api/src/routes/mentoring.ts`) — role-scoped endpoints at `/api/tenants/:tenantId/mentoring`:
+    - `getScopedRelationshipIds()` helper: returns `'all'` for tenant_admin, program-scoped IDs for facilitator, own-mentee IDs for mentor
+    - GET `/relationships` — list relationships (scoped by role)
+    - POST `/relationships`, DELETE `/relationships/:id` — manage pairings (MENTORING_MANAGE permission)
+    - GET/POST `/sessions`, PUT/DELETE `/sessions/:id` — session CRUD (role-scoped)
+    - GET/POST `/sessions/:id/notes` — session notes
+    - GET/POST `/action-items`, PUT `/action-items/:id` — action item CRUD
+    - GET `/stats` — aggregate stats for user's scope
+  - **Permissions API** (`packages/api/src/routes/permissions.ts`) — at `/api/tenants/:tenantId/permissions`:
+    - `resolveNavForUser()` helper: 3-layer resolution (hardcoded defaults → role DB override → user DB override)
+    - GET `/my-nav` — effective nav items for authenticated user
+    - GET/PUT/DELETE `/roles/:roleSlug` — tenant_admin+ can configure per-role nav
+    - GET/PUT/DELETE `/users/:userId` — tenant_admin+ can grant/revoke items for specific users
+  - **DB tables** (`packages/db/src/schema/core/permissions.ts`, migration 0011):
+    - `tenant_role_permissions` — per-tenant role nav overrides (replaces hardcoded defaults when row exists)
+    - `tenant_user_permissions` — per-user grant/revoke lists layered on top of role defaults
+  - **Mentoring page** (`/mentoring`) — role-aware UI with real API data:
+    - Mentor view: "My Mentees" / "Sessions" / "Action Items" tabs
+    - Facilitator view: "Overview" / "Mentors" / "Sessions" / "Action Items" tabs
+    - Agency users: tenant selector dropdown in header (auto-selects first tenant)
+  - **Permissions admin screen** (`/settings/permissions`) — tenant_admin+ only:
+    - Tab 1 "Role Permissions": nav item × role matrix with toggle switches; auto-saves per toggle; "Reset to defaults" per role
+    - Tab 2 "User Overrides": user list with Custom badges; UserPermissionsModal with grant/revoke checkboxes and live nav preview
+  - **Sidebar** uses `useMyNav(tenantId)` hook (staleTime 5 min); falls back to hardcoded constants for agency users / initial render
+  - Settings page shows "Permissions" tab only when `user.roleLevel >= 70`
+  - **Hooks**: `useMentoringRelationships`, `useMentoringSessions`, `useMentoringActionItems`, `useMentoringStats`, `useMyNav`, `useRolePermissions`, `useUpdateRolePermissions`, `useResetRolePermissions`, `useUserPermissionOverrides`, `useUpdateUserPermissions`, `useDeleteUserPermissions`
+
 - **Email & Notification Infrastructure:**
   - `packages/db/src/schema/core/notifications.ts` — `notifications` + `notification_preferences` tables
   - DB migration `0010` applied (also removed 4 deprecated content types)
@@ -497,26 +541,22 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
 ### In Progress
 - Specialized content type editors (quiz builder, form builder)
 - Connect Programs UI to real enrollment/progress data (currently using mock data)
-- Connect Notifications page to real API (hooks built, page still uses mock data)
+- Connect Notifications page to real API (hooks + API routes built; frontend page still uses mock data)
 
 ### Pages Using Mock Data (No API Routes Yet)
-- Scorecard - no API routes, no DB schema
-- Planning & Goals - DB schema exists (planning/), no API routes
-- Mentoring - DB schema exists (mentoring/), no API routes
-- Analytics - no API routes, no DB schema
-- Notifications - DB schema + API routes built; frontend page not yet connected to real API
-- Help & Support - static content, no API needed
+- Scorecard — no API routes, no DB schema
+- Planning & Goals — DB schema exists (`planning/`), no API routes
+- Analytics — no API routes, no DB schema
+- Notifications — DB schema + API routes built; frontend page not yet wired to real API
+- Help & Support — static content, no API needed
 
 ### Not Yet Implemented
-- API routes for: Mentoring, Planning, Scorecard, Analytics
-- Connect Notifications page to real API (`/api/notifications` routes exist)
-- Session prep form (edit mode)
-- Mentoring relationship management UI
-- Real Firebase integration
-- Program templates and duplication
+- API routes for: Planning, Scorecard, Analytics
+- Session prep form (edit mode for mentees)
 - Certificate/diploma generation
-- Rich content editor (WYSIWYG)
-- Lesson resources/attachments UI
+- Rich content editor (WYSIWYG for lessons)
+- Lesson resources/attachments upload UI
+- Real-time updates (WebSocket / SSE)
 - Programs admin view: settings and advanced features (basic editor built)
 
 ### Test Accounts (after running `pnpm --filter @tr/db db:seed`)
@@ -536,7 +576,7 @@ NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
 4. **Imports**: Absolute imports using `@/` alias
 5. **State**: Zustand for global state, React Query for server state
 6. **API calls**: Use the API client from `@/lib/api.ts`
-7. **Hooks**: Use hooks from `@/hooks/api/` for data fetching (usePrograms, useGoals, useTenants, useMentoringSessions, useActionItems, useTemplates, useAssessments, useAssessmentResults, useComputeResults, useDownloadReport, useAssessmentBenchmarks, useAgencyPrograms, useAgencyUserSearch, useMyProfile, useImpersonate, etc.)
+7. **Hooks**: Use hooks from `@/hooks/api/` for data fetching (usePrograms, useGoals, useTenants, useMentoringSessions, useActionItems, useMentoringRelationships, useMentoringStats, useTemplates, useAssessments, useAssessmentResults, useComputeResults, useDownloadReport, useAssessmentBenchmarks, useAgencyPrograms, useAgencyUserSearch, useMyProfile, useImpersonate, useMyNav, useRolePermissions, useUserPermissionOverrides, etc.)
 
 ## UI Prototype (components/)
 
@@ -608,6 +648,23 @@ All components are mobile-responsive with:
 2. Export from `packages/db/src/schema/index.ts`
 3. Run `pnpm --filter @tr/db db:generate`
 4. Run `pnpm --filter @tr/db db:migrate`
+
+### Agency-user tenant selector pattern
+Pages that need `tenantId` must support agency users (who have `agencyId` but no `tenantId`):
+```tsx
+const isAgencyUser = !!(user?.agencyId && !user?.tenantId);
+const { data: tenants } = useTenants();
+const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+
+useEffect(() => {
+  if (isAgencyUser && tenants?.length && !selectedTenantId) {
+    setSelectedTenantId(tenants[0].id);
+  }
+}, [isAgencyUser, tenants, selectedTenantId]);
+
+const tenantId = isAgencyUser ? selectedTenantId : (user?.tenantId ?? null);
+```
+Show a `<select>` dropdown in the page header when `isAgencyUser && tenants?.length > 0`. Already applied to: `/mentoring`, `/settings/permissions`.
 
 ### Adding a UI Prototype Module
 1. Create folder at `components/[module-name]/`

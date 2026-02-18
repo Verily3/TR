@@ -24,6 +24,8 @@ import { assessmentBenchmarksRoutes } from './routes/assessment-benchmarks.js';
 import { adminDbRoutes } from './routes/admin/db.js';
 import { notificationsRoutes } from './routes/notifications.js';
 import { cronRoutes } from './routes/cron.js';
+import { mentoringRoutes } from './routes/mentoring.js';
+import { permissionsRoutes } from './routes/permissions.js';
 import type { Variables } from './types/context.js';
 
 // Create Hono app with typed variables
@@ -115,6 +117,12 @@ app.route('/api/onboarding', onboardingRoutes);
 
 // Notifications routes
 app.route('/api/notifications', notificationsRoutes);
+
+// Mentoring routes (role-scoped)
+app.route('/api/tenants/:tenantId/mentoring', mentoringRoutes);
+
+// Permissions routes (role/user nav overrides)
+app.route('/api/tenants/:tenantId/permissions', permissionsRoutes);
 
 // 404 handler
 app.notFound((c) =>

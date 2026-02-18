@@ -27,12 +27,19 @@ async function start() {
 
   console.log(`🚀 API server starting on port ${port}...`);
 
-  serve({
+  const server = serve({
     fetch: app.fetch,
     port,
   });
 
   console.log(`✅ API server running at http://localhost:${port}`);
+
+  // Graceful shutdown so tsx watch can restart without EADDRINUSE
+  const shutdown = () => {
+    server.close(() => process.exit(0));
+  };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 }
 
 start();

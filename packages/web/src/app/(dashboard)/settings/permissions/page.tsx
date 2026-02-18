@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Shield,
   Lock,
@@ -12,6 +12,7 @@ import {
   User,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { useTenants } from '@/hooks/api/useTenants';
 import {
   useRolePermissions,
   useUpdateRolePermissions,
@@ -628,9 +629,23 @@ type PermTab = 'roles' | 'users';
 export default function PermissionsPage() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<PermTab>('roles');
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
 
-  const tenantId = user?.tenantId;
+  const isAgencyUser = !!(user?.agencyId && !user?.tenantId);
+  const { data: tenants } = useTenants();
+
+  // Auto-select first tenant for agency users
+  useEffect(() => {
+    if (isAgencyUser && tenants && tenants.length > 0 && !selectedTenantId) {
+      setSelectedTenantId(tenants[0].id);
+    }
+  }, [isAgencyUser, tenants, selectedTenantId]);
+
+  const tenantId = isAgencyUser ? selectedTenantId : (user?.tenantId ?? null);
   const roleLevel = user?.roleLevel ?? 0;
+
+  // Load roles for both tabs (needed by UserOverridesTab) — must be before any early returns
+  const { data: roles = [] } = useRolePermissions(tenantId ?? '');
 
   // Access guard — must be roleLevel >= 70
   if (roleLevel < 70) {
@@ -650,19 +665,6 @@ export default function PermissionsPage() {
     );
   }
 
-  if (!tenantId) {
-    return (
-      <div className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8">
-        <div className="text-center py-16 text-muted-foreground">
-          No tenant context. Please select a tenant first.
-        </div>
-      </div>
-    );
-  }
-
-  // Load roles for both tabs (needed by UserOverridesTab)
-  const { data: roles = [] } = useRolePermissions(tenantId);
-
   const tabs: { id: PermTab; label: string }[] = [
     { id: 'roles', label: 'Role Permissions' },
     { id: 'users', label: 'User Overrides' },
@@ -671,8 +673,8 @@ export default function PermissionsPage() {
   return (
     <div className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8">
       {/* Page Header */}
-      <header className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
+      <header className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center gap-3">
           <div className="p-2 bg-red-50 rounded-lg">
             <Shield className="w-6 h-6 text-accent" />
           </div>
@@ -685,6 +687,17 @@ export default function PermissionsPage() {
             </p>
           </div>
         </div>
+        {isAgencyUser && tenants && tenants.length > 0 && (
+          <select
+            value={selectedTenantId || ''}
+            onChange={(e) => setSelectedTenantId(e.target.value)}
+            className="px-3 py-2 border border-border rounded-lg text-sm text-sidebar-foreground bg-card focus:outline-none focus:ring-2 focus:ring-accent"
+          >
+            {tenants.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        )}
       </header>
 
       {/* Tabs */}
@@ -704,8 +717,13 @@ export default function PermissionsPage() {
         ))}
       </div>
 
-      {activeTab === 'roles' && <RolePermissionsTab tenantId={tenantId} />}
-      {activeTab === 'users' && <UserOverridesTab tenantId={tenantId} roles={roles} />}
+      {tenantId && activeTab === 'roles' && <RolePermissionsTab tenantId={tenantId} />}
+      {tenantId && activeTab === 'users' && <UserOverridesTab tenantId={tenantId} roles={roles} />}
+      {!tenantId && (
+        <div className="text-center py-16 text-muted-foreground">
+          Loading tenant context…
+        </div>
+      )}
     </div>
   );
 }

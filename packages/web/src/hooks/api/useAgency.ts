@@ -119,12 +119,13 @@ export function useAgencyImpersonationSearch(search: string) {
   return useQuery({
     queryKey: ['agencyUserSearch', search],
     queryFn: async () => {
+      const qs = search ? `?search=${encodeURIComponent(search)}&limit=30` : '?limit=30';
       const response = await api.get<AgencyUserSearchResult[]>(
-        `/api/agencies/me/users/search?search=${encodeURIComponent(search)}&limit=20`
+        `/api/agencies/me/users/search${qs}`
       ) as unknown as { data: AgencyUserSearchResult[] };
       return response.data;
     },
-    enabled: search.length >= 2,
+    staleTime: 30_000,
   });
 }
 

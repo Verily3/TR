@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Users,
   Calendar,
@@ -18,6 +18,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { useTenants } from '@/hooks/api/useTenants';
 import {
   useMentoringRelationships,
   useMentoringSessions,
@@ -1081,19 +1082,20 @@ function FacilitatorView({
 export default function MentoringPage() {
   const { user } = useAuth();
   const [showNewSessionModal, setShowNewSessionModal] = useState(false);
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
 
-  const tenantId = user?.tenantId;
+  const isAgencyUser = !!(user?.agencyId && !user?.tenantId);
+  const { data: tenants } = useTenants();
+
+  // Auto-select first tenant for agency users
+  useEffect(() => {
+    if (isAgencyUser && tenants && tenants.length > 0 && !selectedTenantId) {
+      setSelectedTenantId(tenants[0].id);
+    }
+  }, [isAgencyUser, tenants, selectedTenantId]);
+
+  const tenantId = isAgencyUser ? selectedTenantId : (user?.tenantId ?? null);
   const roleSlug = user?.roleSlug;
-
-  if (!tenantId) {
-    return (
-      <div className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8">
-        <div className="text-center py-16 text-muted-foreground">
-          No tenant context. Please select a tenant first.
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8">
@@ -1107,27 +1109,46 @@ export default function MentoringPage() {
             Manage mentoring relationships, sessions, and development conversations
           </p>
         </div>
-        <button
-          onClick={() => setShowNewSessionModal(true)}
-          className="px-4 py-2 bg-accent text-white rounded-lg text-sm hover:bg-accent/90 transition-colors flex items-center justify-center gap-2 w-full sm:w-auto"
-        >
-          <Plus className="w-4 h-4" />
-          Schedule Session
-        </button>
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          {isAgencyUser && tenants && tenants.length > 0 && (
+            <select
+              value={selectedTenantId || ''}
+              onChange={(e) => setSelectedTenantId(e.target.value)}
+              className="px-3 py-2 border border-border rounded-lg text-sm text-sidebar-foreground bg-card focus:outline-none focus:ring-2 focus:ring-accent"
+            >
+              {tenants.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          )}
+          <button
+            onClick={() => setShowNewSessionModal(true)}
+            className="px-4 py-2 bg-accent text-white rounded-lg text-sm hover:bg-accent/90 transition-colors flex items-center justify-center gap-2 w-full sm:w-auto"
+          >
+            <Plus className="w-4 h-4" />
+            Schedule Session
+          </button>
+        </div>
       </header>
 
-      {roleSlug === 'mentor' ? (
-        <MentorView
-          tenantId={tenantId}
-          showNewSessionModal={showNewSessionModal}
-          setShowNewSessionModal={setShowNewSessionModal}
-        />
+      {tenantId ? (
+        roleSlug === 'mentor' ? (
+          <MentorView
+            tenantId={tenantId}
+            showNewSessionModal={showNewSessionModal}
+            setShowNewSessionModal={setShowNewSessionModal}
+          />
+        ) : (
+          <FacilitatorView
+            tenantId={tenantId}
+            showNewSessionModal={showNewSessionModal}
+            setShowNewSessionModal={setShowNewSessionModal}
+          />
+        )
       ) : (
-        <FacilitatorView
-          tenantId={tenantId}
-          showNewSessionModal={showNewSessionModal}
-          setShowNewSessionModal={setShowNewSessionModal}
-        />
+        <div className="text-center py-16 text-muted-foreground">
+          {isAgencyUser ? 'Loading tenants...' : 'No tenant context.'}
+        </div>
       )}
     </div>
   );

@@ -29,11 +29,29 @@ async function seed() {
 
   console.log('\n✅ Seed completed successfully!\n');
   console.log('Test accounts (password: password123):');
-  console.log('  - Agency Admin: admin@acme.com');
-  console.log('  - Tenant Admin: admin@techcorp.com');
-  console.log('  - Facilitator:  coach@techcorp.com');
-  console.log('  - Mentor:       mentor@techcorp.com');
-  console.log('  - Learners:     john.doe@techcorp.com, jane.smith@techcorp.com, alex.wilson@techcorp.com\n');
+  console.log('  Agency:');
+  console.log('    admin@acme.com          — Agency Owner');
+  console.log('  TechCorp Industries:');
+  console.log('    admin@techcorp.com       — Tenant Admin');
+  console.log('    coach@techcorp.com       — Facilitator');
+  console.log('    mentor@techcorp.com      — Mentor');
+  console.log('    john.doe@techcorp.com    — Learner');
+  console.log('    jane.smith@techcorp.com  — Learner');
+  console.log('    alex.wilson@techcorp.com — Learner');
+  console.log('  Apex Financial Group:');
+  console.log('    admin@apexfinancial.com  — Tenant Admin');
+  console.log('    coach@apexfinancial.com  — Facilitator');
+  console.log('    mentor@apexfinancial.com — Mentor');
+  console.log('    lisa.parker@apexfinancial.com  — Learner');
+  console.log('    james.wright@apexfinancial.com — Learner');
+  console.log('    natalie.brooks@apexfinancial.com — Learner');
+  console.log('  NovaMed Health Systems:');
+  console.log('    admin@novamed.com        — Tenant Admin');
+  console.log('    coach@novamed.com        — Facilitator');
+  console.log('    mentor@novamed.com       — Mentor');
+  console.log('    carlos.gomez@novamed.com — Learner');
+  console.log('    aisha.patel@novamed.com  — Learner');
+  console.log('    david.kim@novamed.com    — Learner\n');
 
   await client.end();
   process.exit(0);
@@ -126,8 +144,8 @@ async function seedData(db: any) {
       agencyId: agency.id,
       email: 'admin@acme.com',
       passwordHash,
-      firstName: 'Agency',
-      lastName: 'Admin',
+      firstName: 'Jordan',
+      lastName: 'Hart',
       title: 'Managing Director',
       status: 'active',
       emailVerified: true,
@@ -423,7 +441,7 @@ async function seedData(db: any) {
     {
       moduleId: module1_1.id,
       title: 'Mentor Check-in: Self-Awareness',
-      contentType: 'mentor_meeting',
+      contentType: 'assignment',
       order: 3,
       durationMinutes: 30,
       points: 10,
@@ -507,7 +525,7 @@ async function seedData(db: any) {
     {
       moduleId: module1_3.id,
       title: 'Mentor Meeting: Team Strategy',
-      contentType: 'mentor_meeting',
+      contentType: 'assignment',
       order: 1,
       durationMinutes: 45,
       points: 20,
@@ -1639,6 +1657,248 @@ async function seedData(db: any) {
   console.log('  ✓ Created 2 complete responses for Alex\'s LeaderShift 180');
 
   console.log('\n✅ LeaderShift™ seed data complete!');
+
+  // ============================================
+  // 15. Additional Tenant: Apex Financial Group
+  // ============================================
+  console.log('\nCreating Apex Financial Group tenant...');
+  const [apexTenant] = await db
+    .insert(schema.tenants)
+    .values({
+      agencyId: agency.id,
+      name: 'Apex Financial Group',
+      slug: 'apex-financial',
+      domain: 'apexfinancial.com',
+      industry: 'Finance',
+      status: 'active',
+      usersLimit: 50,
+      settings: {
+        timezone: 'America/Chicago',
+        canCreatePrograms: false,
+        features: {
+          programs: true,
+          assessments: true,
+          mentoring: true,
+          goals: true,
+          analytics: true,
+          scorecard: true,
+          planning: true,
+        },
+      },
+    })
+    .returning();
+  console.log(`  ✓ Tenant created: ${apexTenant.name} (${apexTenant.id})`);
+
+  // Create tenant roles for Apex
+  const apexRoles: Record<string, typeof schema.roles.$inferSelect> = {};
+  for (const [key, roleDef] of Object.entries(SYSTEM_ROLES) as [string, SystemRoleDefinition][]) {
+    if (!roleDef.isAgencyRole) {
+      const [role] = await db
+        .insert(schema.roles)
+        .values({
+          tenantId: apexTenant.id,
+          name: roleDef.name,
+          slug: roleDef.slug,
+          description: roleDef.description,
+          level: roleDef.level,
+          isSystem: true,
+          permissions: roleDef.permissions,
+        })
+        .returning();
+      apexRoles[key] = role;
+    }
+  }
+  console.log(`  ✓ Created tenant roles for Apex Financial Group`);
+
+  // Apex Admin
+  const [apexAdmin] = await db.insert(schema.users).values({
+    tenantId: apexTenant.id,
+    email: 'admin@apexfinancial.com',
+    passwordHash,
+    firstName: 'Robert',
+    lastName: 'Whitfield',
+    title: 'Chief People Officer',
+    department: 'Human Resources',
+    status: 'active',
+    emailVerified: true,
+  }).returning();
+  await db.insert(schema.userRoles).values({ userId: apexAdmin.id, roleId: apexRoles.TENANT_ADMIN.id });
+  console.log(`  ✓ User created: ${apexAdmin.email} (Tenant Admin)`);
+
+  // Apex Facilitator
+  const [apexFacilitator] = await db.insert(schema.users).values({
+    tenantId: apexTenant.id,
+    email: 'coach@apexfinancial.com',
+    passwordHash,
+    firstName: 'Diana',
+    lastName: 'Kwan',
+    title: 'Executive Coach',
+    department: 'Learning & Development',
+    status: 'active',
+    emailVerified: true,
+  }).returning();
+  await db.insert(schema.userRoles).values({ userId: apexFacilitator.id, roleId: apexRoles.FACILITATOR.id });
+  console.log(`  ✓ User created: ${apexFacilitator.email} (Facilitator)`);
+
+  // Apex Mentor
+  const [apexMentor] = await db.insert(schema.users).values({
+    tenantId: apexTenant.id,
+    email: 'mentor@apexfinancial.com',
+    passwordHash,
+    firstName: 'Marcus',
+    lastName: 'Osei',
+    title: 'VP of Finance',
+    department: 'Finance',
+    status: 'active',
+    emailVerified: true,
+  }).returning();
+  await db.insert(schema.userRoles).values({ userId: apexMentor.id, roleId: apexRoles.MENTOR.id });
+  console.log(`  ✓ User created: ${apexMentor.email} (Mentor)`);
+
+  // Apex Learners
+  const apexLearnerData = [
+    { firstName: 'Lisa', lastName: 'Parker', email: 'lisa.parker@apexfinancial.com', title: 'Senior Analyst', department: 'Investment Banking' },
+    { firstName: 'James', lastName: 'Wright', email: 'james.wright@apexfinancial.com', title: 'Portfolio Manager', department: 'Asset Management' },
+    { firstName: 'Natalie', lastName: 'Brooks', email: 'natalie.brooks@apexfinancial.com', title: 'Risk Analyst', department: 'Risk Management' },
+  ];
+  for (const data of apexLearnerData) {
+    const [learner] = await db.insert(schema.users).values({
+      tenantId: apexTenant.id,
+      email: data.email,
+      passwordHash,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      title: data.title,
+      department: data.department,
+      managerId: apexMentor.id,
+      status: 'active',
+      emailVerified: true,
+    }).returning();
+    await db.insert(schema.userRoles).values({ userId: learner.id, roleId: apexRoles.LEARNER.id });
+    console.log(`  ✓ User created: ${learner.email} (Learner)`);
+  }
+
+  // ============================================
+  // 16. Additional Tenant: NovaMed Health Systems
+  // ============================================
+  console.log('\nCreating NovaMed Health Systems tenant...');
+  const [novamedTenant] = await db
+    .insert(schema.tenants)
+    .values({
+      agencyId: agency.id,
+      name: 'NovaMed Health Systems',
+      slug: 'novamed',
+      domain: 'novamed.com',
+      industry: 'Healthcare',
+      status: 'active',
+      usersLimit: 75,
+      settings: {
+        timezone: 'America/Los_Angeles',
+        canCreatePrograms: false,
+        features: {
+          programs: true,
+          assessments: true,
+          mentoring: true,
+          goals: true,
+          analytics: true,
+          scorecard: true,
+          planning: true,
+        },
+      },
+    })
+    .returning();
+  console.log(`  ✓ Tenant created: ${novamedTenant.name} (${novamedTenant.id})`);
+
+  // Create tenant roles for NovaMed
+  const novamedRoles: Record<string, typeof schema.roles.$inferSelect> = {};
+  for (const [key, roleDef] of Object.entries(SYSTEM_ROLES) as [string, SystemRoleDefinition][]) {
+    if (!roleDef.isAgencyRole) {
+      const [role] = await db
+        .insert(schema.roles)
+        .values({
+          tenantId: novamedTenant.id,
+          name: roleDef.name,
+          slug: roleDef.slug,
+          description: roleDef.description,
+          level: roleDef.level,
+          isSystem: true,
+          permissions: roleDef.permissions,
+        })
+        .returning();
+      novamedRoles[key] = role;
+    }
+  }
+  console.log(`  ✓ Created tenant roles for NovaMed Health Systems`);
+
+  // NovaMed Admin
+  const [novamedAdmin] = await db.insert(schema.users).values({
+    tenantId: novamedTenant.id,
+    email: 'admin@novamed.com',
+    passwordHash,
+    firstName: 'Priya',
+    lastName: 'Mehta',
+    title: 'Director of Talent Development',
+    department: 'Human Resources',
+    status: 'active',
+    emailVerified: true,
+  }).returning();
+  await db.insert(schema.userRoles).values({ userId: novamedAdmin.id, roleId: novamedRoles.TENANT_ADMIN.id });
+  console.log(`  ✓ User created: ${novamedAdmin.email} (Tenant Admin)`);
+
+  // NovaMed Facilitator
+  const [novamedFacilitator] = await db.insert(schema.users).values({
+    tenantId: novamedTenant.id,
+    email: 'coach@novamed.com',
+    passwordHash,
+    firstName: 'Samuel',
+    lastName: 'Torres',
+    title: 'Leadership Development Specialist',
+    department: 'Learning & Development',
+    status: 'active',
+    emailVerified: true,
+  }).returning();
+  await db.insert(schema.userRoles).values({ userId: novamedFacilitator.id, roleId: novamedRoles.FACILITATOR.id });
+  console.log(`  ✓ User created: ${novamedFacilitator.email} (Facilitator)`);
+
+  // NovaMed Mentor
+  const [novamedMentor] = await db.insert(schema.users).values({
+    tenantId: novamedTenant.id,
+    email: 'mentor@novamed.com',
+    passwordHash,
+    firstName: 'Angela',
+    lastName: 'Foster',
+    title: 'Chief Medical Officer',
+    department: 'Clinical Operations',
+    status: 'active',
+    emailVerified: true,
+  }).returning();
+  await db.insert(schema.userRoles).values({ userId: novamedMentor.id, roleId: novamedRoles.MENTOR.id });
+  console.log(`  ✓ User created: ${novamedMentor.email} (Mentor)`);
+
+  // NovaMed Learners
+  const novamedLearnerData = [
+    { firstName: 'Carlos', lastName: 'Gomez', email: 'carlos.gomez@novamed.com', title: 'Department Head', department: 'Cardiology' },
+    { firstName: 'Aisha', lastName: 'Patel', email: 'aisha.patel@novamed.com', title: 'Nurse Manager', department: 'ICU' },
+    { firstName: 'David', lastName: 'Kim', email: 'david.kim@novamed.com', title: 'Operations Manager', department: 'Hospital Operations' },
+  ];
+  for (const data of novamedLearnerData) {
+    const [learner] = await db.insert(schema.users).values({
+      tenantId: novamedTenant.id,
+      email: data.email,
+      passwordHash,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      title: data.title,
+      department: data.department,
+      managerId: novamedMentor.id,
+      status: 'active',
+      emailVerified: true,
+    }).returning();
+    await db.insert(schema.userRoles).values({ userId: learner.id, roleId: novamedRoles.LEARNER.id });
+    console.log(`  ✓ User created: ${learner.email} (Learner)`);
+  }
+
+  console.log('\n✅ Additional tenants seeded successfully!');
 }
 
 seed().catch((error) => {

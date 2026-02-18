@@ -4,9 +4,10 @@ import { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Menu, LogOut, Settings, UserRoundCog, ChevronDown, Bell } from 'lucide-react';
+import { Menu, LogOut, Settings, UserRoundCog, ChevronDown, Bell, ArrowLeftRight } from 'lucide-react';
 import { ImpersonationSearchModal } from './ImpersonationSearchModal';
 import { useUnreadCount } from '@/hooks/api/useNotifications';
+import { useEndImpersonation } from '@/hooks/api/useImpersonate';
 
 interface HeaderProps {
   onMenuClick?: () => void;
@@ -17,6 +18,7 @@ export const Header = memo(function Header({ onMenuClick }: HeaderProps) {
   const router = useRouter();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showImpersonateModal, setShowImpersonateModal] = useState(false);
+  const endImpersonation = useEndImpersonation();
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { data: unreadCount = 0 } = useUnreadCount();
 
@@ -117,7 +119,19 @@ export const Header = memo(function Header({ onMenuClick }: HeaderProps) {
                 Settings
               </button>
 
-              {user?.agencyId && (
+              {user?.isImpersonating ? (
+                <button
+                  onClick={() => {
+                    setDropdownOpen(false);
+                    endImpersonation.mutate();
+                  }}
+                  disabled={endImpersonation.isPending}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-amber-700 hover:bg-amber-50 transition-colors disabled:opacity-50"
+                >
+                  <ArrowLeftRight className="w-4 h-4 text-amber-500" />
+                  Return to Agency View
+                </button>
+              ) : user?.agencyId ? (
                 <button
                   onClick={() => {
                     setDropdownOpen(false);
@@ -128,7 +142,7 @@ export const Header = memo(function Header({ onMenuClick }: HeaderProps) {
                   <UserRoundCog className="w-4 h-4 text-gray-400" />
                   Login As User
                 </button>
-              )}
+              ) : null}
 
               <div className="border-t border-gray-200 my-1" />
 

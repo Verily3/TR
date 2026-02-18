@@ -10,11 +10,10 @@
  * not the admin dashboard. This is handled in the routing/component level.
  */
 export const NAVIGATION_BY_ROLE = {
-  // Learner: Programs-focused view with personal tools
+  // Learner: Programs-focused view with personal tools (no mentoring — handled by mentor/facilitator)
   learner: [
     'dashboard',
     'programs',
-    'mentoring',
     'assessments',
     'notifications',
     'help',

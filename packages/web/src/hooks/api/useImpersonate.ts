@@ -41,14 +41,17 @@ export function useStartImpersonation() {
 export function useEndImpersonation() {
   return useMutation({
     mutationFn: async () => {
-      const response = await api.post<{ success: boolean }>(
-        '/api/admin/impersonate/end'
-      );
-      return response.data;
+      // Best-effort server-side cleanup — ignore failures since the
+      // client-side token removal is what actually ends the session.
+      try {
+        await api.post<{ success: boolean }>('/api/admin/impersonate/end');
+      } catch {
+        // Swallow — we still clear the token below
+      }
     },
-    onSuccess: () => {
+    onSettled: () => {
       sessionStorage.removeItem('impersonation_token');
-      window.location.reload();
+      window.location.href = '/dashboard';
     },
   });
 }

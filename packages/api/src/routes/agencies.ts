@@ -198,7 +198,7 @@ agenciesRoutes.get(
  * Search users across all tenants belonging to this agency (for impersonation)
  */
 const searchUsersSchema = z.object({
-  search: z.string().min(1).max(100).optional().default(''),
+  search: z.string().max(100).optional().default(''),
   limit: z.coerce.number().min(1).max(50).optional().default(20),
   tenantId: z.string().uuid().optional(),
   includeUnaffiliated: z.coerce.boolean().optional().default(false),
@@ -213,92 +213,65 @@ agenciesRoutes.get(
     const user = c.get('user');
     const { search, limit, tenantId, includeUnaffiliated } = c.req.valid('query');
 
+    // Build base conditions
+    const conditions: (ReturnType<typeof and> | ReturnType<typeof eq> | ReturnType<typeof isNull> | ReturnType<typeof sql>)[] = [
+      isNull(users.deletedAt),
+      eq(users.status, 'active'),
+    ];
+
+    // Optional search filter
     if (search) {
-      // Build conditions based on whether we include unaffiliated users
-      const searchCondition = sql`(
+      conditions.push(sql`(
         "users"."first_name" ILIKE ${`%${search}%`}
         OR "users"."last_name" ILIKE ${`%${search}%`}
         OR "users"."email" ILIKE ${`%${search}%`}
-      )`;
-
-      // If filtering by specific tenant, use simple join query
-      if (tenantId) {
-        const results = await db
-          .select({
-            id: users.id,
-            email: users.email,
-            firstName: users.firstName,
-            lastName: users.lastName,
-            avatar: users.avatar,
-            title: users.title,
-            status: users.status,
-            tenantId: users.tenantId,
-            tenantName: tenants.name,
-          })
-          .from(users)
-          .innerJoin(tenants, eq(users.tenantId, tenants.id))
-          .where(
-            and(
-              isNull(users.deletedAt),
-              eq(users.tenantId, tenantId),
-              eq(tenants.agencyId, user.agencyId!),
-              eq(users.status, 'active'),
-              searchCondition
-            )
-          )
-          .orderBy(users.firstName, users.lastName)
-          .limit(limit);
-
-        return c.json({ data: results });
-      }
-
-      // Default: search across all tenants (optionally include unaffiliated)
-      const conditions: unknown[] = [
-        isNull(users.deletedAt),
-        eq(users.status, 'active'),
-        searchCondition,
-      ];
-
-      if (!includeUnaffiliated) {
-        conditions.push(sql`"users"."tenant_id" IS NOT NULL`);
-      }
-
-      // Use left join to include unaffiliated users (tenantId = null)
-      const joinType = includeUnaffiliated ? 'leftJoin' : 'innerJoin';
-
-      const results = await db
-        .select({
-          id: users.id,
-          email: users.email,
-          firstName: users.firstName,
-          lastName: users.lastName,
-          avatar: users.avatar,
-          title: users.title,
-          status: users.status,
-          tenantId: users.tenantId,
-          tenantName: tenants.name,
-        })
-        .from(users)
-        [joinType](tenants, eq(users.tenantId, tenants.id))
-        .where(
-          and(
-            ...(conditions as any[]),
-            // For tenant-joined users, verify agency match
-            // For unaffiliated users, verify they belong to this agency
-            or(
-              eq(tenants.agencyId, user.agencyId!),
-              and(isNull(users.tenantId), eq(users.agencyId, user.agencyId!))
-            )
-          )
-        )
-        .orderBy(users.firstName, users.lastName)
-        .limit(limit);
-
-      return c.json({ data: results });
+      )`);
     }
 
-    // No search term — return empty
-    return c.json({ data: [] });
+    // Only include tenant-affiliated users (not agency staff)
+    if (!includeUnaffiliated) {
+      conditions.push(sql`"users"."tenant_id" IS NOT NULL`);
+    }
+
+    // Optional tenant filter
+    if (tenantId) {
+      conditions.push(eq(users.tenantId, tenantId));
+    }
+
+    const results = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        avatar: users.avatar,
+        title: users.title,
+        status: users.status,
+        tenantId: users.tenantId,
+        tenantName: tenants.name,
+        roleSlug: sql<string | null>`(
+          SELECT r.slug FROM user_roles ur
+          JOIN roles r ON r.id = ur.role_id
+          WHERE ur.user_id = "users"."id"
+          ORDER BY r.level DESC
+          LIMIT 1
+        )`,
+      })
+      .from(users)
+      .innerJoin(tenants, eq(users.tenantId, tenants.id))
+      .where(
+        and(
+          ...(conditions as any[]),
+          or(
+            eq(tenants.agencyId, user.agencyId!),
+            and(isNull(users.tenantId), eq(users.agencyId, user.agencyId!))
+          )
+        )
+      )
+      .orderBy(tenants.name, users.firstName, users.lastName)
+      .limit(limit);
+
+    return c.json({ data: results });
   }
 );
 

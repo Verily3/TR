@@ -7,6 +7,7 @@ export * from './core/sessions';
 export * from './core/impersonation-sessions';
 export * from './core/onboarding';
 export * from './core/notifications';
+export * from './core/permissions';
 
 // Programs tables
 export * from './programs';

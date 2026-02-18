@@ -34,7 +34,7 @@ interface TaskDef {
 
 interface LessonDef {
   title: string;
-  contentType: 'lesson' | 'assignment' | 'text_form' | 'goal' | 'mentor_meeting' | 'mentor_approval' | 'facilitator_approval' | 'quiz' | 'sub_module';
+  contentType: 'lesson' | 'assignment' | 'text_form' | 'goal' | 'quiz';
   durationMinutes: number;
   points: number;
   approvalRequired?: 'none' | 'mentor' | 'facilitator' | 'both';
@@ -189,7 +189,7 @@ function mostUsefulIdeaLesson(): LessonDef {
 function coachMeetingLesson(): LessonDef {
   return {
     title: 'Coach Meeting',
-    contentType: 'mentor_approval',
+    contentType: 'assignment',
     durationMinutes: 10,
     points: 10,
     approvalRequired: 'mentor',
@@ -485,7 +485,7 @@ async function seedLeaderShift() {
       },
       {
         title: 'Program Kickoff Session',
-        contentType: 'mentor_meeting',
+        contentType: 'assignment',
         durationMinutes: 90,
         points: 20,
         approvalRequired: 'mentor',
@@ -537,7 +537,7 @@ async function seedLeaderShift() {
       },
       {
         title: 'Manager Review',
-        contentType: 'mentor_approval',
+        contentType: 'assignment',
         durationMinutes: 15,
         points: 10,
         approvalRequired: 'mentor',
@@ -702,7 +702,7 @@ async function seedLeaderShift() {
       mostUsefulIdeaLesson(),
       {
         title: 'Planning Performance Skill Practice',
-        contentType: 'facilitator_approval',
+        contentType: 'assignment',
         durationMinutes: 5,
         points: 10,
         approvalRequired: 'facilitator',
@@ -771,7 +771,7 @@ async function seedLeaderShift() {
       actionStepLesson(),
       {
         title: 'Mid-Term Self Assessment',
-        contentType: 'facilitator_approval',
+        contentType: 'assignment',
         durationMinutes: 15,
         points: 15,
         approvalRequired: 'facilitator',
@@ -789,7 +789,7 @@ async function seedLeaderShift() {
       mostUsefulIdeaLesson(),
       {
         title: 'Coaching To Improve Performance Skill Practice',
-        contentType: 'facilitator_approval',
+        contentType: 'assignment',
         durationMinutes: 5,
         points: 10,
         approvalRequired: 'facilitator',
@@ -852,7 +852,7 @@ async function seedLeaderShift() {
       mostUsefulIdeaLesson(),
       {
         title: 'Identifying Motivators Skill Practice',
-        contentType: 'facilitator_approval',
+        contentType: 'assignment',
         durationMinutes: 10,
         points: 10,
         approvalRequired: 'facilitator',
@@ -958,7 +958,7 @@ async function seedLeaderShift() {
       mostUsefulIdeaLesson(),
       {
         title: 'Food For Thought',
-        contentType: 'facilitator_approval',
+        contentType: 'assignment',
         durationMinutes: 5,
         points: 10,
         approvalRequired: 'facilitator',
