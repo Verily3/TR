@@ -94,7 +94,10 @@
       "Bash(cmd //c \"tasklist /FI \"\"PID eq 24444\"\"\")",
       "Bash(cmd //c \"tasklist\")",
       "Bash(TOKEN=\"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiI0MWRjNTEwMS1iNDcyLTRjYjEtYTA4ZC0wOGIyMjU1OTExZjQiLCJzaWQiOiI1MzNhMzQyMC1hYmQ1LTRhY2ItYjYzYy0wMzlhYzE3YTE4NjQiLCJhZ2VuY3lJZCI6IjVlMjJkZTI3LWU5NmMtNDdmNy05ZWQwLTNmNWZiOGYwYjI4MSIsImVtYWlsIjoiYWRtaW5AYWNtZS5jb20iLCJyb2xlU2x1ZyI6ImFnZW5jeV9vd25lciIsInJvbGVMZXZlbCI6MTAwLCJwZXJtaXNzaW9ucyI6WyJhZ2VuY3k6bWFuYWdlIiwiYWdlbmN5OnZpZXc6YmlsbGluZyIsImFnZW5jeTptYW5hZ2U6Y2xpZW50cyIsImFnZW5jeTppbXBlcnNvbmF0ZSIsInRlbmFudDptYW5hZ2UiLCJ0ZW5hbnQ6dmlldyIsInVzZXJzOm1hbmFnZSIsInVzZXJzOnZpZXciLCJ1c2Vyczp2aWV3OmFsbCIsInByb2dyYW1zOm1hbmFnZSIsInByb2dyYW1zOmNyZWF0ZSIsInByb2dyYW1zOnZpZXciLCJwcm9ncmFtczplbnJvbGwiLCJtZW50b3Jpbmc6bWFuYWdlIiwibWVudG9yaW5nOnZpZXc6YXNzaWduZWQiLCJtZW50b3Jpbmc6dmlldzphbGwiLCJnb2Fsczptb W5hZ2UiLCJnb2Fsczp2aWV3IiwiZ29hbHM6dmlldzpkaXJlY3RfcmVwb3J0cyIsImFzc2Vzc21lbnRzOm1hbmFnZSIsImFzc2Vzc21lbnRzOnZpZXciLCJhc3Nlc3NtZW50czpjcmVhdGU6ZnJvbV90ZW1wbGF0ZSIsInRlbXBsYXRlczptYW5hZ2UiLCJ0ZW1wbGF0ZXM6dmlldyIsInNjb3JlY2FyZDptYW5hZ2UiLCJzY29yZWNhcmQ6dmlldyIsInBsYW5uaW5nOm1hbmFnZSIsInBsYW5uaW5nOnZpZXciLCJwZW9wbGU6bWFuYWdlIiwicGVvcGxlOnZpZXciLCJhbmFseXRpY3M6dmlldyIsIm5vdGlmaWNhdGlvbnM6dmlldyIsInNldHRpbmdzOnZpZXciLCJzZXR0aW5nczptYW5hZ2UiLCJoZWxwOnZpZXciXSwidHlwZSI6ImFjY2VzcyIsImlhdCI6MTc3MTM2ODkxMywiZXhwIjoxNzcxMzY5ODEzfQ.iV3ZdzK3vRwTb2hBO5mCEnDapuvZi5Qgt1Ljgi3xgaM\")",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(git -C \"C:\\\\Users\\\\Admin\\\\Documents\\\\VERILYASSIST PROJECTS\\\\04-APPS\\\\TR v2\" status -s)",
+      "Bash(git -C \"C:\\\\Users\\\\Admin\\\\Documents\\\\VERILYASSIST PROJECTS\\\\04-APPS\\\\TR v2\" add .claude/settings.local.json)",
+      "Bash(git -C:*)"
     ]
   }
 }
