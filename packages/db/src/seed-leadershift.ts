@@ -131,7 +131,7 @@ async function createModuleWithLessons(
   const totalPoints = lessonDefs.reduce((sum, l) => sum + l.points, 0);
   const taskInfo = totalTasks > 0 ? `, ${totalTasks} tasks` : '';
   console.log(`  ✓ Module ${moduleDef.order}: "${moduleDef.title}" — ${lessonDefs.length} lessons${taskInfo}, ${totalPoints} pts`);
-  return mod;
+  return { mod, lessons: insertedLessons };
 }
 
 async function createEvent(programId: string, eventDef: EventDef) {
@@ -301,7 +301,7 @@ async function seedLeaderShift() {
   // MODULE 0: Introduction to the Results Tracking Platform
   // (Restructured: 1 lesson + 2 tasks instead of 3 separate lessons)
   // ──────────────────────────────────────────────
-  await createModuleWithLessons(
+  const { lessons: lessons0 } = await createModuleWithLessons(
     program.id,
     {
       title: 'Introduction to the Results Tracking Platform',
@@ -344,7 +344,7 @@ async function seedLeaderShift() {
   // ──────────────────────────────────────────────
   // MODULE 1: Pre-Work — Welcome to LeaderShift!
   // ──────────────────────────────────────────────
-  await createModuleWithLessons(
+  const { lessons: lessons1 } = await createModuleWithLessons(
     program.id,
     {
       title: 'Welcome to LeaderShift!',
@@ -450,7 +450,7 @@ async function seedLeaderShift() {
   // ──────────────────────────────────────────────
   // MODULE 2: Milestone — Ready for First Meeting
   // ──────────────────────────────────────────────
-  await createModuleWithLessons(
+  const { lessons: lessons2 } = await createModuleWithLessons(
     program.id,
     {
       title: "Milestone: You're Ready for Your First Meeting!",
@@ -1104,6 +1104,40 @@ async function seedLeaderShift() {
     learnerEnrollments.push(enrollment);
     console.log(`  ✓ Enrolled ${learner.email} as learner`);
   }
+
+  // 6b. Seed John Doe's progress (modules 0 + 1 complete, module 2 in-progress)
+  console.log('\nSeeding John Doe lesson progress...');
+  const johnEnrollment = learnerEnrollments[0]; // learner1 = john.doe@techcorp.com
+  const completedLessonList = [...lessons0, ...lessons1, ...lessons2.slice(0, 3)];
+  const inProgressLesson = lessons2[3];
+  const progressNow = new Date();
+
+  await db.insert(schema.lessonProgress).values([
+    ...completedLessonList.map((lesson) => ({
+      enrollmentId: johnEnrollment.id,
+      lessonId: lesson.id,
+      status: 'completed' as const,
+      startedAt: progressNow,
+      completedAt: progressNow,
+      pointsEarned: lesson.points,
+    })),
+    {
+      enrollmentId: johnEnrollment.id,
+      lessonId: inProgressLesson.id,
+      status: 'in_progress' as const,
+      startedAt: progressNow,
+      pointsEarned: 0,
+    },
+  ]);
+
+  const completedPts = completedLessonList.reduce((s, l) => s + l.points, 0);
+  // ~14% overall (10 of ~73 total lessons)
+  await db
+    .update(schema.enrollments)
+    .set({ progress: 14, pointsEarned: completedPts })
+    .where(eq(schema.enrollments.id, johnEnrollment.id));
+
+  console.log(`  ✓ John Doe: ${completedLessonList.length} lessons complete, module 2 in-progress (${completedPts} pts)`);
 
   // 6. Create mentorships
   console.log('\nCreating mentor assignments...');

@@ -7,6 +7,7 @@ interface AgencyProgramsListParams {
   limit?: number;
   status?: string;
   type?: string;
+  isTemplate?: boolean;
 }
 
 export function useAgencyPrograms(params?: AgencyProgramsListParams) {
@@ -18,6 +19,7 @@ export function useAgencyPrograms(params?: AgencyProgramsListParams) {
       if (params?.limit) searchParams.set('limit', params.limit.toString());
       if (params?.status) searchParams.set('status', params.status);
       if (params?.type) searchParams.set('type', params.type);
+      if (params?.isTemplate !== undefined) searchParams.set('isTemplate', params.isTemplate.toString());
 
       const queryString = searchParams.toString();
       const url = `/api/agencies/me/programs${queryString ? `?${queryString}` : ''}`;
@@ -277,6 +279,75 @@ export function useReorderAgencyTasks(programId: string | undefined, lessonId: s
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agencyProgram', programId] });
+    },
+  });
+}
+
+// ============ Template Hooks ============
+
+/** Convenience hook: only fetch programs marked as templates */
+export function useAgencyProgramTemplates() {
+  return useAgencyPrograms({ isTemplate: true });
+}
+
+/** Mark or unmark a program as a reusable template */
+export function useMarkProgramAsTemplate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ programId, isTemplate }: { programId: string; isTemplate: boolean }) => {
+      const response = await api.post<Program>(
+        `/api/agencies/me/programs/${programId}/mark-template`,
+        { isTemplate }
+      ) as unknown as { data: Program };
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agencyPrograms'] });
+    },
+  });
+}
+
+/** Create a new agency program from a template (deep copy, stays in agency space) */
+export function useCreateProgramFromTemplate() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ programId, name }: { programId: string; name?: string }) => {
+      const response = await api.post<Program>(
+        `/api/agencies/me/programs/${programId}/use-template`,
+        { name }
+      ) as unknown as { data: Program };
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agencyPrograms'] });
+    },
+  });
+}
+
+/** Assign a program to a client tenant (creates a tenant-scoped copy) */
+export function useAssignProgramToClient() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      programId,
+      tenantId,
+      name,
+    }: {
+      programId: string;
+      tenantId: string;
+      name?: string;
+    }) => {
+      const response = await api.post<Program>(
+        `/api/agencies/me/programs/${programId}/assign`,
+        { tenantId, name }
+      ) as unknown as { data: Program };
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agencyPrograms'] });
     },
   });
 }

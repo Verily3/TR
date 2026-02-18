@@ -5,6 +5,7 @@ import {
   text,
   timestamp,
   jsonb,
+  boolean,
   index,
   pgEnum,
 } from 'drizzle-orm/pg-core';
@@ -100,6 +101,10 @@ export const programs = pgTable(
     // Configuration
     config: jsonb('config').$type<ProgramConfig>().default({}),
 
+    // Template support
+    isTemplate: boolean('is_template').notNull().default(false),
+    sourceTemplateId: uuid('source_template_id'),
+
     // Tracking
     createdBy: uuid('created_by').references(() => users.id, {
       onDelete: 'set null',
@@ -141,6 +146,12 @@ export const programsRelations = relations(programs, ({ one, many }) => ({
     fields: [programs.createdBy],
     references: [users.id],
   }),
+  sourceTemplate: one(programs, {
+    fields: [programs.sourceTemplateId],
+    references: [programs.id],
+    relationName: 'templateDerivations',
+  }),
+  derivedPrograms: many(programs, { relationName: 'templateDerivations' }),
   modules: many(modules),
   enrollments: many(enrollments),
 }));

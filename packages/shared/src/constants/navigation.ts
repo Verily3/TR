@@ -57,38 +57,32 @@ export const NAVIGATION_BY_ROLE = {
     'settings',
   ],
 
-  // Agency Admin: Full access including agency portal
+  // Agency Admin: Agency-focused nav — scorecard/planning/mentoring omitted (no tenant enrollment)
   agency_admin: [
+    'agency',
     'dashboard',
-    'scorecard',
-    'planning',
     'programs',
     'program-builder',
-    'mentoring',
     'assessments',
     'people',
     'analytics',
     'notifications',
     'help',
     'settings',
-    'agency',
   ],
 
   // Agency Owner: Same as Agency Admin
   agency_owner: [
+    'agency',
     'dashboard',
-    'scorecard',
-    'planning',
     'programs',
     'program-builder',
-    'mentoring',
     'assessments',
     'people',
     'analytics',
     'notifications',
     'help',
     'settings',
-    'agency',
   ],
 } as const;
 

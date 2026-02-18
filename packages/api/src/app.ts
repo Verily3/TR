@@ -26,6 +26,7 @@ import { notificationsRoutes } from './routes/notifications.js';
 import { cronRoutes } from './routes/cron.js';
 import { mentoringRoutes } from './routes/mentoring.js';
 import { permissionsRoutes } from './routes/permissions.js';
+import { analyticsRoutes } from './routes/analytics.js';
 import type { Variables } from './types/context.js';
 
 // Create Hono app with typed variables
@@ -123,6 +124,9 @@ app.route('/api/tenants/:tenantId/mentoring', mentoringRoutes);
 
 // Permissions routes (role/user nav overrides)
 app.route('/api/tenants/:tenantId/permissions', permissionsRoutes);
+
+// Analytics routes (agency + tenant)
+app.route('/api/analytics', analyticsRoutes);
 
 // 404 handler
 app.notFound((c) =>

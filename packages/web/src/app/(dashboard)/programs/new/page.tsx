@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
@@ -11,6 +11,13 @@ export default function NewProgramPage() {
   const router = useRouter();
   const { user } = useAuth();
   const createProgram = useCreateProgram(user?.tenantId);
+
+  // Agency users create programs via the Program Builder, not this page
+  useEffect(() => {
+    if (user && user.agencyId && !user.tenantId) {
+      router.replace('/program-builder');
+    }
+  }, [user, router]);
 
   const [formData, setFormData] = useState<CreateProgramInput>({
     name: '',
@@ -35,9 +42,14 @@ export default function NewProgramPage() {
     }
   };
 
-  if (!user?.tenantId) {
+  // Still loading auth or being redirected
+  if (!user || (user.agencyId && !user.tenantId)) {
+    return null;
+  }
+
+  if (!user.tenantId) {
     return (
-      <div className="max-w-[1400px] mx-auto">
+      <div className="max-w-[1400px] mx-auto p-4">
         <p className="text-gray-600">No tenant context available.</p>
       </div>
     );

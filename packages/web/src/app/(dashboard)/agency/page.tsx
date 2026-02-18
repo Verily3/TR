@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Building2,
   Users,
@@ -17,16 +18,28 @@ import {
   Globe,
   Save,
   RefreshCw,
-  BookOpen,
   ClipboardList,
-  Target,
   CheckCircle2,
   Clock,
+  Copy,
+  Trash2,
+  Archive,
+  MoreVertical,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { useAgency, useAgencyStats, useAgencyUsers, useUpdateAgency } from '@/hooks/api/useAgency';
 import { useTenants } from '@/hooks/api/useTenants';
 import { useUsers, type TenantUser } from '@/hooks/api/useUsers';
+import {
+  useTemplates,
+  useTemplateStats,
+  useCreateTemplate,
+  useDeleteTemplate,
+  useDuplicateTemplate,
+  useUpdateTemplate,
+} from '@/hooks/api/useTemplates';
+import type { AssessmentTemplate, TemplateConfig } from '@/types/assessments';
 import { RoleBadge } from '@/components/agency/RoleBadge';
 import { TenantStatusBadge, UserStatusBadge } from '@/components/agency/StatusBadge';
 import { CreateTenantModal } from '@/components/agency/CreateTenantModal';
@@ -47,7 +60,19 @@ const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
 
 export default function AgencyPage() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<Tab>(() => {
+    const t = searchParams.get('tab') as Tab | null;
+    return t && ['overview', 'clients', 'people', 'templates', 'branding', 'billing'].includes(t) ? t : 'overview';
+  });
+
+  // Sync tab with URL when query param changes (e.g. back-navigation from editor)
+  useEffect(() => {
+    const t = searchParams.get('tab') as Tab | null;
+    if (t && ['overview', 'clients', 'people', 'templates', 'branding', 'billing'].includes(t)) {
+      setActiveTab(t);
+    }
+  }, [searchParams]);
 
   if (!user?.agencyId) {
     return (
@@ -629,202 +654,397 @@ function PeopleTab() {
 // ============================================
 // Templates Tab
 // ============================================
+
+function defaultConfig(assessmentType: '180' | '360' | 'custom'): TemplateConfig {
+  return {
+    competencies: [{
+      id: crypto.randomUUID(),
+      name: 'Leadership Effectiveness',
+      questions: [{ id: crypto.randomUUID(), text: 'Demonstrates strong leadership capabilities' }],
+    }],
+    scaleMin: 1,
+    scaleMax: 5,
+    scaleLabels: ['Strongly Disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly Agree'],
+    allowComments: true,
+    requireComments: false,
+    anonymizeResponses: true,
+    raterTypes: assessmentType === '180' ? ['self', 'manager'] : ['self', 'manager', 'peer', 'direct_report'],
+  };
+}
+
+type StatusFilter = 'all' | 'draft' | 'published' | 'archived';
+
 function TemplatesTab() {
-  const [searchTerm, setSearchTerm] = useState('');
+  const router = useRouter();
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
-  // Placeholder templates data — no templates API exists yet
-  const templates: {
-    id: string;
-    name: string;
-    type: 'program' | 'assessment' | 'goal';
-    description: string;
-    category: string;
-    isPublished: boolean;
-    usageCount: number;
-    updatedAt: string;
-  }[] = [];
+  // Create modal
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newType, setNewType] = useState<'360' | '180' | 'custom'>('360');
+  const [newDesc, setNewDesc] = useState('');
+  const [createError, setCreateError] = useState<string | null>(null);
 
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'program': return <BookOpen className="w-5 h-5" />;
-      case 'assessment': return <ClipboardList className="w-5 h-5" />;
-      case 'goal': return <Target className="w-5 h-5" />;
-      default: return <FileText className="w-5 h-5" />;
+  const openCreateModal = () => {
+    setNewName('');
+    setNewType('360');
+    setNewDesc('');
+    setCreateError(null);
+    setShowCreate(true);
+  };
+
+  const { data, isLoading } = useTemplates(
+    statusFilter !== 'all' ? { status: statusFilter } : undefined
+  );
+  const { data: stats } = useTemplateStats();
+  const createTemplate = useCreateTemplate();
+  const deleteTemplate = useDeleteTemplate();
+  const duplicateTemplate = useDuplicateTemplate();
+  const updateTemplate = useUpdateTemplate();
+
+  const templates = data?.templates ?? [];
+
+  const filtered = templates.filter((t) => {
+    if (typeFilter !== 'all' && t.assessmentType !== typeFilter) return false;
+    if (!search) return true;
+    return (
+      t.name.toLowerCase().includes(search.toLowerCase()) ||
+      (t.description ?? '').toLowerCase().includes(search.toLowerCase())
+    );
+  });
+
+  const handleCreate = async () => {
+    if (!newName.trim()) return;
+    setCreateError(null);
+    try {
+      const t = await createTemplate.mutateAsync({
+        name: newName.trim(),
+        description: newDesc.trim() || undefined,
+        assessmentType: newType,
+        config: defaultConfig(newType),
+      });
+      setShowCreate(false);
+      router.push(`/agency/assessments/${t.id}`);
+    } catch (err) {
+      setCreateError((err as Error)?.message ?? 'Failed to create template. Please try again.');
     }
   };
 
-  const typeConfig: Record<string, { bg: string; text: string; label: string }> = {
-    program: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Program' },
-    assessment: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Assessment' },
-    goal: { bg: 'bg-green-100', text: 'text-green-700', label: 'Goal' },
+  const handleDelete = async (t: AssessmentTemplate) => {
+    if (!confirm(`Delete "${t.name}"? This cannot be undone.`)) return;
+    await deleteTemplate.mutateAsync(t.id);
   };
 
-  const filteredTemplates = templates
-    .filter((t) => (typeFilter === 'all' ? true : t.type === typeFilter))
-    .filter((t) =>
-      t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.description.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
+  const handleArchive = async (t: AssessmentTemplate) => {
+    const next = t.status === 'archived' ? 'draft' : 'archived';
+    await updateTemplate.mutateAsync({ templateId: t.id, status: next });
+    setOpenMenuId(null);
   };
+
+  const handlePublish = async (t: AssessmentTemplate) => {
+    await updateTemplate.mutateAsync({ templateId: t.id, status: 'published' });
+    setOpenMenuId(null);
+  };
+
+  const formatDate = (d: string | Date) =>
+    new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  const TYPE_LABELS: Record<string, string> = { '180': '180°', '360': '360°', custom: 'Custom' };
+  const TYPE_COLORS: Record<string, string> = {
+    '180': 'bg-blue-100 text-blue-700',
+    '360': 'bg-purple-100 text-purple-700',
+    custom: 'bg-teal-100 text-teal-700',
+  };
+  const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; classes: string }> = {
+    published: { label: 'Published', icon: <CheckCircle2 className="w-3 h-3" />, classes: 'bg-green-100 text-green-700' },
+    draft:     { label: 'Draft',     icon: <Clock className="w-3 h-3" />,         classes: 'bg-yellow-100 text-yellow-700' },
+    archived:  { label: 'Archived',  icon: <Archive className="w-3 h-3" />,       classes: 'bg-gray-100 text-gray-500' },
+  };
+
+  const STATUS_TABS: { id: StatusFilter; label: string }[] = [
+    { id: 'all',       label: `All (${stats?.total ?? 0})` },
+    { id: 'published', label: `Published (${stats?.published ?? 0})` },
+    { id: 'draft',     label: `Draft (${stats?.draft ?? 0})` },
+    { id: 'archived',  label: `Archived (${stats?.archived ?? 0})` },
+  ];
 
   return (
     <div className="space-y-6">
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">Template Library</h2>
-          <p className="text-sm text-gray-500">Manage reusable templates for programs, assessments, and goals</p>
+          <h2 className="text-xl font-semibold text-gray-900">Assessment Templates</h2>
+          <p className="text-sm text-gray-500">Build and publish 180° / 360° templates for your clients</p>
         </div>
-        <button className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors flex items-center gap-2">
-          <Plus className="w-4 h-4" />
-          Create Template
+        <button
+          onClick={() => openCreateModal()}
+          className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
+        >
+          <Plus className="w-4 h-4" /> New Template
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-red-50 rounded-lg">
-              <FileText className="w-5 h-5 text-red-600" />
-            </div>
+      {/* Stats row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          { label: 'Total', value: stats?.total ?? 0, icon: <FileText className="w-4 h-4 text-red-600" />, bg: 'bg-red-50' },
+          { label: 'Published', value: stats?.published ?? 0, icon: <CheckCircle2 className="w-4 h-4 text-green-600" />, bg: 'bg-green-50' },
+          { label: 'Draft', value: stats?.draft ?? 0, icon: <Clock className="w-4 h-4 text-yellow-600" />, bg: 'bg-yellow-50' },
+          { label: 'Archived', value: stats?.archived ?? 0, icon: <Archive className="w-4 h-4 text-gray-500" />, bg: 'bg-gray-100' },
+        ].map((s) => (
+          <div key={s.label} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-3">
+            <div className={`p-2 rounded-lg ${s.bg} flex-shrink-0`}>{s.icon}</div>
             <div>
-              <div className="text-2xl font-bold text-gray-900">{templates.length}</div>
-              <div className="text-sm text-gray-500">Total Templates</div>
+              <div className="text-xl font-bold text-gray-900">{s.value}</div>
+              <div className="text-xs text-gray-500">{s.label}</div>
             </div>
           </div>
+        ))}
+      </div>
+
+      {/* Status tabs + search + type filter */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className="flex gap-1 p-1 bg-gray-100 rounded-lg text-sm">
+          {STATUS_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setStatusFilter(tab.id)}
+              className={`px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                statusFilter === tab.id
+                  ? 'bg-white text-gray-900 shadow-sm font-medium'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <BookOpen className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-gray-900">
-                {templates.filter((t) => t.type === 'program').length}
-              </div>
-              <div className="text-sm text-gray-500">Programs</div>
-            </div>
+
+        <div className="flex items-center gap-2 flex-1 sm:justify-end">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search templates…"
+              className="pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none w-52"
+            />
           </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <ClipboardList className="w-5 h-5 text-purple-600" />
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-gray-900">
-                {templates.filter((t) => t.type === 'assessment').length}
-              </div>
-              <div className="text-sm text-gray-500">Assessments</div>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <Target className="w-5 h-5 text-green-600" />
-            </div>
-            <div>
-              <div className="text-2xl font-bold text-gray-900">
-                {templates.filter((t) => t.type === 'goal').length}
-              </div>
-              <div className="text-sm text-gray-500">Goals</div>
-            </div>
-          </div>
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
+          >
+            <option value="all">All types</option>
+            <option value="360">360°</option>
+            <option value="180">180°</option>
+            <option value="custom">Custom</option>
+          </select>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-        <div className="relative flex-1 max-w-md w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search templates..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
-          />
+      {/* List */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="w-6 h-6 text-gray-300 animate-spin" />
         </div>
-        <select
-          value={typeFilter}
-          onChange={(e) => setTypeFilter(e.target.value)}
-          className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
-        >
-          <option value="all">All Types</option>
-          <option value="program">Programs</option>
-          <option value="assessment">Assessments</option>
-          <option value="goal">Goals</option>
-        </select>
-      </div>
-
-      {/* Templates Grid or Empty State */}
-      {filteredTemplates.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-          <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-          <h3 className="text-gray-900 font-medium mb-2">No Templates Yet</h3>
+      ) : filtered.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+          <ClipboardList className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+          <p className="text-gray-900 font-medium mb-1">No templates found</p>
           <p className="text-sm text-gray-500 mb-4">
-            Create your first template to standardize programs, assessments, and goals across clients.
+            {search || statusFilter !== 'all' || typeFilter !== 'all'
+              ? 'Try adjusting your filters.'
+              : 'Create your first assessment template to get started.'}
           </p>
-          <button className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors">
-            Create Template
-          </button>
+          {!search && statusFilter === 'all' && typeFilter === 'all' && (
+            <button
+              onClick={() => openCreateModal()}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
+            >
+              New Template
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredTemplates.map((template) => {
-            const conf = typeConfig[template.type];
+          {filtered.map((t) => {
+            const sc = STATUS_CONFIG[t.status];
+            const compCount = t.config?.competencies?.length ?? 0;
+            const qCount = t.config?.competencies?.reduce((n, c) => n + c.questions.length, 0) ?? 0;
             return (
               <div
-                key={template.id}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:border-red-200 transition-colors cursor-pointer"
+                key={t.id}
+                className="bg-white rounded-xl border border-gray-200 p-5 hover:border-red-200 hover:shadow-sm transition-all flex flex-col gap-3"
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded-lg ${conf.bg}`}>
-                      {getTypeIcon(template.type)}
+                {/* Top row */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-2 bg-purple-50 rounded-lg flex-shrink-0">
+                      <ClipboardList className="w-5 h-5 text-purple-600" />
                     </div>
-                    <div>
-                      <div className="font-medium text-gray-900">{template.name}</div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${conf.bg} ${conf.text}`}>
-                          {conf.label}
+                    <div className="min-w-0">
+                      <p className="font-medium text-gray-900 truncate">{t.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_COLORS[t.assessmentType]}`}>
+                          {TYPE_LABELS[t.assessmentType]}
                         </span>
-                        <span className="text-xs text-gray-500">{template.category}</span>
+                        <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${sc.classes}`}>
+                          {sc.icon} {sc.label}
+                        </span>
                       </div>
                     </div>
                   </div>
-                  {template.isPublished ? (
-                    <span className="flex items-center gap-1 px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs">
-                      <CheckCircle2 className="w-3 h-3" />
-                      Published
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs">
-                      <Clock className="w-3 h-3" />
-                      Draft
-                    </span>
-                  )}
+
+                  {/* Actions menu */}
+                  <div className="relative flex-shrink-0">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === t.id ? null : t.id); }}
+                      className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
+                    {openMenuId === t.id && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
+                        <div className="absolute right-0 top-8 z-20 w-44 bg-white rounded-xl border border-gray-200 shadow-lg py-1 text-sm">
+                          <button
+                            onClick={() => { setOpenMenuId(null); router.push(`/agency/assessments/${t.id}`); }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-50 text-gray-700"
+                          >
+                            Edit template
+                          </button>
+                          {t.status !== 'published' && (
+                            <button
+                              onClick={() => void handlePublish(t)}
+                              className="w-full text-left px-3 py-2 hover:bg-gray-50 text-gray-700"
+                            >
+                              Publish
+                            </button>
+                          )}
+                          <button
+                            onClick={() => void handleArchive(t)}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-50 text-gray-700"
+                          >
+                            {t.status === 'archived' ? 'Restore to draft' : 'Archive'}
+                          </button>
+                          <button
+                            onClick={() => { setOpenMenuId(null); void duplicateTemplate.mutateAsync(t.id); }}
+                            className="w-full text-left px-3 py-2 hover:bg-gray-50 text-gray-700 flex items-center gap-2"
+                          >
+                            <Copy className="w-3.5 h-3.5" /> Duplicate
+                          </button>
+                          <hr className="my-1 border-gray-100" />
+                          <button
+                            onClick={() => { setOpenMenuId(null); void handleDelete(t); }}
+                            className="w-full text-left px-3 py-2 hover:bg-red-50 text-red-600 flex items-center gap-2"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Delete
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <p className="text-sm text-gray-500 mb-4 line-clamp-2">{template.description}</p>
+
+                {/* Description */}
+                {t.description && (
+                  <p className="text-sm text-gray-500 line-clamp-2 -mt-1">{t.description}</p>
+                )}
+
+                {/* Footer */}
                 <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                  <div className="flex items-center gap-4 text-xs text-gray-500">
-                    <span>Used {template.usageCount} times</span>
-                    <span>Updated {formatDate(template.updatedAt)}</span>
+                  <span className="text-xs text-gray-400">
+                    {compCount} {compCount === 1 ? 'competency' : 'competencies'} · {qCount} questions
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400">Updated {formatDate(t.updatedAt)}</span>
+                    <button
+                      onClick={() => router.push(`/agency/assessments/${t.id}`)}
+                      className="text-xs text-red-600 hover:text-red-700 font-medium"
+                    >
+                      Edit →
+                    </button>
                   </div>
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ── Create Template Modal ── */}
+      {showCreate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setShowCreate(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-md">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+              <h3 className="text-base font-semibold text-gray-900">New Assessment Template</h3>
+              <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-600">
+                ×
+              </button>
+            </div>
+            <div className="px-5 py-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Template name <span className="text-red-500">*</span></label>
+                <input
+                  autoFocus
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && void handleCreate()}
+                  placeholder="e.g. Leadership 360"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Assessment type</label>
+                <select
+                  value={newType}
+                  onChange={(e) => setNewType(e.target.value as '360' | '180' | 'custom')}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
+                >
+                  <option value="360">360° — Self + Manager + Peers + Direct Reports</option>
+                  <option value="180">180° — Self + Manager only</option>
+                  <option value="custom">Custom — configure rater types manually</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description <span className="text-gray-400 font-normal">(optional)</span></label>
+                <textarea
+                  value={newDesc}
+                  onChange={(e) => setNewDesc(e.target.value)}
+                  rows={2}
+                  placeholder="What is this template used for?"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none resize-none"
+                />
+              </div>
+            </div>
+            {createError && (
+              <p className="px-5 pb-3 text-xs text-red-600 flex items-center gap-1">
+                <span className="font-medium">Error:</span> {createError}
+              </p>
+            )}
+            <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-gray-100">
+              <button
+                onClick={() => setShowCreate(false)}
+                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleCreate()}
+                disabled={!newName.trim() || createTemplate.isPending}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {createTemplate.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                Create &amp; Edit
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

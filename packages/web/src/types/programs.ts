@@ -245,6 +245,8 @@ export interface Program {
   myProgress?: number | null;
   myPointsEarned?: number | null;
   myEnrollmentStatus?: string | null;
+  isTemplate?: boolean;
+  sourceTemplateId?: string | null;
 }
 
 export interface ProgramWithModules extends Program {

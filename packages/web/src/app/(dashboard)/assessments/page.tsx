@@ -6,6 +6,7 @@ import { useAssessments, useAssessmentStats, useAssessment, useAssessmentResults
 import type { AssessmentListItem, AssessmentDetail, ComputedAssessmentResults, AssessmentTemplate as APITemplate, AssessmentInvitation } from '@/types/assessments';
 import { DownloadReportButton } from '@/components/assessments/DownloadReportButton';
 import { DevelopmentPlanView } from '@/components/assessments/DevelopmentPlanView';
+import { CreateAssessmentChoiceModal } from '@/components/assessments/CreateAssessmentChoiceModal';
 import {
   ClipboardList,
   Users,
@@ -28,6 +29,8 @@ import {
   BarChart3,
   FileText,
   Settings,
+  Building2,
+  ChevronDown,
 } from 'lucide-react';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -1978,12 +1981,13 @@ export default function AssessmentsPage() {
   const { user } = useAuth();
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   const [activeTypeFilter, setActiveTypeFilter] = useState<FilterType>('all');
+  const [showChoiceModal, setShowChoiceModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
 
   // Determine tenant
-  const { data: tenants } = useTenants();
+  const { data: tenants, isLoading: tenantsLoading } = useTenants();
   const isAgencyUser = user?.agencyId && !user?.tenantId;
   const activeTenantId = isAgencyUser ? selectedTenantId : user?.tenantId;
 
@@ -2024,6 +2028,23 @@ export default function AssessmentsPage() {
     return matchesStatus && matchesType;
   });
 
+  // Agency user: wait for tenants to load
+  if (isAgencyUser && tenantsLoading) {
+    return (
+      <div className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600" />
+      </div>
+    );
+  }
+
+  if (isAgencyUser && (!tenants || tenants.length === 0)) {
+    return (
+      <div className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8">
+        <p className="text-gray-500">No client tenants found.</p>
+      </div>
+    );
+  }
+
   // If an assessment is selected, show the detail view
   if (selectedAssessmentId && assessmentDetail) {
     const selectedAssessment = adaptDetailToAssessment(assessmentDetail);
@@ -2057,16 +2078,36 @@ export default function AssessmentsPage() {
             Assessments
           </h1>
           <p className="text-gray-500">
-            Manage 180 and 360 feedback assessments and view performance insights
+            {isAgencyUser
+              ? 'View and manage assessments across your clients'
+              : 'Manage 180 and 360 feedback assessments and view performance insights'}
           </p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors flex items-center gap-2 self-start"
-        >
-          <Plus className="w-4 h-4" />
-          New Assessment
-        </button>
+        <div className="flex items-center gap-2 self-start flex-wrap">
+          {/* Tenant selector for agency users */}
+          {isAgencyUser && tenants && tenants.length > 0 && (
+            <div className="relative">
+              <Building2 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <select
+                value={selectedTenantId || ''}
+                onChange={(e) => setSelectedTenantId(e.target.value)}
+                className="pl-8 pr-8 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-red-500 appearance-none cursor-pointer"
+              >
+                {tenants.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            </div>
+          )}
+          <button
+            onClick={() => setShowChoiceModal(true)}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            New Assessment
+          </button>
+        </div>
       </header>
 
       {/* Stats Grid */}
@@ -2189,7 +2230,7 @@ export default function AssessmentsPage() {
             </p>
             {activeFilter === 'all' && (
               <button
-                onClick={() => setShowCreateModal(true)}
+                onClick={() => setShowChoiceModal(true)}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
               >
                 Create Assessment
@@ -2198,6 +2239,13 @@ export default function AssessmentsPage() {
           </div>
         </div>
       )}
+
+      {/* Choice Modal — entry point for creating a new assessment */}
+      <CreateAssessmentChoiceModal
+        isOpen={showChoiceModal}
+        onClose={() => setShowChoiceModal(false)}
+        onCreate={() => { setShowChoiceModal(false); setShowCreateModal(true); }}
+      />
 
       {/* Create Assessment Modal */}
       <CreateAssessmentModal

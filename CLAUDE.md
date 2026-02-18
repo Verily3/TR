@@ -443,7 +443,7 @@ NEXT_PUBLIC_API_URL=http://localhost:3002
   - Mentoring (`/mentoring`) - Role-aware: mentor sees My Mentees/Sessions/Action Items; facilitator sees Overview/Mentors/Sessions/Action Items (real API data)
   - Assessments (`/assessments`) - 180/360 types, filter tabs, detail view with Results/Development tabs, CCI + Current Ceiling display
   - People (`/people`) - User directory with grid/list views
-  - Analytics (`/analytics`) - Charts and metrics dashboard
+  - Analytics (`/analytics`) - Real-data dashboard connected to live API (programs, enrollments, assessments, team, goals)
   - Settings (`/settings`) - Profile (connected to real API), Notifications, Security, Integrations, Account; Permissions tab (tenant_admin+) → `/settings/permissions`
   - Notifications (`/notifications`) - Notification center with filters
   - Help & Support (`/help`) - Knowledge base, FAQs, tickets
@@ -460,6 +460,29 @@ NEXT_PUBLIC_API_URL=http://localhost:3002
   - useMyProfile() → GET /api/users/me (full profile with phone, timezone, metadata)
   - Save via useUpdateUser(tenantId, userId) for tenant users
   - Loads real firstName, lastName, email, title, department, phone, timezone, bio
+- **Analytics connected to real API:**
+  - API route: `GET /api/analytics?timeRange=30d&tenantId=xxx` — queries programs, enrollments, assessments, users, goals
+  - Scope: agency users see all tenants or filter by client; tenant users scoped to their tenantId
+  - Hook: `useAnalytics(timeRange, tenantId?)` with 2-minute staleTime — re-fetches on filter change
+  - 5 tab views: Overview (KPI cards + trend badges), Programs (enrollment/completion trends, top programs), Assessments (activity trend, status breakdown), Team (headcount trend, department bars), Goals (goals trend, status/category breakdowns)
+  - Custom `HeaderDropdown<T>` component (click-outside, chevron animation, red dot on selected)
+  - Client selector (agency users only, from `useTenants()`); time range picker (7d/30d/90d/12m)
+  - Files: `packages/api/src/routes/analytics.ts`, `packages/web/src/hooks/api/useAnalytics.ts`, `packages/web/src/app/(dashboard)/analytics/page.tsx`
+- **Program Templates (full stack):**
+  - DB: `isTemplate: boolean` + `sourceTemplateId: uuid` columns on `programs` table (migration 0012)
+  - API endpoints (in `packages/api/src/routes/agencies.ts`):
+    - `POST /me/programs/:id/mark-template` — toggle template flag
+    - `POST /me/programs/:id/use-template` — deep-copy for agency reuse (sets `sourceTemplateId`)
+    - `POST /me/programs/:id/assign` — create tenant-scoped copy for a client
+    - `POST /me/programs/:id/duplicate` — plain duplicate (preserves `isTemplate` status)
+    - `GET /me/programs?isTemplate=true` — filter templates only
+  - Hooks: `useMarkProgramAsTemplate`, `useCreateProgramFromTemplate`, `useAssignProgramToClient`, `useAgencyProgramTemplates` (in `useAgencyPrograms.ts`)
+  - UI components (`packages/web/src/components/programs/`):
+    - `CreateProgramChoiceModal` — "Start from Scratch" vs "Use a Template" picker
+    - `TemplateBrowserModal` — searchable list of agency templates with module/lesson counts
+    - `UseTemplateModal` — confirm + rename when creating from template
+    - `AssignProgramModal` — client tenant picker with optional name override
+  - Program Builder: Templates tab (shows template cards with "Template" badge), "New Program" button opens choice modal, 3-dot menu has "Mark as Template" + "Assign to Client"
 - **UI Prototype (components/):**
   - Dashboard with Journey Hub, Leaderboard, Schedule, Learning Queue
   - Scorecard with Role/Mission, KPIs, Competencies, Org Health
@@ -546,12 +569,11 @@ NEXT_PUBLIC_API_URL=http://localhost:3002
 ### Pages Using Mock Data (No API Routes Yet)
 - Scorecard — no API routes, no DB schema
 - Planning & Goals — DB schema exists (`planning/`), no API routes
-- Analytics — no API routes, no DB schema
 - Notifications — DB schema + API routes built; frontend page not yet wired to real API
 - Help & Support — static content, no API needed
 
 ### Not Yet Implemented
-- API routes for: Planning, Scorecard, Analytics
+- API routes for: Planning, Scorecard
 - Session prep form (edit mode for mentees)
 - Certificate/diploma generation
 - Rich content editor (WYSIWYG for lessons)

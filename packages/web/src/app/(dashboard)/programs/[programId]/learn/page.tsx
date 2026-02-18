@@ -591,10 +591,22 @@ export default function ModuleViewLMS() {
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Preview Role Banner */}
         {queryPreviewRole && (
-          <div className="flex-shrink-0 bg-amber-50 border-b border-amber-200 px-4 sm:px-8 py-2 text-center">
+          <div className="flex-shrink-0 bg-amber-50 border-b border-amber-200 px-4 sm:px-8 py-2 flex items-center justify-between gap-4">
+            <div className="flex-1" />
             <span className="text-xs font-medium text-amber-800">
               Preview Mode: Viewing as <span className="capitalize">{queryPreviewRole}</span>
             </span>
+            <div className="flex-1 flex justify-end">
+              <button
+                onClick={() => {
+                  const builderUrl = `/program-builder/${programId}${queryTenantId ? `?tenantId=${queryTenantId}` : ''}`;
+                  window.location.href = builderUrl;
+                }}
+                className="text-xs font-medium text-amber-700 hover:text-amber-900 underline underline-offset-2 transition-colors"
+              >
+                Exit Preview
+              </button>
+            </div>
           </div>
         )}
 

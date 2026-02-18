@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Plus,
   Search,
@@ -17,11 +17,23 @@ import {
   CheckCircle2,
   AlertCircle,
   Archive,
+  LayoutTemplate,
+  Building2,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { useAgencyPrograms, useDeleteAgencyProgram, useDuplicateAgencyProgram } from '@/hooks/api/useAgencyPrograms';
+import {
+  useAgencyPrograms,
+  useDeleteAgencyProgram,
+  useDuplicateAgencyProgram,
+  useMarkProgramAsTemplate,
+  useCreateProgramFromTemplate,
+} from '@/hooks/api/useAgencyPrograms';
 import { usePrograms, useDeleteProgram, useDuplicateProgram } from '@/hooks/api/usePrograms';
+import { CreateProgramChoiceModal } from '@/components/programs/CreateProgramChoiceModal';
+import { TemplateBrowserModal } from '@/components/programs/TemplateBrowserModal';
+import { UseTemplateModal } from '@/components/programs/UseTemplateModal';
+import { AssignProgramModal } from '@/components/programs/AssignProgramModal';
 import type { Program } from '@/types/programs';
 
 // ============================================
@@ -29,13 +41,14 @@ import type { Program } from '@/types/programs';
 // ============================================
 
 type DisplayStatus = 'active' | 'draft' | 'archived';
-type FilterTab = 'all' | 'active' | 'draft' | 'archived';
+type FilterTab = 'all' | 'active' | 'draft' | 'archived' | 'templates';
 
 const FILTER_TABS: { id: FilterTab; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'active', label: 'Published' },
   { id: 'draft', label: 'Draft' },
   { id: 'archived', label: 'Archived' },
+  { id: 'templates', label: 'Templates' },
 ];
 
 const STATUS_CONFIG: Record<
@@ -191,6 +204,10 @@ function ActionMenu({
   onEdit,
   onDuplicate,
   onDelete,
+  onMarkTemplate,
+  onAssign,
+  isTemplate,
+  isAgency,
 }: {
   isOpen: boolean;
   onToggle: () => void;
@@ -198,10 +215,28 @@ function ActionMenu({
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  onMarkTemplate?: () => void;
+  onAssign?: () => void;
+  isTemplate?: boolean;
+  isAgency?: boolean;
 }) {
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState({ top: 0, right: 0 });
+
+  useEffect(() => {
+    if (isOpen && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setPos({
+        top: rect.bottom + window.scrollY + 4,
+        right: window.innerWidth - rect.right,
+      });
+    }
+  }, [isOpen]);
+
   return (
-    <div className="relative">
+    <div>
       <button
+        ref={btnRef}
         onClick={onToggle}
         className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-400 hover:text-gray-600"
       >
@@ -209,8 +244,11 @@ function ActionMenu({
       </button>
       {isOpen && (
         <>
-          <div className="fixed inset-0 z-10" onClick={onClose} />
-          <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+          <div className="fixed inset-0 z-40" onClick={onClose} />
+          <div
+            className="fixed w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
+            style={{ top: pos.top, right: pos.right }}
+          >
             <button
               onClick={() => { onClose(); onEdit(); }}
               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
@@ -225,6 +263,24 @@ function ActionMenu({
               <Copy className="w-3.5 h-3.5" />
               Duplicate
             </button>
+            {isAgency && onMarkTemplate && (
+              <button
+                onClick={() => { onClose(); onMarkTemplate(); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <LayoutTemplate className="w-3.5 h-3.5" />
+                {isTemplate ? 'Remove Template Flag' : 'Mark as Template'}
+              </button>
+            )}
+            {isAgency && onAssign && (
+              <button
+                onClick={() => { onClose(); onAssign(); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                Assign to Client
+              </button>
+            )}
             <div className="border-t border-gray-100 my-1" />
             <button
               onClick={() => { onClose(); onDelete(); }}
@@ -248,6 +304,9 @@ function ProgramTable({
   onEdit,
   onDuplicate,
   onDelete,
+  onMarkTemplate,
+  onAssign,
+  isAgency,
 }: {
   programs: Program[];
   openMenuId: string | null;
@@ -256,6 +315,9 @@ function ProgramTable({
   onEdit: (id: string) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
+  onMarkTemplate?: (id: string, isTemplate: boolean) => void;
+  onAssign?: (program: Program) => void;
+  isAgency?: boolean;
 }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -282,16 +344,26 @@ function ProgramTable({
             <div className="hidden lg:grid lg:grid-cols-[1fr_120px_160px_150px_160px_80px] gap-4 px-6 py-4 items-center">
               {/* Program */}
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center shrink-0">
-                  <BookOpen className="w-5 h-5 text-red-600" />
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${program.isTemplate ? 'bg-blue-50' : 'bg-red-50'}`}>
+                  {program.isTemplate
+                    ? <LayoutTemplate className="w-5 h-5 text-blue-600" />
+                    : <BookOpen className="w-5 h-5 text-red-600" />
+                  }
                 </div>
                 <div className="min-w-0">
-                  <button
-                    onClick={() => onEdit(program.id)}
-                    className="text-sm font-medium text-gray-900 hover:text-red-600 transition-colors truncate block text-left"
-                  >
-                    {program.name}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => onEdit(program.id)}
+                      className="text-sm font-medium text-gray-900 hover:text-red-600 transition-colors truncate block text-left"
+                    >
+                      {program.name}
+                    </button>
+                    {program.isTemplate && (
+                      <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                        Template
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-gray-400 truncate">
                     {learningTrack || program.type?.replace('_', ' ')}
                   </p>
@@ -365,6 +437,10 @@ function ProgramTable({
                   onEdit={() => onEdit(program.id)}
                   onDuplicate={() => onDuplicate(program.id)}
                   onDelete={() => onDelete(program.id)}
+                  onMarkTemplate={onMarkTemplate ? () => onMarkTemplate(program.id, !program.isTemplate) : undefined}
+                  onAssign={onAssign ? () => onAssign(program) : undefined}
+                  isTemplate={program.isTemplate}
+                  isAgency={isAgency}
                 />
               </div>
             </div>
@@ -395,10 +471,19 @@ function ProgramTable({
                       onEdit={() => onEdit(program.id)}
                       onDuplicate={() => onDuplicate(program.id)}
                       onDelete={() => onDelete(program.id)}
+                      onMarkTemplate={onMarkTemplate ? () => onMarkTemplate(program.id, !program.isTemplate) : undefined}
+                      onAssign={onAssign ? () => onAssign(program) : undefined}
+                      isTemplate={program.isTemplate}
+                      isAgency={isAgency}
                     />
                   </div>
                   <div className="flex items-center gap-3 mt-2 flex-wrap">
                     <StatusBadge status={program.status as DisplayStatus} />
+                    {program.isTemplate && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                        Template
+                      </span>
+                    )}
                     {Number(program.learnerCount || 0) > 0 && (
                       <span className="text-xs text-gray-500">{Number(program.learnerCount)} learners</span>
                     )}
@@ -465,6 +550,13 @@ export default function ProgramBuilderPage() {
   const isAgencyUser = !!user?.agencyId;
   const tenantId = user?.tenantId;
 
+  // Modal states
+  const [showChoiceModal, setShowChoiceModal] = useState(false);
+  const [showTemplateBrowser, setShowTemplateBrowser] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<Program | null>(null);
+  const [showUseTemplate, setShowUseTemplate] = useState(false);
+  const [assignTarget, setAssignTarget] = useState<Program | null>(null);
+
   const { data: agencyData, isLoading: agencyLoading } = useAgencyPrograms(
     isAgencyUser ? { limit: 100 } : undefined
   );
@@ -475,6 +567,8 @@ export default function ProgramBuilderPage() {
 
   const deleteAgencyProgram = useDeleteAgencyProgram();
   const duplicateAgencyProgram = useDuplicateAgencyProgram();
+  const markProgramAsTemplate = useMarkProgramAsTemplate();
+  const createFromTemplate = useCreateProgramFromTemplate();
   const deleteTenantProgram = useDeleteProgram(tenantId);
   const duplicateTenantProgram = useDuplicateProgram(tenantId);
 
@@ -486,8 +580,10 @@ export default function ProgramBuilderPage() {
   const filteredPrograms = useMemo(() => {
     let result = allPrograms;
 
-    if (activeTab !== 'all') {
-      result = result.filter((p) => p.status === activeTab);
+    if (activeTab === 'templates') {
+      result = result.filter((p) => p.isTemplate);
+    } else if (activeTab !== 'all') {
+      result = result.filter((p) => p.status === activeTab && !p.isTemplate);
     }
 
     if (searchQuery.trim()) {
@@ -525,6 +621,31 @@ export default function ProgramBuilderPage() {
     }
   };
 
+  const handleMarkTemplate = (programId: string, isTemplate: boolean) => {
+    markProgramAsTemplate.mutate({ programId, isTemplate });
+  };
+
+  const handleCreateClick = () => {
+    if (isAgencyUser) {
+      setShowChoiceModal(true);
+    } else {
+      router.push('/program-builder/new');
+    }
+  };
+
+
+
+  const handleUseTemplate = async (name: string) => {
+    if (!selectedTemplate) return;
+    const newProgram = await createFromTemplate.mutateAsync({
+      programId: selectedTemplate.id,
+      name,
+    });
+    setShowUseTemplate(false);
+    setSelectedTemplate(null);
+    router.push(`/program-builder/${newProgram.id}`);
+  };
+
   return (
     <div className="max-w-[1400px] mx-auto">
       {/* Page Header */}
@@ -537,7 +658,7 @@ export default function ProgramBuilderPage() {
             </p>
           </div>
           <button
-            onClick={() => router.push('/program-builder/new')}
+            onClick={handleCreateClick}
             className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-full text-sm font-medium hover:bg-red-700 transition-colors shrink-0"
           >
             <Plus className="w-4 h-4" />
@@ -594,13 +715,47 @@ export default function ProgramBuilderPage() {
               onEdit={handleEdit}
               onDuplicate={handleDuplicate}
               onDelete={handleDelete}
+              onMarkTemplate={isAgencyUser ? handleMarkTemplate : undefined}
+              onAssign={isAgencyUser ? (p) => setAssignTarget(p) : undefined}
+              isAgency={isAgencyUser}
             />
           ) : (
-            <EmptyState filter={activeTab} search={searchQuery} onCreateClick={() => router.push('/program-builder/new')} />
+            <EmptyState filter={activeTab} search={searchQuery} onCreateClick={handleCreateClick} />
           )}
         </>
       )}
 
+      {/* Modals */}
+      <CreateProgramChoiceModal
+        isOpen={showChoiceModal}
+        onClose={() => setShowChoiceModal(false)}
+        onScratch={() => { setShowChoiceModal(false); router.push('/program-builder/new'); }}
+        onTemplate={() => { setShowChoiceModal(false); setShowTemplateBrowser(true); }}
+      />
+
+      <TemplateBrowserModal
+        isOpen={showTemplateBrowser}
+        onClose={() => setShowTemplateBrowser(false)}
+        onSelect={(template) => {
+          setSelectedTemplate(template);
+          setShowTemplateBrowser(false);
+          setShowUseTemplate(true);
+        }}
+      />
+
+      <UseTemplateModal
+        isOpen={showUseTemplate}
+        template={selectedTemplate}
+        onClose={() => { setShowUseTemplate(false); setSelectedTemplate(null); }}
+        onConfirm={handleUseTemplate}
+        isLoading={createFromTemplate.isPending}
+      />
+
+      <AssignProgramModal
+        isOpen={!!assignTarget}
+        program={assignTarget}
+        onClose={() => setAssignTarget(null)}
+      />
     </div>
   );
 }

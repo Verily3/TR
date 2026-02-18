@@ -131,8 +131,9 @@ export default function ProgramDetailPage() {
   );
 
   const handleContinueLearning = useCallback(() => {
-    router.push(`/programs/${programId}/learn`);
-  }, [router, programId]);
+    const tenantParam = activeTenantId ? `?tenantId=${activeTenantId}` : '';
+    router.push(`/programs/${programId}/learn${tenantParam}`);
+  }, [router, programId, activeTenantId]);
 
   // Transform modules with progress data
   const modulesWithProgress: ModuleProgressData[] = useMemo(() => {

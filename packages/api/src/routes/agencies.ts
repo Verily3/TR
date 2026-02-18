@@ -401,6 +401,7 @@ const programListQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(20),
   status: z.enum(['draft', 'active', 'archived']).optional(),
   type: z.enum(['cohort', 'self_paced']).optional(),
+  isTemplate: z.coerce.boolean().optional(),
 });
 
 const createAgencyProgramSchema = z.object({
@@ -449,7 +450,7 @@ agenciesRoutes.get(
   zValidator('query', programListQuerySchema),
   async (c) => {
     const user = c.get('user');
-    const { page, limit, status, type } = c.req.valid('query');
+    const { page, limit, status, type, isTemplate } = c.req.valid('query');
 
     const conditions = [
       eq(programs.agencyId, user.agencyId!),
@@ -462,6 +463,10 @@ agenciesRoutes.get(
 
     if (type) {
       conditions.push(eq(programs.type, type));
+    }
+
+    if (isTemplate !== undefined) {
+      conditions.push(eq(programs.isTemplate, isTemplate));
     }
 
     // Get total count
@@ -485,6 +490,8 @@ agenciesRoutes.get(
         tenantId: programs.tenantId,
         allowedTenantIds: programs.allowedTenantIds,
         config: programs.config,
+        isTemplate: programs.isTemplate,
+        sourceTemplateId: programs.sourceTemplateId,
         createdAt: programs.createdAt,
         updatedAt: programs.updatedAt,
         enrollmentCount: sql<number>`(
@@ -819,6 +826,462 @@ agenciesRoutes.delete(
       .where(eq(programs.id, programId));
 
     return c.json({ data: { success: true } });
+  }
+);
+
+/**
+ * POST /api/agencies/me/programs/:programId/duplicate
+ * Create a duplicate of any agency program (preserves isTemplate status)
+ */
+agenciesRoutes.post(
+  '/me/programs/:programId/duplicate',
+  requireAgencyAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_CREATE),
+  async (c) => {
+    const user = c.get('user');
+    const { programId } = c.req.param();
+    const body = await c.req.json().catch(() => ({})) as { name?: string };
+    const overrideName = body?.name;
+
+    const [original] = await db
+      .select()
+      .from(programs)
+      .where(
+        and(
+          eq(programs.id, programId),
+          eq(programs.agencyId, user.agencyId!),
+          isNull(programs.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!original) {
+      throw new NotFoundError('Program', programId);
+    }
+
+    const newName = overrideName ?? `Copy of ${original.name}`;
+
+    const [newProgram] = await db
+      .insert(programs)
+      .values({
+        agencyId: user.agencyId!,
+        tenantId: null,
+        allowedTenantIds: [],
+        name: newName,
+        internalName: original.internalName ? `${original.internalName} (Copy)` : null,
+        description: original.description,
+        type: original.type,
+        coverImage: original.coverImage,
+        timezone: original.timezone,
+        config: original.config,
+        status: 'draft',
+        isTemplate: original.isTemplate,
+        sourceTemplateId: null,
+        createdBy: user.id,
+      })
+      .returning();
+
+    // Deep copy modules → lessons → tasks
+    const originalModules = await db
+      .select()
+      .from(modules)
+      .where(eq(modules.programId, programId))
+      .orderBy(asc(modules.order));
+
+    const moduleIdMap = new Map<string, string>();
+
+    for (const mod of originalModules) {
+      const [newModule] = await db
+        .insert(modules)
+        .values({
+          programId: newProgram.id,
+          parentModuleId: mod.parentModuleId ? moduleIdMap.get(mod.parentModuleId) : null,
+          title: mod.title,
+          description: mod.description,
+          order: mod.order,
+          depth: mod.depth,
+          type: mod.type,
+          eventConfig: mod.eventConfig,
+          dripType: mod.dripType,
+          dripValue: mod.dripValue,
+          dripDate: mod.dripDate,
+          status: 'draft',
+        })
+        .returning();
+
+      moduleIdMap.set(mod.id, newModule.id);
+
+      const moduleLessons = await db
+        .select()
+        .from(lessons)
+        .where(eq(lessons.moduleId, mod.id))
+        .orderBy(asc(lessons.order));
+
+      for (const lesson of moduleLessons) {
+        const [newLesson] = await db.insert(lessons).values({
+          moduleId: newModule.id,
+          title: lesson.title,
+          contentType: lesson.contentType,
+          content: lesson.content,
+          order: lesson.order,
+          durationMinutes: lesson.durationMinutes,
+          points: lesson.points,
+          dripType: lesson.dripType,
+          dripValue: lesson.dripValue,
+          dripDate: lesson.dripDate,
+          visibleTo: lesson.visibleTo,
+          approvalRequired: lesson.approvalRequired,
+          status: 'draft',
+        }).returning();
+
+        const lessonTaskList = await db
+          .select()
+          .from(lessonTasks)
+          .where(eq(lessonTasks.lessonId, lesson.id))
+          .orderBy(asc(lessonTasks.order));
+
+        for (const task of lessonTaskList) {
+          await db.insert(lessonTasks).values({
+            lessonId: newLesson.id,
+            title: task.title,
+            description: task.description,
+            order: task.order,
+            responseType: task.responseType,
+            approvalRequired: task.approvalRequired,
+            dueDaysOffset: task.dueDaysOffset,
+            points: task.points,
+            config: task.config,
+            status: 'draft',
+          });
+        }
+      }
+    }
+
+    return c.json({ data: newProgram }, 201);
+  }
+);
+
+/**
+ * POST /api/agencies/me/programs/:programId/mark-template
+ * Toggle the isTemplate flag on a program
+ */
+agenciesRoutes.post(
+  '/me/programs/:programId/mark-template',
+  requireAgencyAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', z.object({ isTemplate: z.boolean().default(true) })),
+  async (c) => {
+    const user = c.get('user');
+    const { programId } = c.req.param();
+    const { isTemplate: flagValue } = c.req.valid('json');
+
+    const [existing] = await db
+      .select({ id: programs.id })
+      .from(programs)
+      .where(
+        and(
+          eq(programs.id, programId),
+          eq(programs.agencyId, user.agencyId!),
+          isNull(programs.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundError('Program', programId);
+    }
+
+    const [updated] = await db
+      .update(programs)
+      .set({ isTemplate: flagValue, updatedAt: new Date() })
+      .where(eq(programs.id, programId))
+      .returning();
+
+    return c.json({ data: updated });
+  }
+);
+
+/**
+ * POST /api/agencies/me/programs/:programId/use-template
+ * Create a new agency program derived from a template (deep copy)
+ */
+agenciesRoutes.post(
+  '/me/programs/:programId/use-template',
+  requireAgencyAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_CREATE),
+  zValidator('json', z.object({ name: z.string().min(1).max(255).optional() })),
+  async (c) => {
+    const user = c.get('user');
+    const { programId } = c.req.param();
+    const { name: overrideName } = c.req.valid('json');
+
+    const [template] = await db
+      .select()
+      .from(programs)
+      .where(
+        and(
+          eq(programs.id, programId),
+          eq(programs.agencyId, user.agencyId!),
+          isNull(programs.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!template) {
+      throw new NotFoundError('Program', programId);
+    }
+
+    const newName = overrideName ?? `Copy of ${template.name}`;
+
+    const [newProgram] = await db
+      .insert(programs)
+      .values({
+        agencyId: user.agencyId!,
+        tenantId: null,
+        allowedTenantIds: [],
+        name: newName,
+        internalName: template.internalName ? `${template.internalName} (Copy)` : null,
+        description: template.description,
+        type: template.type,
+        coverImage: template.coverImage,
+        timezone: template.timezone,
+        config: template.config,
+        status: 'draft',
+        isTemplate: false,
+        sourceTemplateId: template.id,
+        createdBy: user.id,
+      })
+      .returning();
+
+    // Deep copy modules → lessons → tasks
+    const originalModules = await db
+      .select()
+      .from(modules)
+      .where(eq(modules.programId, programId))
+      .orderBy(asc(modules.order));
+
+    const moduleIdMap = new Map<string, string>();
+
+    for (const mod of originalModules) {
+      const [newModule] = await db
+        .insert(modules)
+        .values({
+          programId: newProgram.id,
+          parentModuleId: mod.parentModuleId ? moduleIdMap.get(mod.parentModuleId) : null,
+          title: mod.title,
+          description: mod.description,
+          order: mod.order,
+          depth: mod.depth,
+          type: mod.type,
+          eventConfig: mod.eventConfig,
+          dripType: mod.dripType,
+          dripValue: mod.dripValue,
+          dripDate: mod.dripDate,
+          status: 'draft',
+        })
+        .returning();
+
+      moduleIdMap.set(mod.id, newModule.id);
+
+      const moduleLessons = await db
+        .select()
+        .from(lessons)
+        .where(eq(lessons.moduleId, mod.id))
+        .orderBy(asc(lessons.order));
+
+      for (const lesson of moduleLessons) {
+        const [newLesson] = await db.insert(lessons).values({
+          moduleId: newModule.id,
+          title: lesson.title,
+          contentType: lesson.contentType,
+          content: lesson.content,
+          order: lesson.order,
+          durationMinutes: lesson.durationMinutes,
+          points: lesson.points,
+          dripType: lesson.dripType,
+          dripValue: lesson.dripValue,
+          dripDate: lesson.dripDate,
+          visibleTo: lesson.visibleTo,
+          approvalRequired: lesson.approvalRequired,
+          status: 'draft',
+        }).returning();
+
+        const lessonTaskList = await db
+          .select()
+          .from(lessonTasks)
+          .where(eq(lessonTasks.lessonId, lesson.id))
+          .orderBy(asc(lessonTasks.order));
+
+        for (const task of lessonTaskList) {
+          await db.insert(lessonTasks).values({
+            lessonId: newLesson.id,
+            title: task.title,
+            description: task.description,
+            order: task.order,
+            responseType: task.responseType,
+            approvalRequired: task.approvalRequired,
+            dueDaysOffset: task.dueDaysOffset,
+            points: task.points,
+            config: task.config,
+            status: 'draft',
+          });
+        }
+      }
+    }
+
+    return c.json({ data: newProgram }, 201);
+  }
+);
+
+/**
+ * POST /api/agencies/me/programs/:programId/assign
+ * Assign a program to a client tenant (creates a tenant-scoped copy)
+ */
+agenciesRoutes.post(
+  '/me/programs/:programId/assign',
+  requireAgencyAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', z.object({
+    tenantId: z.string().uuid(),
+    name: z.string().min(1).max(255).optional(),
+  })),
+  async (c) => {
+    const user = c.get('user');
+    const { programId } = c.req.param();
+    const { tenantId, name: overrideName } = c.req.valid('json');
+
+    const [sourceProgram] = await db
+      .select()
+      .from(programs)
+      .where(
+        and(
+          eq(programs.id, programId),
+          eq(programs.agencyId, user.agencyId!),
+          isNull(programs.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!sourceProgram) {
+      throw new NotFoundError('Program', programId);
+    }
+
+    // Verify tenant belongs to this agency
+    const [tenant] = await db
+      .select({ id: tenants.id })
+      .from(tenants)
+      .where(
+        and(
+          eq(tenants.id, tenantId),
+          eq(tenants.agencyId, user.agencyId!),
+          isNull(tenants.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!tenant) {
+      throw new NotFoundError('Tenant', tenantId);
+    }
+
+    const newName = overrideName ?? sourceProgram.name;
+
+    const [newProgram] = await db
+      .insert(programs)
+      .values({
+        agencyId: user.agencyId!,
+        tenantId,
+        allowedTenantIds: [],
+        name: newName,
+        internalName: sourceProgram.internalName,
+        description: sourceProgram.description,
+        type: sourceProgram.type,
+        coverImage: sourceProgram.coverImage,
+        timezone: sourceProgram.timezone,
+        config: sourceProgram.config,
+        status: 'draft',
+        isTemplate: false,
+        sourceTemplateId: sourceProgram.id,
+        createdBy: user.id,
+      })
+      .returning();
+
+    // Deep copy modules → lessons → tasks
+    const originalModules = await db
+      .select()
+      .from(modules)
+      .where(eq(modules.programId, programId))
+      .orderBy(asc(modules.order));
+
+    const moduleIdMap = new Map<string, string>();
+
+    for (const mod of originalModules) {
+      const [newModule] = await db
+        .insert(modules)
+        .values({
+          programId: newProgram.id,
+          parentModuleId: mod.parentModuleId ? moduleIdMap.get(mod.parentModuleId) : null,
+          title: mod.title,
+          description: mod.description,
+          order: mod.order,
+          depth: mod.depth,
+          type: mod.type,
+          eventConfig: mod.eventConfig,
+          dripType: mod.dripType,
+          dripValue: mod.dripValue,
+          dripDate: mod.dripDate,
+          status: 'draft',
+        })
+        .returning();
+
+      moduleIdMap.set(mod.id, newModule.id);
+
+      const moduleLessons = await db
+        .select()
+        .from(lessons)
+        .where(eq(lessons.moduleId, mod.id))
+        .orderBy(asc(lessons.order));
+
+      for (const lesson of moduleLessons) {
+        const [newLesson] = await db.insert(lessons).values({
+          moduleId: newModule.id,
+          title: lesson.title,
+          contentType: lesson.contentType,
+          content: lesson.content,
+          order: lesson.order,
+          durationMinutes: lesson.durationMinutes,
+          points: lesson.points,
+          dripType: lesson.dripType,
+          dripValue: lesson.dripValue,
+          dripDate: lesson.dripDate,
+          visibleTo: lesson.visibleTo,
+          approvalRequired: lesson.approvalRequired,
+          status: 'draft',
+        }).returning();
+
+        const lessonTaskList = await db
+          .select()
+          .from(lessonTasks)
+          .where(eq(lessonTasks.lessonId, lesson.id))
+          .orderBy(asc(lessonTasks.order));
+
+        for (const task of lessonTaskList) {
+          await db.insert(lessonTasks).values({
+            lessonId: newLesson.id,
+            title: task.title,
+            description: task.description,
+            order: task.order,
+            responseType: task.responseType,
+            approvalRequired: task.approvalRequired,
+            dueDaysOffset: task.dueDaysOffset,
+            points: task.points,
+            config: task.config,
+            status: 'draft',
+          });
+        }
+      }
+    }
+
+    return c.json({ data: newProgram }, 201);
   }
 );
 

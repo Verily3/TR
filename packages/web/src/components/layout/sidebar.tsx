@@ -1,5 +1,6 @@
 'use client';
 
+import { Fragment } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
@@ -23,6 +24,9 @@ import {
   X,
 } from 'lucide-react';
 
+// Items that get a visual divider above them (separates operational from utility nav)
+const DIVIDER_BEFORE = new Set(['notifications']);
+
 const NAV_ITEMS: Record<string, { label: string; href: string; icon: React.ComponentType<{ className?: string }> }> = {
   dashboard: { label: 'Dashboard', href: '/dashboard', icon: Home },
   scorecard: { label: 'Scorecard', href: '/scorecard', icon: BarChart3 },
@@ -36,7 +40,7 @@ const NAV_ITEMS: Record<string, { label: string; href: string; icon: React.Compo
   notifications: { label: 'Notifications', href: '/notifications', icon: Bell },
   help: { label: 'Help & Support', href: '/help', icon: HelpCircle },
   settings: { label: 'Settings', href: '/settings', icon: Settings },
-  agency: { label: 'Agency Portal', href: '/agency', icon: Building2 },
+  agency: { label: 'Agency', href: '/agency', icon: Building2 },
 };
 
 interface SidebarProps {
@@ -113,20 +117,25 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               const isActive = pathname === navItem.href || pathname.startsWith(`${navItem.href}/`);
 
               return (
-                <li key={item}>
-                  <Link
-                    href={navItem.href}
-                    onClick={onClose}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-red-600 text-white'
-                        : 'text-gray-700 hover:bg-gray-100'
-                    }`}
-                  >
-                    <Icon className="w-5 h-5" />
-                    <span>{navItem.label}</span>
-                  </Link>
-                </li>
+                <Fragment key={item}>
+                  {DIVIDER_BEFORE.has(item) && (
+                    <li className="mx-1 my-2 border-t border-gray-100" role="separator" />
+                  )}
+                  <li>
+                    <Link
+                      href={navItem.href}
+                      onClick={onClose}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                        isActive
+                          ? 'bg-red-600 text-white'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5" />
+                      <span>{navItem.label}</span>
+                    </Link>
+                  </li>
+                </Fragment>
               );
             })}
           </ul>

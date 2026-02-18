@@ -348,7 +348,7 @@ const ProgramCard = memo(function ProgramCard({ program, tenantId, animationInde
         {/* Action Button */}
         <div className="flex gap-3 mb-4">
           <Link
-            href={`/programs/${program.id}`}
+            href={`/programs/${program.id}?tenantId=${tenantId}`}
             className="flex-1 px-4 py-2.5 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-all hover:shadow-md active:scale-[0.98] text-center focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
           >
             {!program.myEnrollmentId
@@ -608,12 +608,18 @@ export default function ProgramsPage() {
             </select>
           )}
           <Link
-            href="/programs/new"
+            href={isAgencyUser ? '/program-builder' : '/programs/new'}
             className="px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-all hover:shadow-md active:scale-[0.98] flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
           >
             <Plus className="w-4 h-4" aria-hidden="true" />
-            <span className="hidden sm:inline">Enroll in Program</span>
-            <span className="sm:hidden">Enroll</span>
+            {isAgencyUser ? (
+              <span>Program Builder</span>
+            ) : (
+              <>
+                <span className="hidden sm:inline">New Program</span>
+                <span className="sm:hidden">New</span>
+              </>
+            )}
           </Link>
         </div>
       </header>

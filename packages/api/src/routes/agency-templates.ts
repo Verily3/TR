@@ -17,12 +17,15 @@ const competencyQuestionSchema = z.object({
   text: z.string().min(1),
   type: z.enum(['rating', 'text', 'multiple_choice']).optional(),
   required: z.boolean().optional(),
+  reverseScored: z.boolean().optional(),
+  isCCI: z.boolean().optional(),
 });
 
 const competencySchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string().optional(),
+  subtitle: z.string().optional(),
   questions: z.array(competencyQuestionSchema).min(1),
 });
 
