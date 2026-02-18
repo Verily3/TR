@@ -3,7 +3,7 @@ import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { db, schema } from '@tr/db';
 import { requireTenantAccess, requireRoleLevel } from '../middleware/permissions.js';
-import { NAVIGATION_BY_ROLE, getNavigationForRole } from '@tr/shared';
+import { getNavigationForRole } from '@tr/shared';
 import type { Variables } from '../types/context.js';
 
 const { tenantRolePermissions, tenantUserPermissions, users } = schema;
@@ -71,7 +71,7 @@ async function resolveNavForUser(
 
 permissionsRoutes.get('/my-nav', requireTenantAccess(), async (c) => {
   const user = c.get('user');
-  const tenantId = c.req.param('tenantId');
+  const tenantId = c.req.param('tenantId')!;
 
   if (!user.tenantId) {
     // Agency user — return hardcoded nav
@@ -85,7 +85,7 @@ permissionsRoutes.get('/my-nav', requireTenantAccess(), async (c) => {
 // ─── GET /roles ───────────────────────────────────────────────────────────────
 
 permissionsRoutes.get('/roles', requireTenantAccess(), requireRoleLevel(70), async (c) => {
-  const tenantId = c.req.param('tenantId');
+  const tenantId = c.req.param('tenantId')!;
 
   const overrides = await db
     .select()
@@ -111,8 +111,8 @@ permissionsRoutes.put(
   requireTenantAccess(),
   requireRoleLevel(70),
   async (c) => {
-    const tenantId = c.req.param('tenantId');
-    const roleSlug = c.req.param('roleSlug');
+    const tenantId = c.req.param('tenantId')!;
+    const roleSlug = c.req.param('roleSlug')!;
     const user = c.get('user');
 
     if (!CONFIGURABLE_ROLES.includes(roleSlug as typeof CONFIGURABLE_ROLES[number])) {
@@ -150,8 +150,8 @@ permissionsRoutes.delete(
   requireTenantAccess(),
   requireRoleLevel(70),
   async (c) => {
-    const tenantId = c.req.param('tenantId');
-    const roleSlug = c.req.param('roleSlug');
+    const tenantId = c.req.param('tenantId')!;
+    const roleSlug = c.req.param('roleSlug')!;
 
     await db
       .delete(tenantRolePermissions)
@@ -169,7 +169,7 @@ permissionsRoutes.delete(
 // ─── GET /users ───────────────────────────────────────────────────────────────
 
 permissionsRoutes.get('/users', requireTenantAccess(), requireRoleLevel(70), async (c) => {
-  const tenantId = c.req.param('tenantId');
+  const tenantId = c.req.param('tenantId')!;
 
   const overrides = await db
     .select({
@@ -197,8 +197,8 @@ permissionsRoutes.get(
   requireTenantAccess(),
   requireRoleLevel(70),
   async (c) => {
-    const tenantId = c.req.param('tenantId');
-    const userId = c.req.param('userId');
+    const tenantId = c.req.param('tenantId')!;
+    const userId = c.req.param('userId')!;
 
     const [override] = await db
       .select()
@@ -221,8 +221,8 @@ permissionsRoutes.put(
   requireTenantAccess(),
   requireRoleLevel(70),
   async (c) => {
-    const tenantId = c.req.param('tenantId');
-    const userId = c.req.param('userId');
+    const tenantId = c.req.param('tenantId')!;
+    const userId = c.req.param('userId')!;
     const adminUser = c.get('user');
 
     const body = await c.req.json();
@@ -257,8 +257,8 @@ permissionsRoutes.delete(
   requireTenantAccess(),
   requireRoleLevel(70),
   async (c) => {
-    const tenantId = c.req.param('tenantId');
-    const userId = c.req.param('userId');
+    const tenantId = c.req.param('tenantId')!;
+    const userId = c.req.param('userId')!;
 
     await db
       .delete(tenantUserPermissions)

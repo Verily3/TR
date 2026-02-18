@@ -12,7 +12,6 @@ const {
   mentoringSessionNotes,
   mentoringActionItems,
   enrollments,
-  enrollmentMentorships,
   users,
 } = schema;
 
@@ -104,7 +103,7 @@ mentoringRoutes.get(
   requirePermission([PERMISSIONS.MENTORING_VIEW_ASSIGNED, PERMISSIONS.MENTORING_VIEW_ALL]),
   async (c) => {
     const user = c.get('user');
-    const tenantId = c.req.param('tenantId');
+    const tenantId = c.req.param('tenantId')!;
 
     const scopedIds = await getScopedRelationshipIds(user, tenantId);
 
@@ -160,7 +159,7 @@ mentoringRoutes.post(
   requireTenantAccess(),
   requirePermission(PERMISSIONS.MENTORING_MANAGE),
   async (c) => {
-    const tenantId = c.req.param('tenantId');
+    const tenantId = c.req.param('tenantId')!;
     const body = await c.req.json();
     const parsed = z.object({
       mentorId: z.string().uuid(),
@@ -173,7 +172,7 @@ mentoringRoutes.post(
 
     const [row] = await db
       .insert(mentoringRelationships)
-      .values({ tenantId, ...parsed, startedAt: new Date() })
+      .values({ tenantId, ...parsed })
       .returning();
 
     return c.json({ data: row }, 201);
@@ -185,7 +184,7 @@ mentoringRoutes.delete(
   requireTenantAccess(),
   requirePermission(PERMISSIONS.MENTORING_MANAGE),
   async (c) => {
-    const tenantId = c.req.param('tenantId');
+    const tenantId = c.req.param('tenantId')!;
     const id = c.req.param('id');
 
     await db
@@ -205,7 +204,7 @@ mentoringRoutes.get(
   requirePermission([PERMISSIONS.MENTORING_VIEW_ASSIGNED, PERMISSIONS.MENTORING_VIEW_ALL]),
   async (c) => {
     const user = c.get('user');
-    const tenantId = c.req.param('tenantId');
+    const tenantId = c.req.param('tenantId')!;
     const relationshipId = c.req.query('relationshipId');
 
     const scopedIds = await getScopedRelationshipIds(user, tenantId);
@@ -367,7 +366,7 @@ mentoringRoutes.get(
   requirePermission([PERMISSIONS.MENTORING_VIEW_ASSIGNED, PERMISSIONS.MENTORING_VIEW_ALL]),
   async (c) => {
     const user = c.get('user');
-    const tenantId = c.req.param('tenantId');
+    const tenantId = c.req.param('tenantId')!;
     const status = c.req.query('status');
 
     const scopedIds = await getScopedRelationshipIds(user, tenantId);
@@ -457,7 +456,7 @@ mentoringRoutes.get(
   requirePermission([PERMISSIONS.MENTORING_VIEW_ASSIGNED, PERMISSIONS.MENTORING_VIEW_ALL]),
   async (c) => {
     const user = c.get('user');
-    const tenantId = c.req.param('tenantId');
+    const tenantId = c.req.param('tenantId')!;
 
     const scopedIds = await getScopedRelationshipIds(user, tenantId);
 
