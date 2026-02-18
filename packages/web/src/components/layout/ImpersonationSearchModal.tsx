@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Search, X, LogIn, AlertTriangle, Loader2, Users, ChevronDown, Building2 } from 'lucide-react';
 import { useAgencyImpersonationSearch, type AgencyUserSearchResult } from '@/hooks/api/useAgency';
 import { useStartImpersonation } from '@/hooks/api/useImpersonate';
