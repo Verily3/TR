@@ -161,7 +161,7 @@ adminDbRoutes.get('/migrate', async (c) => {
   // Return JSON if requested
   const accept = c.req.header('Accept') || '';
   if (accept.includes('application/json')) {
-    return c.json(result, status);
+    return c.json({ data: result }, status);
   }
 
   return c.html(renderHtml(result), status);
