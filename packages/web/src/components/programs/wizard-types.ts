@@ -11,6 +11,13 @@ export interface EmailSetting {
   description: string;
   enabled: boolean;
   timing?: string;
+  // Per-program content overrides (optional)
+  subjectOverride?: string;
+  bodyOverride?: string;
+  // Timing config fields (shown inline when enabled)
+  inactivityDays?: number;
+  weeklyDigestDay?: number;             // 0=Sun … 6=Sat
+  mentorSummaryFrequency?: 'weekly' | 'biweekly';
 }
 
 export interface ReminderTiming {
@@ -39,6 +46,12 @@ export interface WizardFormData {
   allowIndividualPacing: boolean;
   startOffset: number;
   deadlineFlexibility: number;
+
+  // Step 3b: Enrollment Settings
+  allowSelfEnrollment: boolean;
+  requireManagerApproval: boolean;
+  programCapacity: number | null;
+  enableWaitlist: boolean;
 
   // Step 4: Communication Settings
   emailSettings: EmailSetting[];

@@ -14,6 +14,7 @@ export {
   AssignmentContent,
   GoalContent,
   QuizContent,
+  SurveyContent,
   ApprovalContent,
   DiscussionContent,
   EventContent,

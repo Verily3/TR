@@ -106,7 +106,7 @@ export const ModuleProgressTracker = memo(function ModuleProgressTracker({
               {programName}
             </h3>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {modules.length}-Module Leadership Development Program
+              {modules.length} {modules.length === 1 ? 'Module' : 'Modules'}
             </p>
           </div>
         </div>

@@ -52,6 +52,9 @@ export interface LessonContent {
     options?: string[];
     correctAnswer?: string | number;
     points?: number;
+    // Short answer grading mode (only applies to short_answer type)
+    gradingMode?: 'auto_complete' | 'keyword' | 'manual';
+    keywords?: string[];  // For gradingMode='keyword'
   }[];
   passingScore?: number;
   allowRetakes?: boolean;

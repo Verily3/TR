@@ -5,7 +5,7 @@
 import { pgEnum } from 'drizzle-orm/pg-core';
 
 /**
- * Content type enum - 9 types
+ * Content type enum
  */
 export const contentTypeEnum = pgEnum('content_type', [
   'lesson',
@@ -13,6 +13,7 @@ export const contentTypeEnum = pgEnum('content_type', [
   'assignment',
   'text_form',
   'goal',
+  'survey',
 ]);
 
 /**
@@ -58,4 +59,13 @@ export const taskProgressStatusEnum = pgEnum('task_progress_status', [
   'not_started',
   'in_progress',
   'completed',
+]);
+
+/**
+ * Quiz grading status enum
+ */
+export const quizGradingStatusEnum = pgEnum('quiz_grading_status', [
+  'auto_graded',    // MC + T/F questions only — graded instantly
+  'pending_grade',  // Has manual short-answer questions awaiting facilitator review
+  'graded',         // Facilitator has completed manual grading
 ]);

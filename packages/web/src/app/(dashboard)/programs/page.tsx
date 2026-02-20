@@ -14,6 +14,9 @@ import {
   Circle,
   Search,
   Loader2,
+  LayoutGrid,
+  PlayCircle,
+  CalendarDays,
 } from 'lucide-react';
 import { StatCard, ProgramCardSkeleton } from '@/components/programs';
 import type { Program, LessonProgressStatus } from '@/types/programs';
@@ -76,83 +79,118 @@ interface Phase {
 }
 
 const PhaseProgressTracker = memo(function PhaseProgressTracker({ phases }: { phases: Phase[] }) {
-  const currentPhaseIndex = phases.findIndex(p => p.status === 'in-progress');
-  const progressWidth = phases.length > 1
-    ? `${(Math.max(0, currentPhaseIndex) / (phases.length - 1)) * 100}%`
-    : '0%';
+  const completedCount = phases.filter(p => p.status === 'completed').length;
+  const currentIndex = phases.findIndex(p => p.status === 'in-progress');
+  const currentPhase = currentIndex >= 0 ? phases[currentIndex] : null;
+  const totalLessonsCompleted = phases.reduce((sum, p) => sum + (p.modules[0]?.lessonsCompleted ?? 0), 0);
+  const totalLessons = phases.reduce((sum, p) => sum + (p.modules[0]?.totalLessons ?? 0), 0);
+
+  // Progress = completed modules + fraction through current module
+  const currentModuleFraction = currentPhase && (currentPhase.modules[0]?.totalLessons ?? 0) > 0
+    ? (currentPhase.modules[0]?.lessonsCompleted ?? 0) / (currentPhase.modules[0]?.totalLessons ?? 1)
+    : 0;
+  const progressPct = phases.length > 0
+    ? Math.round(((completedCount + currentModuleFraction) / phases.length) * 100)
+    : 0;
+
+  // For small programs (≤6 modules) show dot nodes; larger programs show bar only
+  const showDots = phases.length <= 6;
 
   return (
     <div className="mb-6 p-4 sm:p-5 bg-muted/30 rounded-xl">
-      <div className="mb-4">
-        <div className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Program Phases</div>
-        <div className="text-sm text-sidebar-foreground font-medium">
-          Phase {currentPhaseIndex + 1 || 1} of {phases.length}
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Progress</div>
+          <div className="text-sm font-semibold text-sidebar-foreground">
+            {currentPhase
+              ? <>Module {currentIndex + 1} of {phases.length}</>
+              : completedCount === phases.length && phases.length > 0
+              ? 'All modules complete'
+              : `0 of ${phases.length} modules`}
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-lg font-bold text-accent tabular-nums">{progressPct}%</div>
+          <div className="text-xs text-muted-foreground">
+            {totalLessonsCompleted} / {totalLessons} lessons
+          </div>
         </div>
       </div>
 
-      {/* Phase Tracker */}
+      {/* Progress bar */}
       <div
-        className="relative"
+        className="h-2 bg-muted rounded-full overflow-hidden mb-3"
         role="progressbar"
-        aria-valuenow={currentPhaseIndex + 1}
-        aria-valuemin={1}
-        aria-valuemax={phases.length}
-        aria-label={`Program phase ${currentPhaseIndex + 1} of ${phases.length}`}
+        aria-valuenow={progressPct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={`Module ${currentIndex + 1} of ${phases.length}, ${progressPct}% complete`}
       >
         <div
-          className="absolute top-[18px] left-0 right-0 h-0.5 bg-border"
-          style={{ marginLeft: '18px', marginRight: '18px' }}
-          aria-hidden="true"
+          className="h-full bg-accent rounded-full transition-all duration-700"
+          style={{ width: `${progressPct}%` }}
         />
-        <div
-          className="absolute top-[18px] left-0 h-0.5 bg-accent transition-all duration-700"
-          style={{ marginLeft: '18px', width: `calc(${progressWidth} - 18px)` }}
-          aria-hidden="true"
-        />
+      </div>
 
-        <div className="relative flex items-start justify-between">
-          {phases.map((phase, idx) => (
-            <div
-              key={phase.id}
-              className="flex flex-col items-center"
-              style={{ flex: 1 }}
-            >
-              <div
-                className={`relative z-10 w-9 h-9 rounded-full flex items-center justify-center mb-2 transition-all duration-300 ${
-                  phase.status === 'completed'
-                    ? 'bg-accent border-2 border-accent shadow-sm'
-                    : phase.status === 'in-progress'
-                    ? 'bg-accent border-[3px] border-accent/20 shadow-lg shadow-accent/20 scale-110'
-                    : 'bg-card border-2 border-border'
-                }`}
-                aria-label={`Phase ${idx + 1}: ${phase.name} - ${phase.status.replace('-', ' ')}`}
-              >
-                {phase.status === 'completed' ? (
-                  <CheckCircle2 className="w-4 h-4 text-accent-foreground" aria-hidden="true" />
-                ) : phase.status === 'in-progress' ? (
-                  <Clock className="w-4 h-4 text-accent-foreground" aria-hidden="true" />
-                ) : (
-                  <Circle className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
-                )}
-              </div>
-              <div className="text-center px-1">
+      {/* Dot nodes — only for ≤6 modules */}
+      {showDots && (
+        <div className="relative mt-4" aria-hidden="true">
+          {/* Track line */}
+          <div className="absolute top-[13px] left-3.5 right-3.5 h-px bg-border" />
+          <div
+            className="absolute top-[13px] left-3.5 h-px bg-accent transition-all duration-700"
+            style={{
+              width: phases.length > 1
+                ? `calc(${(Math.max(0, completedCount) / (phases.length - 1)) * 100}% - 7px)`
+                : '0%',
+            }}
+          />
+          <div className="relative flex justify-between">
+            {phases.map((phase, idx) => (
+              <div key={phase.id} className="flex flex-col items-center gap-1.5" style={{ width: `${100 / phases.length}%` }}>
                 <div
-                  className={`text-xs transition-colors ${
-                    phase.status === 'not-started'
-                      ? 'text-muted-foreground'
+                  className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-300 ${
+                    phase.status === 'completed'
+                      ? 'bg-accent'
                       : phase.status === 'in-progress'
-                      ? 'text-sidebar-foreground font-semibold'
-                      : 'text-sidebar-foreground'
+                      ? 'bg-accent ring-4 ring-accent/20'
+                      : 'bg-card border-2 border-border'
                   }`}
                 >
-                  <span className="hidden sm:inline">{phase.name}</span>
-                  <span className="sm:hidden">P{idx + 1}</span>
+                  {phase.status === 'completed' ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-accent-foreground" />
+                  ) : phase.status === 'in-progress' ? (
+                    <Clock className="w-3.5 h-3.5 text-accent-foreground" />
+                  ) : (
+                    <span className="text-[10px] font-semibold text-muted-foreground">{idx + 1}</span>
+                  )}
                 </div>
+                <span
+                  className={`text-[10px] leading-tight text-center line-clamp-2 max-w-[60px] ${
+                    phase.status === 'in-progress'
+                      ? 'text-sidebar-foreground font-semibold'
+                      : phase.status === 'completed'
+                      ? 'text-sidebar-foreground'
+                      : 'text-muted-foreground'
+                  }`}
+                >
+                  {phase.name}
+                </span>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Current module name — shown for all sizes */}
+      {currentPhase && (
+        <div className={`flex items-center gap-2 ${showDots ? 'mt-3 pt-3 border-t border-border/50' : ''}`}>
+          <Clock className="w-3.5 h-3.5 text-accent flex-shrink-0" aria-hidden="true" />
+          <span className="text-xs text-muted-foreground">Now: </span>
+          <span className="text-xs font-medium text-sidebar-foreground truncate">{currentPhase.name}</span>
+        </div>
+      )}
     </div>
   );
 });
@@ -284,11 +322,11 @@ const ProgramCard = memo(function ProgramCard({ program, tenantId, animationInde
                 <BookOpen className={`w-5 h-5 ${config.color}`} />
               </div>
               <div className="min-w-0">
-                <h3 id={`program-${program.id}-title`} className="text-sidebar-foreground font-medium truncate">
+                <h3 id={`program-${program.id}-title`} className="text-sidebar-foreground font-semibold truncate">
                   {program.name}
                 </h3>
-                <div className="inline-block px-2 py-0.5 bg-purple-100 text-purple-700 rounded text-xs mt-1">
-                  {program.type === 'cohort' ? 'Leadership Track' : 'Self-Paced'}
+                <div className="inline-block px-2 py-0.5 bg-muted text-muted-foreground rounded text-xs mt-1 font-medium">
+                  {program.type === 'cohort' ? 'Cohort' : 'Self-Paced'}
                 </div>
               </div>
             </div>
@@ -307,12 +345,12 @@ const ProgramCard = memo(function ProgramCard({ program, tenantId, animationInde
         {/* Progress Bar */}
         {program.status !== 'draft' && program.myEnrollmentId && (
           <div className="mb-4">
-            <div className="flex items-center justify-between mb-2 text-xs">
-              <span className="text-muted-foreground">Overall Progress</span>
-              <span className="text-sidebar-foreground font-medium tabular-nums">{progress}%</span>
+            <div className="flex items-center justify-between mb-1.5 text-xs">
+              <span className="text-muted-foreground font-medium">Progress</span>
+              <span className="text-sidebar-foreground font-semibold tabular-nums">{progress}%</span>
             </div>
             <div
-              className="h-2 bg-muted rounded-full overflow-hidden"
+              className="h-2.5 bg-muted rounded-full overflow-hidden"
               role="progressbar"
               aria-valuenow={progress}
               aria-valuemin={0}
@@ -329,19 +367,29 @@ const ProgramCard = memo(function ProgramCard({ program, tenantId, animationInde
 
         {/* Next Action */}
         {program.myEnrollmentStatus === 'active' && progress > 0 && progress < 100 && (
-          <div className="mb-4 p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg transition-all hover:bg-blue-100/50">
-            <div className="text-xs text-blue-600 font-medium mb-1">Next Action</div>
-            <div className="text-sm text-sidebar-foreground">
-              Continue where you left off ({progress}% complete)
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
+            <PlayCircle className="w-4 h-4 text-blue-500 flex-shrink-0" aria-hidden="true" />
+            <div>
+              <div className="text-xs text-blue-600 font-medium">Ready to continue</div>
+              <div className="text-xs text-blue-500/80 mt-0.5">Pick up where you left off</div>
             </div>
           </div>
         )}
 
-        {/* Due Date */}
-        <div className="flex items-center justify-between text-xs text-muted-foreground mb-4">
-          <span>Due: {dueDate}</span>
+        {/* Due Date & Role */}
+        <div className="flex items-center justify-between text-xs mb-4">
+          {program.endDate ? (
+            <span className="flex items-center gap-1.5 text-muted-foreground">
+              <CalendarDays className="w-3.5 h-3.5" aria-hidden="true" />
+              Due {dueDate}
+            </span>
+          ) : (
+            <span className="text-muted-foreground/60 italic text-xs">Ongoing</span>
+          )}
           {program.myRole && (
-            <span className="capitalize">{program.myRole}</span>
+            <span className="px-2 py-0.5 bg-muted text-muted-foreground rounded-full capitalize font-medium">
+              {program.myRole}
+            </span>
           )}
         </div>
 
@@ -397,39 +445,28 @@ const ProgramCard = memo(function ProgramCard({ program, tenantId, animationInde
             <>
               <PhaseProgressTracker phases={phases} />
 
-              <div className="text-xs text-muted-foreground mb-3 uppercase tracking-wide">Curriculum Structure</div>
+              <div className="text-xs text-muted-foreground mb-3 uppercase tracking-wide">Modules</div>
 
-              <div className="space-y-3" role="list" aria-label="Program curriculum">
-                {phases.map((phase) => (
-                  <div key={phase.id} className="bg-card border border-border rounded-xl overflow-hidden" role="listitem">
-                    <div className="p-4 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        {getStatusIcon(phase.status)}
-                        <div>
-                          <div className="text-sm text-sidebar-foreground font-medium mb-0.5">{phase.name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {phase.modules.filter(m => m.status === 'completed').length} of {phase.modules.length} modules completed
-                          </div>
-                        </div>
+              <div className="space-y-2" role="list" aria-label="Program curriculum">
+                {phases.map((mod) => (
+                  <div
+                    key={mod.id}
+                    className="flex items-center gap-3 p-3 bg-card border border-border rounded-xl"
+                    role="listitem"
+                  >
+                    {getStatusIcon(mod.status)}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-sidebar-foreground font-medium truncate">{mod.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {mod.modules[0]?.lessonsCompleted ?? 0} of {mod.modules[0]?.totalLessons ?? 0} lessons completed
                       </div>
                     </div>
-
-                    {/* Modules */}
-                    <ul className="px-4 pb-4 space-y-2" role="list" aria-label={`Modules in ${phase.name}`}>
-                      {phase.modules.map((module) => (
-                        <li key={module.id} className="pl-7 py-2 border-l-2 border-border ml-2">
-                          <div className="flex items-start gap-2">
-                            {getStatusIcon(module.status)}
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm text-sidebar-foreground truncate">{module.name}</div>
-                              <div className="text-xs text-muted-foreground">
-                                {module.lessonsCompleted} of {module.totalLessons} lessons
-                              </div>
-                            </div>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
+                    {mod.status === 'completed' && (
+                      <span className="text-xs font-medium text-green-600 flex-shrink-0">Done</span>
+                    )}
+                    {mod.status === 'in-progress' && (
+                      <span className="text-xs font-medium text-blue-600 flex-shrink-0">Active</span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -589,49 +626,48 @@ export default function ProgramsPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {/* Tenant selector for agency users */}
+          {/* Styled tenant selector for agency users */}
           {isAgencyUser && tenants && tenants.length > 0 && (
-            <label className="sr-only" htmlFor="tenant-select">Select tenant</label>
-          )}
-          {isAgencyUser && tenants && tenants.length > 0 && (
-            <select
-              id="tenant-select"
-              value={selectedTenantId || ''}
-              onChange={handleTenantChange}
-              className="px-3 sm:px-4 py-2 border border-border rounded-lg text-sm text-sidebar-foreground bg-card focus:outline-none focus:ring-2 focus:ring-accent"
-            >
-              {tenants.map((tenant) => (
-                <option key={tenant.id} value={tenant.id}>
-                  {tenant.name}
-                </option>
-              ))}
-            </select>
+            <div className="relative">
+              <label htmlFor="tenant-select" className="sr-only">Select client</label>
+              <select
+                id="tenant-select"
+                value={selectedTenantId || ''}
+                onChange={handleTenantChange}
+                className="appearance-none pl-3 pr-8 py-2 border border-border rounded-lg text-sm font-medium text-sidebar-foreground bg-card hover:border-accent/40 focus:outline-none focus:ring-2 focus:ring-accent transition-colors cursor-pointer"
+              >
+                {tenants.map((tenant) => (
+                  <option key={tenant.id} value={tenant.id}>{tenant.name}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" aria-hidden="true" />
+            </div>
           )}
           <Link
             href={isAgencyUser ? '/program-builder' : '/programs/new'}
             className="px-4 py-2 bg-accent text-accent-foreground rounded-lg text-sm font-medium hover:bg-accent/90 transition-all hover:shadow-md active:scale-[0.98] flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
           >
             <Plus className="w-4 h-4" aria-hidden="true" />
-            {isAgencyUser ? (
-              <span>Program Builder</span>
-            ) : (
-              <>
-                <span className="hidden sm:inline">New Program</span>
-                <span className="sm:hidden">New</span>
-              </>
-            )}
+            <span className="hidden sm:inline">{isAgencyUser ? 'Program Builder' : 'New Program'}</span>
+            <span className="sm:hidden">New</span>
           </Link>
         </div>
       </header>
 
       {/* Stats Bar */}
       <section className="mb-6 sm:mb-8 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4" aria-label="Program statistics">
-        <StatCard label="Total Programs" value={stats.total} animationIndex={0} />
+        <StatCard
+          label="Total Programs"
+          value={stats.total}
+          icon={<LayoutGrid className="w-4 h-4 text-muted-foreground" />}
+          animationIndex={0}
+        />
         <StatCard
           label="In Progress"
           value={stats.inProgress}
           borderColor="border-blue-200"
           valueColor="text-blue-600"
+          icon={<PlayCircle className="w-4 h-4 text-blue-400" />}
           animationIndex={1}
         />
         <StatCard
@@ -639,12 +675,14 @@ export default function ProgramsPage() {
           value={stats.completed}
           borderColor="border-green-200"
           valueColor="text-green-600"
+          icon={<CheckCircle2 className="w-4 h-4 text-green-400" />}
           animationIndex={2}
         />
         <StatCard
           label="Not Started"
           value={stats.notStarted}
           valueColor="text-muted-foreground"
+          icon={<Circle className="w-4 h-4 text-muted-foreground" />}
           animationIndex={3}
         />
       </section>
@@ -710,7 +748,7 @@ export default function ProgramsPage() {
             onClearFilters={handleClearFilters}
           />
         ) : (
-          <div className="grid gap-4">
+          <div className="grid gap-4 lg:grid-cols-2">
             {filteredPrograms.map((program, index) => (
               <ProgramCard key={program.id} program={program} tenantId={activeTenantId} userId={user?.id} animationIndex={index} />
             ))}

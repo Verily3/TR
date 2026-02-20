@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import { useAssessments, useAssessmentStats, useAssessment, useAssessmentResults, useTemplates, useTenants } from '@/hooks/api';
 import type { AssessmentListItem, AssessmentDetail, ComputedAssessmentResults, AssessmentTemplate as APITemplate, AssessmentInvitation } from '@/types/assessments';
 import { DownloadReportButton } from '@/components/assessments/DownloadReportButton';
 import { DevelopmentPlanView } from '@/components/assessments/DevelopmentPlanView';
-import { CreateAssessmentChoiceModal } from '@/components/assessments/CreateAssessmentChoiceModal';
 import {
   ClipboardList,
   Users,
@@ -18,9 +18,6 @@ import {
   AlertCircle,
   ArrowRight,
   Send,
-  X,
-  Search,
-  ChevronRight,
   Target,
   Award,
   AlertTriangle,
@@ -70,7 +67,7 @@ interface AssessmentTemplate {
 }
 
 interface Person {
-  id: string;
+  id: string | null;
   name: string;
   email: string;
   role?: string;
@@ -134,17 +131,6 @@ interface AssessmentStats {
 }
 
 // ─── Mock Data ─────────────────────────────────────────────────────────────────
-
-const samplePeople: Person[] = [
-  { id: 'p1', name: 'John Doe', email: 'john.doe@company.com', role: 'Senior Manager' },
-  { id: 'p2', name: 'Sarah Johnson', email: 'sarah.johnson@company.com', role: 'Director' },
-  { id: 'p3', name: 'Michael Chen', email: 'michael.chen@company.com', role: 'Team Lead' },
-  { id: 'p4', name: 'Emily Davis', email: 'emily.davis@company.com', role: 'Manager' },
-  { id: 'p5', name: 'James Wilson', email: 'james.wilson@company.com', role: 'VP Operations' },
-  { id: 'p6', name: 'Amanda Rodriguez', email: 'amanda.rodriguez@company.com', role: 'Analyst' },
-  { id: 'p7', name: 'David Kim', email: 'david.kim@company.com', role: 'Engineer' },
-  { id: 'p8', name: 'Lisa Thompson', email: 'lisa.thompson@company.com', role: 'Coordinator' },
-];
 
 const defaultTemplates: AssessmentTemplate[] = [
   {
@@ -525,433 +511,6 @@ function AssessmentCard({
 
             <ArrowRight className="w-5 h-5 text-red-600" />
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── CreateAssessmentModal ─────────────────────────────────────────────────────
-
-type ModalStep = 'template' | 'subject' | 'raters' | 'schedule' | 'review';
-
-const modalSteps: { id: ModalStep; label: string }[] = [
-  { id: 'template', label: 'Select Template' },
-  { id: 'subject', label: 'Choose Subject' },
-  { id: 'raters', label: 'Add Raters' },
-  { id: 'schedule', label: 'Set Schedule' },
-  { id: 'review', label: 'Review & Launch' },
-];
-
-function CreateAssessmentModal({
-  isOpen,
-  onClose,
-  templates,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  templates: AssessmentTemplate[];
-}) {
-  const [currentStep, setCurrentStep] = useState<ModalStep>('template');
-  const [selectedTemplate, setSelectedTemplate] = useState<AssessmentTemplate | null>(null);
-  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
-  const [selectedRaters, setSelectedRaters] = useState<{ personId: string; type: string }[]>([]);
-  const [dueDate, setDueDate] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-
-  if (!isOpen) return null;
-
-  const currentStepIndex = modalSteps.findIndex((s) => s.id === currentStep);
-
-  const handleNext = () => {
-    const nextIndex = currentStepIndex + 1;
-    if (nextIndex < modalSteps.length) {
-      setCurrentStep(modalSteps[nextIndex].id);
-    }
-  };
-
-  const handleBack = () => {
-    const prevIndex = currentStepIndex - 1;
-    if (prevIndex >= 0) {
-      setCurrentStep(modalSteps[prevIndex].id);
-    }
-  };
-
-  const handleCreate = () => {
-    handleClose();
-  };
-
-  const handleClose = () => {
-    setCurrentStep('template');
-    setSelectedTemplate(null);
-    setSelectedSubject(null);
-    setSelectedRaters([]);
-    setDueDate('');
-    setSearchTerm('');
-    onClose();
-  };
-
-  const filteredPeople = samplePeople.filter(
-    (p) =>
-      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const canProceed = () => {
-    switch (currentStep) {
-      case 'template':
-        return selectedTemplate !== null;
-      case 'subject':
-        return selectedSubject !== null;
-      case 'raters':
-        return selectedRaters.length > 0;
-      case 'schedule':
-        return dueDate !== '';
-      default:
-        return true;
-    }
-  };
-
-  const toggleRater = (personId: string, type: string) => {
-    const exists = selectedRaters.find((r) => r.personId === personId && r.type === type);
-    if (exists) {
-      setSelectedRaters(
-        selectedRaters.filter((r) => !(r.personId === personId && r.type === type))
-      );
-    } else {
-      setSelectedRaters([...selectedRaters, { personId, type }]);
-    }
-  };
-
-  const raterTypes = [
-    { id: 'self', label: 'Self' },
-    { id: 'manager', label: 'Manager' },
-    { id: 'peer', label: 'Peer' },
-    { id: 'direct_report', label: 'Direct Report' },
-    { id: 'other', label: 'Other' },
-  ];
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col mx-4">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Create New Assessment</h2>
-          <button
-            onClick={handleClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5 text-gray-500" />
-          </button>
-        </div>
-
-        {/* Progress Steps */}
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            {modalSteps.map((step, index) => (
-              <div key={step.id} className="flex items-center">
-                <div
-                  className={`flex items-center gap-2 ${
-                    index <= currentStepIndex ? 'text-red-600' : 'text-gray-500'
-                  }`}
-                >
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                      index < currentStepIndex
-                        ? 'bg-red-600 text-white'
-                        : index === currentStepIndex
-                          ? 'bg-red-50 text-red-600 border-2 border-red-600'
-                          : 'bg-gray-100 text-gray-500'
-                    }`}
-                  >
-                    {index + 1}
-                  </div>
-                  <span className="text-sm hidden md:block">{step.label}</span>
-                </div>
-                {index < modalSteps.length - 1 && (
-                  <ChevronRight className="w-5 h-5 mx-2 text-gray-500" />
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-auto p-6">
-          {/* Template Selection */}
-          {currentStep === 'template' && (
-            <div className="space-y-4">
-              <p className="text-gray-500">Choose a template for this assessment</p>
-              <div className="grid grid-cols-1 gap-4">
-                {templates.map((template) => (
-                  <div
-                    key={template.id}
-                    onClick={() => setSelectedTemplate(template)}
-                    className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                      selectedTemplate?.id === template.id
-                        ? 'border-red-600 bg-red-50/50'
-                        : 'border-gray-200 hover:border-red-600/30'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="font-medium text-gray-900">{template.name}</h3>
-                        <p className="text-sm text-gray-500 mt-1">{template.description}</p>
-                        <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
-                          <span>{template.competencies.length} competencies</span>
-                          <span>
-                            {template.competencies.reduce(
-                              (acc, c) => acc + c.questions.length,
-                              0
-                            )}{' '}
-                            questions
-                          </span>
-                          <span>
-                            Scale: {template.scale.min}-{template.scale.max}
-                          </span>
-                        </div>
-                      </div>
-                      <div
-                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                          selectedTemplate?.id === template.id
-                            ? 'border-red-600 bg-red-600'
-                            : 'border-gray-400'
-                        }`}
-                      >
-                        {selectedTemplate?.id === template.id && (
-                          <div className="w-2 h-2 bg-white rounded-full" />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Subject Selection */}
-          {currentStep === 'subject' && (
-            <div className="space-y-4">
-              <p className="text-gray-500">Who is this assessment for?</p>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                <input
-                  type="text"
-                  placeholder="Search people..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-red-600"
-                />
-              </div>
-              <div className="space-y-2 max-h-[300px] overflow-auto">
-                {filteredPeople.map((person) => (
-                  <div
-                    key={person.id}
-                    onClick={() => setSelectedSubject(person.id)}
-                    className={`p-3 border rounded-lg cursor-pointer transition-colors flex items-center gap-3 ${
-                      selectedSubject === person.id
-                        ? 'border-red-600 bg-red-50/50'
-                        : 'border-gray-200 hover:border-red-600/30'
-                    }`}
-                  >
-                    <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center font-medium">
-                      {getInitials(person.name)}
-                    </div>
-                    <div className="flex-1">
-                      <div className="font-medium text-gray-900">{person.name}</div>
-                      <div className="text-sm text-gray-500">
-                        {person.role} &bull; {person.email}
-                      </div>
-                    </div>
-                    <div
-                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                        selectedSubject === person.id
-                          ? 'border-red-600 bg-red-600'
-                          : 'border-gray-400'
-                      }`}
-                    >
-                      {selectedSubject === person.id && (
-                        <div className="w-2 h-2 bg-white rounded-full" />
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Raters Selection */}
-          {currentStep === 'raters' && (
-            <div className="space-y-4">
-              <p className="text-gray-500">Select raters and assign their relationship type</p>
-              <div className="flex items-center gap-4 text-sm">
-                <Users className="w-4 h-4 text-red-600" />
-                <span className="text-gray-500">{selectedRaters.length} raters selected</span>
-              </div>
-              <div className="space-y-3 max-h-[350px] overflow-auto">
-                {samplePeople
-                  .filter((p) => p.id !== selectedSubject)
-                  .map((person) => {
-                    const personRaters = selectedRaters.filter((r) => r.personId === person.id);
-                    return (
-                      <div key={person.id} className="p-3 border border-gray-200 rounded-lg">
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className="w-8 h-8 rounded-full bg-red-50 text-red-600 flex items-center justify-center text-sm font-medium">
-                            {getInitials(person.name)}
-                          </div>
-                          <div>
-                            <div className="font-medium text-gray-900 text-sm">{person.name}</div>
-                            <div className="text-xs text-gray-500">{person.role}</div>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {raterTypes.map((type) => {
-                            const isSelected = personRaters.some((r) => r.type === type.id);
-                            return (
-                              <button
-                                key={type.id}
-                                onClick={() => toggleRater(person.id, type.id)}
-                                className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
-                                  isSelected
-                                    ? 'bg-red-600 text-white'
-                                    : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                                }`}
-                              >
-                                {type.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-          )}
-
-          {/* Schedule */}
-          {currentStep === 'schedule' && (
-            <div className="space-y-6">
-              <p className="text-gray-500">Set the deadline for this assessment</p>
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">Due Date</label>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                  <input
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                    min={new Date().toISOString().split('T')[0]}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-600"
-                  />
-                </div>
-              </div>
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <h4 className="font-medium text-gray-900 mb-2">Reminder Schedule</h4>
-                <ul className="text-sm text-gray-500 space-y-1">
-                  <li>&bull; Initial invitation sent immediately</li>
-                  <li>&bull; First reminder: 1 week before due date</li>
-                  <li>&bull; Second reminder: 3 days before due date</li>
-                  <li>&bull; Final reminder: 1 day before due date</li>
-                </ul>
-              </div>
-            </div>
-          )}
-
-          {/* Review */}
-          {currentStep === 'review' && (
-            <div className="space-y-6">
-              <p className="text-gray-500">Review your assessment details before launching</p>
-
-              <div className="space-y-4">
-                <div className="p-4 border border-gray-200 rounded-lg">
-                  <h4 className="text-xs uppercase text-gray-500 mb-2">Template</h4>
-                  <p className="font-medium text-gray-900">{selectedTemplate?.name}</p>
-                  <p className="text-sm text-gray-500">
-                    {selectedTemplate?.competencies.length} competencies &bull;{' '}
-                    {selectedTemplate?.competencies.reduce(
-                      (acc, c) => acc + c.questions.length,
-                      0
-                    )}{' '}
-                    questions
-                  </p>
-                </div>
-
-                <div className="p-4 border border-gray-200 rounded-lg">
-                  <h4 className="text-xs uppercase text-gray-500 mb-2">Subject</h4>
-                  {selectedSubject && (
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center font-medium">
-                        {getInitials(
-                          samplePeople.find((p) => p.id === selectedSubject)?.name || ''
-                        )}
-                      </div>
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {samplePeople.find((p) => p.id === selectedSubject)?.name}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {samplePeople.find((p) => p.id === selectedSubject)?.role}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="p-4 border border-gray-200 rounded-lg">
-                  <h4 className="text-xs uppercase text-gray-500 mb-2">
-                    Raters ({selectedRaters.length})
-                  </h4>
-                  <div className="flex flex-wrap gap-2">
-                    {raterTypes.map((type) => {
-                      const count = selectedRaters.filter((r) => r.type === type.id).length;
-                      if (count === 0) return null;
-                      return (
-                        <span
-                          key={type.id}
-                          className="px-2 py-1 bg-gray-100 rounded text-sm text-gray-500"
-                        >
-                          {type.label}: {count}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="p-4 border border-gray-200 rounded-lg">
-                  <h4 className="text-xs uppercase text-gray-500 mb-2">Schedule</h4>
-                  <p className="font-medium text-gray-900">
-                    Due:{' '}
-                    {dueDate
-                      ? new Date(dueDate).toLocaleDateString('en-US', {
-                          weekday: 'long',
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })
-                      : 'Not set'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-between p-6 border-t border-gray-200">
-          <button
-            onClick={currentStepIndex === 0 ? handleClose : handleBack}
-            className="px-4 py-2 text-gray-500 hover:text-gray-900 transition-colors"
-          >
-            {currentStepIndex === 0 ? 'Cancel' : 'Back'}
-          </button>
-          <button
-            onClick={currentStep === 'review' ? handleCreate : handleNext}
-            disabled={!canProceed()}
-            className="px-6 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {currentStep === 'review' ? 'Launch Assessment' : 'Continue'}
-          </button>
         </div>
       </div>
     </div>
@@ -1978,11 +1537,10 @@ function adaptComputedResults(results: ComputedAssessmentResults, subjectName: s
 }
 
 export default function AssessmentsPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   const [activeTypeFilter, setActiveTypeFilter] = useState<FilterType>('all');
-  const [showChoiceModal, setShowChoiceModal] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
 
@@ -2101,7 +1659,7 @@ export default function AssessmentsPage() {
             </div>
           )}
           <button
-            onClick={() => setShowChoiceModal(true)}
+            onClick={() => router.push('/assessments/new')}
             className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
@@ -2230,7 +1788,7 @@ export default function AssessmentsPage() {
             </p>
             {activeFilter === 'all' && (
               <button
-                onClick={() => setShowChoiceModal(true)}
+                onClick={() => router.push('/assessments/new')}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
               >
                 Create Assessment
@@ -2240,19 +1798,6 @@ export default function AssessmentsPage() {
         </div>
       )}
 
-      {/* Choice Modal — entry point for creating a new assessment */}
-      <CreateAssessmentChoiceModal
-        isOpen={showChoiceModal}
-        onClose={() => setShowChoiceModal(false)}
-        onCreate={() => { setShowChoiceModal(false); setShowCreateModal(true); }}
-      />
-
-      {/* Create Assessment Modal */}
-      <CreateAssessmentModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        templates={displayTemplates}
-      />
     </div>
   );
 }

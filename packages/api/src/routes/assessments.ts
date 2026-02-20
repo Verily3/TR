@@ -11,7 +11,7 @@ import {
 } from 'drizzle-orm';
 import { db, schema } from '@tr/db';
 import { NotFoundError, BadRequestError } from '../lib/errors.js';
-import { sendAssessmentInvitation, sendAssessmentReminder } from '../lib/email.js';
+import { sendAssessmentInvitation, sendAssessmentReminder, sendSubjectInvitation } from '../lib/email.js';
 import { createNotification } from '../lib/notifications.js';
 import { env } from '../lib/env.js';
 import { computeAssessmentResults } from '../lib/assessment-engine.js';
@@ -28,20 +28,29 @@ const {
 } = schema;
 
 export const assessmentsRoutes = new Hono<{ Variables: Variables }>();
+export const publicAssessmentSetupRoutes = new Hono();
 
 // Zod schemas
 const createAssessmentSchema = z.object({
   templateId: z.string().uuid(),
-  subjectId: z.string().uuid(),
+  // Either subjectId (existing user) OR external subject fields
+  subjectId: z.string().uuid().optional(),
+  subjectEmail: z.string().email().optional(),
+  subjectFirstName: z.string().min(1).max(100).optional(),
+  subjectLastName: z.string().min(1).max(100).optional(),
   name: z.string().min(1).max(255),
   description: z.string().optional(),
   openDate: z.string().optional(),
   closeDate: z.string().optional(),
   anonymizeResults: z.boolean().default(true),
   showResultsToSubject: z.boolean().default(true),
+  subjectCanAddRaters: z.boolean().default(true),
   programId: z.string().uuid().optional(),
   enrollmentId: z.string().uuid().optional(),
-});
+}).refine(
+  (data) => data.subjectId || (data.subjectEmail && data.subjectFirstName && data.subjectLastName),
+  { message: 'Either subjectId or subject email + first name + last name is required' }
+);
 
 const updateAssessmentSchema = z.object({
   name: z.string().min(1).max(255).optional(),
@@ -51,14 +60,23 @@ const updateAssessmentSchema = z.object({
   closeDate: z.string().nullable().optional(),
   anonymizeResults: z.boolean().optional(),
   showResultsToSubject: z.boolean().optional(),
+  subjectCanAddRaters: z.boolean().optional(),
 });
 
 const addInvitationsSchema = z.object({
   invitations: z.array(
     z.object({
-      raterId: z.string().uuid(),
+      // Either raterId (existing user) OR external rater fields
+      raterId: z.string().uuid().optional(),
+      raterEmail: z.string().email().optional(),
+      raterFirstName: z.string().min(1).max(100).optional(),
+      raterLastName: z.string().min(1).max(100).optional(),
       raterType: z.enum(['self', 'manager', 'peer', 'direct_report']),
-    })
+      addedBy: z.enum(['admin', 'subject']).default('admin'),
+    }).refine(
+      (data) => data.raterId || (data.raterEmail && data.raterFirstName && data.raterLastName),
+      { message: 'Either raterId or rater email + name is required' }
+    )
   ).min(1),
 });
 
@@ -120,8 +138,8 @@ assessmentsRoutes.get('/', async (c) => {
     );
   }
 
-  // Fetch subject info
-  const subjectIds = [...new Set(rows.map((a) => a.subjectId))];
+  // Fetch subject info for registered users
+  const subjectIds = [...new Set(rows.map((a) => a.subjectId).filter(Boolean))] as string[];
   let subjectMap: Record<string, { firstName: string; lastName: string; email: string }> = {};
   if (subjectIds.length > 0) {
     const subjects = await db
@@ -155,7 +173,11 @@ assessmentsRoutes.get('/', async (c) => {
 
   const data = rows.map((a) => ({
     ...a,
-    subject: subjectMap[a.subjectId] || null,
+    subject: a.subjectId
+      ? (subjectMap[a.subjectId] || null)
+      : a.subjectEmail
+        ? { firstName: a.subjectFirstName ?? '', lastName: a.subjectLastName ?? '', email: a.subjectEmail }
+        : null,
     template: templateMap[a.templateId] || null,
     invitationStats: invitationCounts[a.id] || { total: 0, completed: 0 },
     responseRate:
@@ -253,21 +275,34 @@ assessmentsRoutes.get('/:assessmentId', async (c) => {
     .where(eq(assessmentTemplates.id, assessment.templateId))
     .limit(1);
 
-  // Fetch subject
-  const [subject] = await db
-    .select({
-      id: users.id,
-      firstName: users.firstName,
-      lastName: users.lastName,
-      email: users.email,
-      title: users.title,
-      avatar: users.avatar,
-    })
-    .from(users)
-    .where(eq(users.id, assessment.subjectId))
-    .limit(1);
+  // Fetch subject (may be null for external subjects)
+  let subject: { id: string; firstName: string; lastName: string; email: string; title: string | null; avatar: string | null } | null = null;
+  if (assessment.subjectId) {
+    const [row] = await db
+      .select({
+        id: users.id,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        email: users.email,
+        title: users.title,
+        avatar: users.avatar,
+      })
+      .from(users)
+      .where(eq(users.id, assessment.subjectId))
+      .limit(1);
+    subject = row ?? null;
+  } else if (assessment.subjectEmail) {
+    subject = {
+      id: '',
+      firstName: assessment.subjectFirstName ?? '',
+      lastName: assessment.subjectLastName ?? '',
+      email: assessment.subjectEmail,
+      title: null,
+      avatar: null,
+    };
+  }
 
-  // Fetch invitations with rater info
+  // Fetch invitations with rater info (supports both registered and external raters)
   const invitations = await db
     .select({
       id: assessmentInvitations.id,
@@ -278,10 +313,16 @@ assessmentsRoutes.get('/:assessmentId', async (c) => {
       sentAt: assessmentInvitations.sentAt,
       completedAt: assessmentInvitations.completedAt,
       reminderCount: assessmentInvitations.reminderCount,
-      raterFirstName: users.firstName,
-      raterLastName: users.lastName,
-      raterEmail: users.email,
-      raterAvatar: users.avatar,
+      addedBy: assessmentInvitations.addedBy,
+      // From invitation record (external raters)
+      invRaterEmail: assessmentInvitations.raterEmail,
+      invRaterFirstName: assessmentInvitations.raterFirstName,
+      invRaterLastName: assessmentInvitations.raterLastName,
+      // From users table (registered raters)
+      userFirstName: users.firstName,
+      userLastName: users.lastName,
+      userEmail: users.email,
+      userAvatar: users.avatar,
     })
     .from(assessmentInvitations)
     .leftJoin(users, eq(assessmentInvitations.raterId, users.id))
@@ -297,12 +338,13 @@ assessmentsRoutes.get('/:assessmentId', async (c) => {
     sentAt: inv.sentAt,
     completedAt: inv.completedAt,
     reminderCount: inv.reminderCount,
+    addedBy: inv.addedBy ?? 'admin',
     rater: {
-      id: inv.raterId,
-      firstName: inv.raterFirstName,
-      lastName: inv.raterLastName,
-      email: inv.raterEmail,
-      avatar: inv.raterAvatar,
+      id: inv.raterId ?? null,
+      firstName: inv.userFirstName ?? inv.invRaterFirstName ?? null,
+      lastName: inv.userLastName ?? inv.invRaterLastName ?? null,
+      email: inv.userEmail ?? inv.invRaterEmail ?? null,
+      avatar: inv.userAvatar ?? null,
     },
   }));
 
@@ -353,12 +395,20 @@ assessmentsRoutes.post(
       throw new BadRequestError('Template must be published to create assessments');
     }
 
+    // Generate setup token for subjects who can add their own raters
+    const subjectSetupToken = crypto.randomUUID().replace(/-/g, '').slice(0, 48);
+
     const [assessment] = await db
       .insert(assessments)
       .values({
         templateId: body.templateId,
         tenantId,
-        subjectId: body.subjectId,
+        subjectId: body.subjectId ?? null,
+        subjectEmail: body.subjectEmail ?? null,
+        subjectFirstName: body.subjectFirstName ?? null,
+        subjectLastName: body.subjectLastName ?? null,
+        subjectSetupToken,
+        subjectCanAddRaters: body.subjectCanAddRaters ?? true,
         createdBy: user.id,
         name: body.name,
         description: body.description,
@@ -371,6 +421,32 @@ assessmentsRoutes.post(
         status: 'draft',
       })
       .returning();
+
+    // Send subject invitation email if external subject or if subject should add raters
+    if (body.subjectCanAddRaters !== false) {
+      const setupUrl = `${env.APP_URL}/assessment-setup/${subjectSetupToken}`;
+      if (body.subjectEmail && body.subjectFirstName) {
+        // External subject — send invitation
+        await sendSubjectInvitation({
+          to: body.subjectEmail,
+          name: `${body.subjectFirstName} ${body.subjectLastName ?? ''}`.trim(),
+          assessmentName: body.name,
+          setupUrl,
+        }).catch((err) => console.error('[email] Failed to send subject invitation:', err));
+      } else if (body.subjectId) {
+        // Registered subject — look up and send
+        const [subjectUser] = await db.select({ email: users.email, firstName: users.firstName, lastName: users.lastName })
+          .from(users).where(eq(users.id, body.subjectId)).limit(1);
+        if (subjectUser) {
+          await sendSubjectInvitation({
+            to: subjectUser.email,
+            name: `${subjectUser.firstName} ${subjectUser.lastName}`,
+            assessmentName: body.name,
+            setupUrl,
+          }).catch((err) => console.error('[email] Failed to send subject invitation:', err));
+        }
+      }
+    }
 
     return c.json({ data: assessment }, 201);
   }
@@ -411,6 +487,7 @@ assessmentsRoutes.put(
     if (body.closeDate !== undefined) updateData.closeDate = body.closeDate;
     if (body.anonymizeResults !== undefined) updateData.anonymizeResults = body.anonymizeResults;
     if (body.showResultsToSubject !== undefined) updateData.showResultsToSubject = body.showResultsToSubject;
+    if (body.subjectCanAddRaters !== undefined) updateData.subjectCanAddRaters = body.subjectCanAddRaters;
 
     const [updated] = await db
       .update(assessments)
@@ -494,10 +571,14 @@ assessmentsRoutes.get('/:assessmentId/invitations', async (c) => {
       completedAt: assessmentInvitations.completedAt,
       reminderCount: assessmentInvitations.reminderCount,
       lastReminderAt: assessmentInvitations.lastReminderAt,
-      raterFirstName: users.firstName,
-      raterLastName: users.lastName,
-      raterEmail: users.email,
-      raterAvatar: users.avatar,
+      addedBy: assessmentInvitations.addedBy,
+      invRaterEmail: assessmentInvitations.raterEmail,
+      invRaterFirstName: assessmentInvitations.raterFirstName,
+      invRaterLastName: assessmentInvitations.raterLastName,
+      userFirstName: users.firstName,
+      userLastName: users.lastName,
+      userEmail: users.email,
+      userAvatar: users.avatar,
     })
     .from(assessmentInvitations)
     .leftJoin(users, eq(assessmentInvitations.raterId, users.id))
@@ -505,13 +586,24 @@ assessmentsRoutes.get('/:assessmentId/invitations', async (c) => {
     .orderBy(assessmentInvitations.raterType);
 
   const data = invitations.map((inv) => ({
-    ...inv,
+    id: inv.id,
+    raterId: inv.raterId,
+    raterType: inv.raterType,
+    status: inv.status,
+    accessToken: inv.accessToken,
+    sentAt: inv.sentAt,
+    viewedAt: inv.viewedAt,
+    startedAt: inv.startedAt,
+    completedAt: inv.completedAt,
+    reminderCount: inv.reminderCount,
+    lastReminderAt: inv.lastReminderAt,
+    addedBy: inv.addedBy ?? 'admin',
     rater: {
-      id: inv.raterId,
-      firstName: inv.raterFirstName,
-      lastName: inv.raterLastName,
-      email: inv.raterEmail,
-      avatar: inv.raterAvatar,
+      id: inv.raterId ?? null,
+      firstName: inv.userFirstName ?? inv.invRaterFirstName ?? null,
+      lastName: inv.userLastName ?? inv.invRaterLastName ?? null,
+      email: inv.userEmail ?? inv.invRaterEmail ?? null,
+      avatar: inv.userAvatar ?? null,
     },
   }));
 
@@ -520,7 +612,7 @@ assessmentsRoutes.get('/:assessmentId/invitations', async (c) => {
 
 /**
  * POST /api/tenants/:tenantId/assessments/:assessmentId/invitations
- * Batch add rater invitations
+ * Batch add rater invitations (supports both registered and external raters)
  */
 assessmentsRoutes.post(
   '/:assessmentId/invitations',
@@ -545,10 +637,20 @@ assessmentsRoutes.post(
       throw new NotFoundError('Assessment');
     }
 
-    // Generate access tokens for each invitation
+    // Determine subject name for email context
+    let subjectName = assessment.name;
+    if (assessment.subjectFirstName) {
+      subjectName = `${assessment.subjectFirstName} ${assessment.subjectLastName ?? ''}`.trim();
+    }
+
+    // Insert invitations — support both registered and external raters
     const values = body.invitations.map((inv) => ({
       assessmentId,
-      raterId: inv.raterId,
+      raterId: inv.raterId ?? null,
+      raterEmail: inv.raterEmail ?? null,
+      raterFirstName: inv.raterFirstName ?? null,
+      raterLastName: inv.raterLastName ?? null,
+      addedBy: inv.addedBy ?? 'admin',
       raterType: inv.raterType as 'self' | 'manager' | 'peer' | 'direct_report',
       status: 'pending' as const,
       accessToken: crypto.randomUUID().replace(/-/g, '').slice(0, 32),
@@ -559,36 +661,55 @@ assessmentsRoutes.post(
       .values(values)
       .returning();
 
-    // Send invitation emails + create in-app notifications
-    const raterIds = inserted.map((inv) => inv.raterId);
-    const raters = raterIds.length > 0
+    // Fetch registered rater details for email
+    const registeredRaterIds = inserted.map((inv) => inv.raterId).filter(Boolean) as string[];
+    const registeredRaters = registeredRaterIds.length > 0
       ? await db.select({ id: users.id, email: users.email, firstName: users.firstName, lastName: users.lastName })
           .from(users)
-          .where(inArray(users.id, raterIds))
+          .where(inArray(users.id, registeredRaterIds))
       : [];
+    const raterMap = new Map(registeredRaters.map((r) => [r.id, r]));
 
-    const raterMap = new Map(raters.map((r) => [r.id, r]));
-
+    // Send invitation emails + in-app notifications
     await Promise.allSettled(
       inserted.map(async (inv) => {
-        const rater = raterMap.get(inv.raterId);
-        if (!rater) return;
         const respondUrl = `${env.APP_URL}/respond/${inv.accessToken}`;
+        let raterEmail: string | undefined;
+        let raterName: string | undefined;
+        let raterId: string | undefined;
+
+        if (inv.raterId) {
+          const rater = raterMap.get(inv.raterId);
+          if (rater) {
+            raterEmail = rater.email;
+            raterName = rater.firstName;
+            raterId = rater.id;
+          }
+        } else if (inv.raterEmail) {
+          raterEmail = inv.raterEmail;
+          raterName = inv.raterFirstName ?? 'there';
+        }
+
+        if (!raterEmail) return;
+
         await sendAssessmentInvitation({
-          to: rater.email,
-          name: rater.firstName,
-          assessorName: assessment.name,
+          to: raterEmail,
+          name: raterName ?? 'there',
+          assessorName: subjectName,
           assessmentName: assessment.name,
           respondUrl,
         });
-        await createNotification({
-          userId: rater.id,
-          type: 'assessment_invite',
-          title: 'Assessment invitation',
-          message: `You've been invited to complete the "${assessment.name}" assessment.`,
-          actionUrl: respondUrl,
-          actionLabel: 'Start Assessment',
-        });
+
+        if (raterId) {
+          await createNotification({
+            userId: raterId,
+            type: 'assessment_invite',
+            title: 'Assessment invitation',
+            message: `You've been invited to complete the "${assessment.name}" assessment.`,
+            actionUrl: respondUrl,
+            actionLabel: 'Start Assessment',
+          });
+        }
       })
     );
 
@@ -710,23 +831,33 @@ assessmentsRoutes.post('/:assessmentId/invitations/remind', async (c) => {
     .where(eq(assessments.id, assessmentId))
     .limit(1);
 
-  // Send reminder emails
-  const raterIds = pending.map((inv) => inv.raterId);
-  const raters = await db
-    .select({ id: users.id, email: users.email, firstName: users.firstName })
-    .from(users)
-    .where(inArray(users.id, raterIds));
+  // Send reminder emails (supports both registered and external raters)
+  const registeredRaterIds = pending.map((inv) => inv.raterId).filter(Boolean) as string[];
+  const raters = registeredRaterIds.length > 0
+    ? await db.select({ id: users.id, email: users.email, firstName: users.firstName })
+        .from(users).where(inArray(users.id, registeredRaterIds))
+    : [];
 
   const raterMap = new Map(raters.map((r) => [r.id, r]));
 
   await Promise.allSettled(
     pending.map(async (inv) => {
-      const rater = raterMap.get(inv.raterId);
-      if (!rater) return;
+      let email: string | undefined;
+      let name: string | undefined;
+
+      if (inv.raterId) {
+        const rater = raterMap.get(inv.raterId);
+        if (rater) { email = rater.email; name = rater.firstName; }
+      } else if (inv.raterEmail) {
+        email = inv.raterEmail;
+        name = inv.raterFirstName ?? 'there';
+      }
+
+      if (!email) return;
       const reminderCount = parseInt(inv.reminderCount || '0', 10) + 1;
       await sendAssessmentReminder({
-        to: rater.email,
-        name: rater.firstName,
+        to: email,
+        name: name ?? 'there',
         assessorName: assessment?.name ?? 'Assessment',
         assessmentName: assessment?.name ?? 'Assessment',
         respondUrl: `${env.APP_URL}/respond/${inv.accessToken}`,
@@ -941,6 +1072,10 @@ assessmentsRoutes.post('/:assessmentId/goals', async (c) => {
     throw new BadRequestError('Results must be computed before creating goals');
   }
 
+  if (!assessment.subjectId) {
+    throw new BadRequestError('Goals can only be created for assessments with a registered subject');
+  }
+
   const results = assessment.computedResults as ComputedAssessmentResults;
 
   // Check if goals already exist for this assessment
@@ -1022,4 +1157,159 @@ assessmentsRoutes.post('/:assessmentId/goals', async (c) => {
     .returning();
 
   return c.json({ data: created }, 201);
+});
+
+// ============================================
+// PUBLIC ASSESSMENT SETUP ROUTES
+// (Mounted before auth middleware in app.ts)
+// ============================================
+
+/**
+ * GET /api/assessments/setup/:token
+ * Public: Get assessment setup info for the subject
+ */
+publicAssessmentSetupRoutes.get('/:token', async (c) => {
+  const token = c.req.param('token')!;
+
+  const [assessment] = await db
+    .select({
+      id: assessments.id,
+      name: assessments.name,
+      description: assessments.description,
+      subjectFirstName: assessments.subjectFirstName,
+      subjectLastName: assessments.subjectLastName,
+      subjectEmail: assessments.subjectEmail,
+      subjectCanAddRaters: assessments.subjectCanAddRaters,
+      subjectSetupCompletedAt: assessments.subjectSetupCompletedAt,
+      templateId: assessments.templateId,
+      closeDate: assessments.closeDate,
+    })
+    .from(assessments)
+    .where(eq(assessments.subjectSetupToken, token))
+    .limit(1);
+
+  if (!assessment) {
+    return c.json({ error: { message: 'Invalid or expired setup link' } }, 404);
+  }
+
+  // Fetch template name
+  const [template] = await db
+    .select({ name: assessmentTemplates.name, assessmentType: assessmentTemplates.assessmentType })
+    .from(assessmentTemplates)
+    .where(eq(assessmentTemplates.id, assessment.templateId))
+    .limit(1);
+
+  // Fetch existing raters
+  const raters = await db
+    .select({
+      id: assessmentInvitations.id,
+      raterId: assessmentInvitations.raterId,
+      raterType: assessmentInvitations.raterType,
+      status: assessmentInvitations.status,
+      addedBy: assessmentInvitations.addedBy,
+      invRaterEmail: assessmentInvitations.raterEmail,
+      invRaterFirstName: assessmentInvitations.raterFirstName,
+      invRaterLastName: assessmentInvitations.raterLastName,
+      userFirstName: users.firstName,
+      userLastName: users.lastName,
+      userEmail: users.email,
+    })
+    .from(assessmentInvitations)
+    .leftJoin(users, eq(assessmentInvitations.raterId, users.id))
+    .where(eq(assessmentInvitations.assessmentId, assessment.id));
+
+  const ratersFormatted = raters.map((r) => ({
+    id: r.id,
+    raterType: r.raterType,
+    status: r.status,
+    addedBy: r.addedBy ?? 'admin',
+    firstName: r.userFirstName ?? r.invRaterFirstName ?? null,
+    lastName: r.userLastName ?? r.invRaterLastName ?? null,
+    email: r.userEmail ?? r.invRaterEmail ?? null,
+  }));
+
+  return c.json({
+    data: {
+      ...assessment,
+      template: template ?? null,
+      raters: ratersFormatted,
+    },
+  });
+});
+
+/**
+ * POST /api/assessments/setup/:token/raters
+ * Public: Subject submits their rater list
+ */
+publicAssessmentSetupRoutes.post('/:token/raters', async (c) => {
+  const token = c.req.param('token')!;
+
+  const body = await c.req.json<{
+    raters: { firstName: string; lastName: string; email: string; raterType: string }[];
+  }>();
+
+  if (!body?.raters || !Array.isArray(body.raters) || body.raters.length === 0) {
+    return c.json({ error: { message: 'At least one rater is required' } }, 400);
+  }
+
+  const [assessment] = await db
+    .select({
+      id: assessments.id,
+      name: assessments.name,
+      subjectCanAddRaters: assessments.subjectCanAddRaters,
+      subjectSetupCompletedAt: assessments.subjectSetupCompletedAt,
+    })
+    .from(assessments)
+    .where(eq(assessments.subjectSetupToken, token))
+    .limit(1);
+
+  if (!assessment) {
+    return c.json({ error: { message: 'Invalid or expired setup link' } }, 404);
+  }
+
+  if (!assessment.subjectCanAddRaters) {
+    return c.json({ error: { message: 'This assessment does not allow subject-added raters' } }, 403);
+  }
+
+  // Allow re-submission only if not yet completed
+  const values = body.raters.map((r) => ({
+    assessmentId: assessment.id,
+    raterId: null,
+    raterEmail: r.email,
+    raterFirstName: r.firstName,
+    raterLastName: r.lastName,
+    raterType: r.raterType as 'self' | 'manager' | 'peer' | 'direct_report',
+    addedBy: 'subject',
+    status: 'pending' as const,
+    accessToken: crypto.randomUUID().replace(/-/g, '').slice(0, 32),
+  }));
+
+  const inserted = await db.insert(assessmentInvitations).values(values).returning();
+
+  // Send invitation emails to the raters
+  await Promise.allSettled(
+    inserted.map(async (inv) => {
+      if (!inv.raterEmail) return;
+      const respondUrl = `${env.APP_URL}/respond/${inv.accessToken}`;
+      await sendAssessmentInvitation({
+        to: inv.raterEmail,
+        name: inv.raterFirstName ?? 'there',
+        assessorName: assessment.name,
+        assessmentName: assessment.name,
+        respondUrl,
+      });
+    })
+  );
+
+  // Mark as sent
+  await db.update(assessmentInvitations)
+    .set({ status: 'sent', sentAt: new Date() })
+    .where(inArray(assessmentInvitations.id, inserted.map((i) => i.id)));
+
+  // Mark setup as completed
+  await db.update(assessments)
+    .set({ subjectSetupCompletedAt: new Date() })
+    .where(eq(assessments.subjectSetupToken, token));
+
+  return c.json({ data: { added: inserted.length } }, 201);
 });

@@ -25,7 +25,6 @@ import type {
 import {
   learningTracks,
   timeZones,
-  defaultEmailSettings,
   defaultBeforeDueReminders,
   defaultAfterDueReminders,
 } from './wizard-data';
@@ -135,7 +134,7 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
         { id: '2', text: '' },
         { id: '3', text: '' },
       ],
-      emailSettings: cfg.emailSettings?.length ? cfg.emailSettings : defaultEmailSettings,
+      emailSettings: cfg.emailSettings ?? {},
       beforeDueReminders: cfg.beforeDueReminders?.length ? cfg.beforeDueReminders : defaultBeforeDueReminders,
       afterDueReminders: cfg.afterDueReminders?.length ? cfg.afterDueReminders : defaultAfterDueReminders,
     };
@@ -527,11 +526,9 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
                 <p className="text-sm text-gray-500 mt-0.5">Sent before program starts to prepare learners</p>
               </div>
               <Toggle
-                enabled={!!(formConfig.emailSettings || [])[0]?.enabled}
+                enabled={formConfig.emailSettings?.welcome !== false}
                 onToggle={() => {
-                  const updated = [...(formConfig.emailSettings || defaultEmailSettings)];
-                  if (updated[0]) updated[0] = { ...updated[0], enabled: !updated[0].enabled };
-                  updateConfig({ emailSettings: updated });
+                  updateConfig({ emailSettings: { ...formConfig.emailSettings, welcome: formConfig.emailSettings?.welcome === false } });
                 }}
               />
             </div>
@@ -565,11 +562,9 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
                 <p className="text-sm text-gray-500 mt-0.5">Sent on program start date</p>
               </div>
               <Toggle
-                enabled={!!(formConfig.emailSettings || [])[1]?.enabled}
+                enabled={formConfig.emailSettings?.kickoff !== false}
                 onToggle={() => {
-                  const updated = [...(formConfig.emailSettings || defaultEmailSettings)];
-                  if (updated[1]) updated[1] = { ...updated[1], enabled: !updated[1].enabled };
-                  updateConfig({ emailSettings: updated });
+                  updateConfig({ emailSettings: { ...formConfig.emailSettings, kickoff: formConfig.emailSettings?.kickoff === false } });
                 }}
               />
             </div>
@@ -667,11 +662,9 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
                 <p className="text-sm text-gray-500 mt-0.5">Weekly summary of progress and upcoming content</p>
               </div>
               <Toggle
-                enabled={!!(formConfig.emailSettings || [])[2]?.enabled}
+                enabled={formConfig.emailSettings?.weeklyDigest !== false}
                 onToggle={() => {
-                  const updated = [...(formConfig.emailSettings || defaultEmailSettings)];
-                  if (updated[2]) updated[2] = { ...updated[2], enabled: !updated[2].enabled };
-                  updateConfig({ emailSettings: updated });
+                  updateConfig({ emailSettings: { ...formConfig.emailSettings, weeklyDigest: formConfig.emailSettings?.weeklyDigest === false } });
                 }}
               />
             </div>
@@ -693,11 +686,9 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
                 <p className="text-sm text-gray-500 mt-0.5">Re-engage learners who haven&apos;t logged in recently</p>
               </div>
               <Toggle
-                enabled={!!(formConfig.emailSettings || [])[3]?.enabled}
+                enabled={formConfig.emailSettings?.inactivityReminders !== false}
                 onToggle={() => {
-                  const updated = [...(formConfig.emailSettings || defaultEmailSettings)];
-                  if (updated[3]) updated[3] = { ...updated[3], enabled: !updated[3].enabled };
-                  updateConfig({ emailSettings: updated });
+                  updateConfig({ emailSettings: { ...formConfig.emailSettings, inactivityReminders: formConfig.emailSettings?.inactivityReminders === false } });
                 }}
               />
             </div>
@@ -715,11 +706,9 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
                 <p className="text-sm text-gray-500 mt-0.5">Celebrate progress at key completion milestones</p>
               </div>
               <Toggle
-                enabled={!!(formConfig.emailSettings || [])[4]?.enabled}
+                enabled={formConfig.emailSettings?.milestones !== false}
                 onToggle={() => {
-                  const updated = [...(formConfig.emailSettings || defaultEmailSettings)];
-                  if (updated[4]) updated[4] = { ...updated[4], enabled: !updated[4].enabled };
-                  updateConfig({ emailSettings: updated });
+                  updateConfig({ emailSettings: { ...formConfig.emailSettings, milestones: formConfig.emailSettings?.milestones === false } });
                 }}
               />
             </div>
@@ -740,11 +729,9 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
                 <p className="text-sm text-gray-500 mt-0.5">Congratulate learners on program completion</p>
               </div>
               <Toggle
-                enabled={!!(formConfig.emailSettings || [])[5]?.enabled}
+                enabled={formConfig.emailSettings?.completion !== false}
                 onToggle={() => {
-                  const updated = [...(formConfig.emailSettings || defaultEmailSettings)];
-                  if (updated[5]) updated[5] = { ...updated[5], enabled: !updated[5].enabled };
-                  updateConfig({ emailSettings: updated });
+                  updateConfig({ emailSettings: { ...formConfig.emailSettings, completion: formConfig.emailSettings?.completion === false } });
                 }}
               />
             </div>
@@ -758,11 +745,9 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
                 <p className="text-sm text-gray-500 mt-0.5">Send progress reports to mentors and managers</p>
               </div>
               <Toggle
-                enabled={!!(formConfig.emailSettings || [])[6]?.enabled}
+                enabled={formConfig.emailSettings?.mentorSummary !== false}
                 onToggle={() => {
-                  const updated = [...(formConfig.emailSettings || defaultEmailSettings)];
-                  if (updated[6]) updated[6] = { ...updated[6], enabled: !updated[6].enabled };
-                  updateConfig({ emailSettings: updated });
+                  updateConfig({ emailSettings: { ...formConfig.emailSettings, mentorSummary: formConfig.emailSettings?.mentorSummary === false } });
                 }}
               />
             </div>

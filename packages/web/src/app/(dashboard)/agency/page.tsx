@@ -26,9 +26,15 @@ import {
   Archive,
   MoreVertical,
   Loader2,
+  Mail,
+  Lock,
+  ChevronDown,
+  ChevronRight,
+  Eye,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { useAgency, useAgencyStats, useAgencyUsers, useUpdateAgency } from '@/hooks/api/useAgency';
+import { useAgencyEmailConfig, useUpdateAgencyEmailConfig, type AgencyEmailConfig } from '@/hooks/api/useAgencyEmailConfig';
 import { useTenants } from '@/hooks/api/useTenants';
 import { useUsers, type TenantUser } from '@/hooks/api/useUsers';
 import {
@@ -47,7 +53,7 @@ import { CreateUserModal } from '@/components/agency/CreateUserModal';
 import { ChangeRoleModal } from '@/components/agency/ChangeRoleModal';
 import { ImpersonateUserModal } from '@/components/agency/ImpersonateUserModal';
 
-type Tab = 'overview' | 'clients' | 'people' | 'templates' | 'branding' | 'billing';
+type Tab = 'overview' | 'clients' | 'people' | 'templates' | 'branding' | 'communications' | 'billing';
 
 const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'overview', label: 'Overview', icon: <TrendingUp className="w-4 h-4" /> },
@@ -55,21 +61,23 @@ const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'people', label: 'People', icon: <Users className="w-4 h-4" /> },
   { id: 'templates', label: 'Templates', icon: <FileText className="w-4 h-4" /> },
   { id: 'branding', label: 'Branding', icon: <Palette className="w-4 h-4" /> },
+  { id: 'communications', label: 'Communications', icon: <Mail className="w-4 h-4" /> },
   { id: 'billing', label: 'Billing', icon: <CreditCard className="w-4 h-4" /> },
 ];
 
 export default function AgencyPage() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
+  const validTabs: Tab[] = ['overview', 'clients', 'people', 'templates', 'branding', 'communications', 'billing'];
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const t = searchParams.get('tab') as Tab | null;
-    return t && ['overview', 'clients', 'people', 'templates', 'branding', 'billing'].includes(t) ? t : 'overview';
+    return t && validTabs.includes(t) ? t : 'overview';
   });
 
   // Sync tab with URL when query param changes (e.g. back-navigation from editor)
   useEffect(() => {
     const t = searchParams.get('tab') as Tab | null;
-    if (t && ['overview', 'clients', 'people', 'templates', 'branding', 'billing'].includes(t)) {
+    if (t && validTabs.includes(t)) {
       setActiveTab(t);
     }
   }, [searchParams]);
@@ -124,6 +132,7 @@ export default function AgencyPage() {
         {activeTab === 'people' && <PeopleTab />}
         {activeTab === 'templates' && <TemplatesTab />}
         {activeTab === 'branding' && <BrandingTab />}
+        {activeTab === 'communications' && <CommunicationsTab />}
         {activeTab === 'billing' && <BillingTab />}
       </div>
     </div>
@@ -1328,6 +1337,413 @@ function BrandingTab() {
                 <RefreshCw className="w-4 h-4" />
                 Reset to Defaults
               </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// Communications Tab
+// ============================================
+
+interface EmailTypeDefinition {
+  id: string;
+  name: string;
+  description: string;
+  group: 'Assessment' | 'Program' | 'Auth & System';
+  defaultSubject: string;
+  defaultBody: string;
+  transactional?: boolean; // cannot be disabled
+}
+
+const EMAIL_TYPE_DEFINITIONS: EmailTypeDefinition[] = [
+  // Assessment
+  {
+    id: 'assessmentInvitation',
+    name: 'Assessment Invitation',
+    description: 'Sent to raters when they are invited to complete an assessment.',
+    group: 'Assessment',
+    defaultSubject: "You've been invited to complete an assessment",
+    defaultBody: "Hi [Name], [Assessor] has invited you to complete the [Assessment] assessment. Your honest feedback helps support professional growth and development. The assessment should take about 10–15 minutes to complete.",
+    transactional: true,
+  },
+  {
+    id: 'subjectInvitation',
+    name: 'Subject Invitation',
+    description: 'Sent to the assessment subject when they are selected.',
+    group: 'Assessment',
+    defaultSubject: "You've been selected as a subject for an assessment",
+    defaultBody: "Hi [Name], you have been selected as the subject for the [Assessment] assessment. Click below to review the details and add your reviewers.",
+    transactional: true,
+  },
+  {
+    id: 'assessmentReminder',
+    name: 'Assessment Reminder',
+    description: 'Sent to raters who have not yet completed their response.',
+    group: 'Assessment',
+    defaultSubject: 'Reminder: Your assessment response is due',
+    defaultBody: "Hi [Name], this is a friendly reminder that you have a pending [Assessment] assessment. Your response is still needed. It only takes 10–15 minutes and makes a real difference.",
+  },
+  // Program
+  {
+    id: 'welcome',
+    name: 'Program Welcome',
+    description: 'Sent to participants when they are enrolled in a program.',
+    group: 'Program',
+    defaultSubject: "You've been enrolled in [Program]",
+    defaultBody: "Hi [Name], you've been enrolled in [Program]. We're excited to have you on this journey. Click below to view your program and get started.",
+  },
+  {
+    id: 'kickoff',
+    name: 'Program Kickoff',
+    description: "Sent on the program's start date to all active participants.",
+    group: 'Program',
+    defaultSubject: '[Program] starts today',
+    defaultBody: "Hi [Name], [Program] is officially underway. Your first module is ready and waiting. Log in to get started — your facilitator and fellow participants are ready to go.",
+  },
+  {
+    id: 'weeklyDigest',
+    name: 'Weekly Progress Digest',
+    description: 'Sent weekly summarising each participant\'s progress.',
+    group: 'Program',
+    defaultSubject: 'Your weekly progress in [Program]',
+    defaultBody: "Hi [Name], here's your progress update for [Program]: [Progress]% overall, [Modules] modules completed, [Points] points earned. Keep up the great work.",
+  },
+  {
+    id: 'inactivity',
+    name: 'Inactivity Reminder',
+    description: 'Sent to participants who have not logged in for a configured number of days.',
+    group: 'Program',
+    defaultSubject: 'We miss you — pick up where you left off',
+    defaultBody: "Hi [Name], you haven't logged into [Program] in [Days] days. Your progress is saved and your next module is ready whenever you are.",
+  },
+  {
+    id: 'milestones',
+    name: 'Milestone Celebration',
+    description: 'Sent when a participant reaches 25%, 50%, 75%, or 100% completion.',
+    group: 'Program',
+    defaultSubject: "You've reached [N]% in [Program]!",
+    defaultBody: "Hi [Name], congratulations on your progress! You've reached [N]% completion in [Program]. Keep going!",
+  },
+  {
+    id: 'completion',
+    name: 'Program Completion',
+    description: 'Sent when a participant completes the entire program.',
+    group: 'Program',
+    defaultSubject: "Congratulations! You've completed [Program]",
+    defaultBody: "Hi [Name], congratulations on completing [Program]! This is a significant achievement. Your certificate and results are available in your account.",
+  },
+  {
+    id: 'mentorSummary',
+    name: 'Mentor Progress Summary',
+    description: "Sent weekly or biweekly to mentors with their mentees' progress.",
+    group: 'Program',
+    defaultSubject: 'Weekly mentee progress summary',
+    defaultBody: "Hi [Name], here's a summary of your mentees' progress this week. Click below to view detailed activity and session notes.",
+  },
+  // Auth & System
+  {
+    id: 'userWelcome',
+    name: 'User Welcome & Password Setup',
+    description: 'Sent when a new user account is created.',
+    group: 'Auth & System',
+    defaultSubject: 'Welcome to Transformation OS — Set your password',
+    defaultBody: "Hi [Name], your account has been created on Transformation OS. Click the button below to set your password and access your account. This link expires in 72 hours.",
+    transactional: true,
+  },
+  {
+    id: 'passwordReset',
+    name: 'Password Reset',
+    description: 'Sent when a user requests a password reset.',
+    group: 'Auth & System',
+    defaultSubject: 'Reset your password',
+    defaultBody: "Hi [Name], we received a request to reset your password. Click the button below to choose a new one. This link expires in 1 hour.",
+    transactional: true,
+  },
+];
+
+const EMAIL_GROUPS: Array<EmailTypeDefinition['group']> = ['Assessment', 'Program', 'Auth & System'];
+
+function buildPreviewHtml(subject: string, body: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+    body{margin:0;padding:20px;background:#f3f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;}
+    .wrap{max-width:560px;margin:0 auto;}
+    .header{background:#1f2937;border-radius:12px 12px 0 0;padding:20px 28px;}
+    .header p{margin:0;color:#f9fafb;font-size:16px;font-weight:700;}
+    .body{background:#fff;padding:28px;color:#374151;font-size:14px;line-height:1.7;}
+    .body h1{margin:0 0 16px;font-size:18px;font-weight:700;color:#111827;}
+    .body p{margin:0 0 12px;}
+    .btn{display:inline-block;background:#dc2626;color:#fff;text-decoration:none;font-weight:600;font-size:14px;padding:10px 24px;border-radius:8px;margin-top:12px;}
+    .footer{background:#f9fafb;border-radius:0 0 12px 12px;padding:16px 28px;border-top:1px solid #e5e7eb;}
+    .footer p{margin:0;color:#9ca3af;font-size:11px;line-height:1.6;}
+  </style></head><body><div class="wrap">
+    <div class="header"><p>Transformation OS</p></div>
+    <div class="body">
+      <h1>${subject}</h1>
+      <p>${body.replace(/\[(\w+)\]/g, '<em style="color:#6b7280">[<strong>$1</strong>]</em>')}</p>
+      <a class="btn" href="#">Action Button</a>
+    </div>
+    <div class="footer"><p>You're receiving this because you have an account on Transformation OS.<br>© ${new Date().getFullYear()} Transformation OS. All rights reserved.</p></div>
+  </div></body></html>`;
+}
+
+function CommunicationsTab() {
+  const { data: savedConfig, isLoading } = useAgencyEmailConfig();
+  const updateConfig = useUpdateAgencyEmailConfig();
+
+  const [localConfig, setLocalConfig] = useState<AgencyEmailConfig>({});
+  const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set());
+  const [previewType, setPreviewType] = useState<string>('welcome');
+  const [hasChanges, setHasChanges] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
+  // Initialise local config from saved data
+  useEffect(() => {
+    if (savedConfig) {
+      setLocalConfig(savedConfig);
+      setHasChanges(false);
+    }
+  }, [savedConfig]);
+
+  function updateType(typeId: string, patch: Partial<AgencyEmailConfig[string]>) {
+    setLocalConfig((prev) => ({
+      ...prev,
+      [typeId]: { ...(prev[typeId] ?? {}), ...patch },
+    }));
+    setHasChanges(true);
+  }
+
+  function toggleExpanded(typeId: string) {
+    setExpandedTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(typeId)) next.delete(typeId);
+      else next.add(typeId);
+      return next;
+    });
+  }
+
+  async function handleSave() {
+    try {
+      await updateConfig.mutateAsync(localConfig);
+      setHasChanges(false);
+      setSaveMessage('Changes saved successfully!');
+    } catch {
+      setSaveMessage('Failed to save. Please try again.');
+    }
+    setTimeout(() => setSaveMessage(null), 3000);
+  }
+
+  const previewDef = EMAIL_TYPE_DEFINITIONS.find((d) => d.id === previewType);
+  const previewCfg = localConfig[previewType] ?? {};
+  const previewSubject = previewCfg.subject || previewDef?.defaultSubject || '';
+  const previewBody = previewCfg.body || previewDef?.defaultBody || '';
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        {[...Array(4)].map((_, i) => <div key={i} className="h-28 bg-gray-100 rounded-xl animate-pulse" />)}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900">Email Communications</h2>
+          <p className="text-sm text-gray-500">
+            Configure default email content, enable/disable types, and lock settings for all programs.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          {saveMessage && (
+            <span className={`text-sm ${saveMessage.includes('Failed') ? 'text-red-600' : 'text-green-600'}`}>
+              {saveMessage}
+            </span>
+          )}
+          {hasChanges && (
+            <button
+              onClick={handleSave}
+              disabled={updateConfig.isPending}
+              className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+            >
+              {updateConfig.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Save Changes
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: email type list */}
+        <div className="lg:col-span-2 space-y-6">
+          {EMAIL_GROUPS.map((group) => {
+            const types = EMAIL_TYPE_DEFINITIONS.filter((d) => d.group === group);
+            return (
+              <div key={group} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="px-5 py-3 bg-gray-50 border-b border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-700">{group}</h3>
+                </div>
+                <div className="divide-y divide-gray-100">
+                  {types.map((typeDef) => {
+                    const cfg = localConfig[typeDef.id] ?? {};
+                    const isEnabled = cfg.enabled ?? true;
+                    const isMandatory = cfg.mandatory ?? false;
+                    const isExpanded = expandedTypes.has(typeDef.id);
+                    const hasCustomSubject = !!cfg.subject;
+                    const hasCustomBody = !!cfg.body;
+
+                    return (
+                      <div key={typeDef.id} className="p-5">
+                        {/* Top row */}
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className="text-sm font-semibold text-gray-900">{typeDef.name}</span>
+                              {typeDef.transactional && (
+                                <span className="text-xs px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full border border-amber-200">
+                                  Transactional
+                                </span>
+                              )}
+                              {(hasCustomSubject || hasCustomBody) && (
+                                <span className="text-xs px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full border border-blue-200">
+                                  Customized
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500">{typeDef.description}</p>
+                          </div>
+
+                          <div className="flex items-center gap-4 shrink-0">
+                            {/* Preview button */}
+                            <button
+                              onClick={() => setPreviewType(typeDef.id)}
+                              className={`p-1.5 rounded transition-colors ${previewType === typeDef.id ? 'text-red-600 bg-red-50' : 'text-gray-400 hover:text-gray-600'}`}
+                              title="Preview this email"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+
+                            {/* Mandatory lock */}
+                            {!typeDef.transactional && (
+                              <div className="flex flex-col items-center gap-0.5">
+                                <button
+                                  onClick={() => updateType(typeDef.id, { mandatory: !isMandatory })}
+                                  className={`p-1.5 rounded transition-colors ${isMandatory ? 'text-amber-600 bg-amber-50' : 'text-gray-300 hover:text-gray-500'}`}
+                                  title={isMandatory ? 'Mandatory — programs cannot disable' : 'Click to make mandatory'}
+                                >
+                                  <Lock className="w-3.5 h-3.5" />
+                                </button>
+                                <span className="text-[10px] text-gray-400">Lock</span>
+                              </div>
+                            )}
+
+                            {/* Enabled toggle */}
+                            {!typeDef.transactional && (
+                              <div className="flex flex-col items-center gap-0.5">
+                                <button
+                                  onClick={() => updateType(typeDef.id, { enabled: !isEnabled })}
+                                  className={`relative w-10 h-5 rounded-full transition-colors ${isEnabled ? 'bg-red-600' : 'bg-gray-300'}`}
+                                >
+                                  <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${isEnabled ? 'translate-x-5' : ''}`} />
+                                </button>
+                                <span className="text-[10px] text-gray-400">{isEnabled ? 'Default on' : 'Default off'}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Customize toggle */}
+                        <button
+                          onClick={() => toggleExpanded(typeDef.id)}
+                          className="mt-3 flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                        >
+                          {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                          Customize subject &amp; body
+                        </button>
+
+                        {/* Expand: custom subject + body */}
+                        {isExpanded && (
+                          <div className="mt-3 space-y-3 pl-4 border-l-2 border-gray-100">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Subject line</label>
+                              <input
+                                type="text"
+                                value={cfg.subject ?? ''}
+                                onChange={(e) => updateType(typeDef.id, { subject: e.target.value || undefined })}
+                                placeholder={typeDef.defaultSubject}
+                                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">Body copy</label>
+                              <textarea
+                                rows={4}
+                                value={cfg.body ?? ''}
+                                onChange={(e) => updateType(typeDef.id, { body: e.target.value || undefined })}
+                                placeholder={typeDef.defaultBody}
+                                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 resize-none"
+                              />
+                              <p className="text-[10px] text-gray-400 mt-1">
+                                Use <code>[Name]</code>, <code>[Program]</code>, <code>[Assessment]</code> etc. as placeholders.
+                              </p>
+                            </div>
+                            {(hasCustomSubject || hasCustomBody) && (
+                              <button
+                                onClick={() => updateType(typeDef.id, { subject: undefined, body: undefined })}
+                                className="text-xs text-gray-400 hover:text-red-600 transition-colors"
+                              >
+                                Reset to default
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Right: sticky preview */}
+        <div className="lg:col-span-1">
+          <div className="sticky top-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="px-5 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-700">Preview</h3>
+                <select
+                  value={previewType}
+                  onChange={(e) => setPreviewType(e.target.value)}
+                  className="text-xs border border-gray-200 rounded px-2 py-1 bg-white focus:outline-none"
+                >
+                  {EMAIL_TYPE_DEFINITIONS.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="p-3">
+                <div className="text-xs text-gray-500 mb-2 font-medium truncate">
+                  Subject: <span className="text-gray-800">{previewSubject}</span>
+                </div>
+                <div className="rounded-lg overflow-hidden border border-gray-200" style={{ height: 420 }}>
+                  <iframe
+                    srcDoc={buildPreviewHtml(previewSubject, previewBody)}
+                    className="w-full h-full"
+                    style={{ transform: 'scale(0.85)', transformOrigin: 'top left', width: '118%', height: '118%' }}
+                    title="Email preview"
+                    sandbox="allow-same-origin"
+                  />
+                </div>
+                {(previewCfg.subject || previewCfg.body) && (
+                  <p className="text-[10px] text-blue-600 mt-2 text-center">Showing customized content</p>
+                )}
+              </div>
             </div>
           </div>
         </div>

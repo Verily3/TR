@@ -15,6 +15,7 @@ import {
   FileText,
   Target,
   ClipboardList,
+  ClipboardCheck,
   CheckSquare,
   MessageSquare,
   Calendar,
@@ -22,7 +23,7 @@ import {
 } from 'lucide-react';
 
 // Lesson types
-type LessonType = 'reading' | 'video' | 'meeting' | 'submission' | 'assignment' | 'goal' | 'quiz' | 'approval' | 'discussion';
+type LessonType = 'reading' | 'video' | 'meeting' | 'submission' | 'assignment' | 'goal' | 'quiz' | 'approval' | 'discussion' | 'survey';
 
 type FilterMode = 'all' | 'remaining';
 
@@ -68,6 +69,7 @@ const lessonIcons: Record<LessonType, typeof BookOpen> = {
   quiz: ClipboardList,
   approval: CheckSquare,
   discussion: MessageSquare,
+  survey: ClipboardCheck,
 };
 
 /**
@@ -173,7 +175,7 @@ export const LearnerSidebar = memo(function LearnerSidebar({
             </button>
           </div>
           <h2 className="text-sidebar-foreground font-semibold mb-1 truncate">{programName}</h2>
-          <p className="text-sm text-muted-foreground">{modules.length}-Module Leadership Program</p>
+          <p className="text-sm text-muted-foreground">{modules.length} {modules.length === 1 ? 'Module' : 'Modules'}</p>
 
           {/* Overall Progress */}
           <div className="mt-4 p-3 bg-muted/30 rounded-lg">
@@ -324,18 +326,17 @@ export const LearnerSidebar = memo(function LearnerSidebar({
                     role="list"
                     aria-label={`Lessons in Module ${module.number}`}
                   >
-                    <li className="bg-muted/20">
-                      {module.lessons.map((lesson, lessonIndex) => {
-                        // In "remaining" mode, hide completed lessons
-                        if (filterMode === 'remaining' && lesson.completed) return null;
+                    {module.lessons.map((lesson, lessonIndex) => {
+                      // In "remaining" mode, hide completed lessons
+                      if (filterMode === 'remaining' && lesson.completed) return null;
 
-                        const LessonIcon = lessonIcons[lesson.type];
-                        const isCurrentLesson =
-                          moduleIndex === currentModuleIndex && lessonIndex === currentLessonIndex;
+                      const LessonIcon = lessonIcons[lesson.type];
+                      const isCurrentLesson =
+                        moduleIndex === currentModuleIndex && lessonIndex === currentLessonIndex;
 
-                        return (
+                      return (
+                        <li key={lesson.id} className="bg-muted/20">
                           <button
-                            key={lesson.id}
                             onClick={() => onSelectLesson(moduleIndex, lessonIndex)}
                             onKeyDown={(e) => handleLessonKeyDown(e, moduleIndex, lessonIndex)}
                             className={`w-full p-3 pl-14 text-left border-t border-border/50 hover:bg-muted/50 transition-all focus:outline-none focus:bg-muted/50 ${
@@ -371,9 +372,9 @@ export const LearnerSidebar = memo(function LearnerSidebar({
                               <span>{lesson.points} pts</span>
                             </div>
                           </button>
-                        );
-                      })}
-                    </li>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </li>
               );

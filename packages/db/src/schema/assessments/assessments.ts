@@ -59,10 +59,16 @@ export const assessments = pgTable(
       .notNull()
       .references(() => tenants.id, { onDelete: 'cascade' }),
 
-    // Who is being assessed
-    subjectId: uuid('subject_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    // Who is being assessed — nullable for external subjects without accounts
+    subjectId: uuid('subject_id').references(() => users.id, { onDelete: 'cascade' }),
+
+    // External subject fields (populated when subjectId is null)
+    subjectEmail: varchar('subject_email', { length: 255 }),
+    subjectFirstName: varchar('subject_first_name', { length: 100 }),
+    subjectLastName: varchar('subject_last_name', { length: 100 }),
+    subjectSetupToken: varchar('subject_setup_token', { length: 64 }).unique(),
+    subjectSetupCompletedAt: timestamp('subject_setup_completed_at', { withTimezone: true }),
+    subjectCanAddRaters: boolean('subject_can_add_raters').notNull().default(true),
 
     // Who created/manages this assessment
     createdBy: uuid('created_by').references(() => users.id, {
@@ -108,6 +114,7 @@ export const assessments = pgTable(
     index('assessments_tenant_idx').on(table.tenantId),
     index('assessments_subject_idx').on(table.subjectId),
     index('assessments_status_idx').on(table.status),
+    index('assessments_setup_token_idx').on(table.subjectSetupToken),
   ]
 );
 
@@ -124,10 +131,14 @@ export const assessmentInvitations = pgTable(
       .notNull()
       .references(() => assessments.id, { onDelete: 'cascade' }),
 
-    // The rater
-    raterId: uuid('rater_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
+    // The rater — nullable for external raters without accounts
+    raterId: uuid('rater_id').references(() => users.id, { onDelete: 'cascade' }),
+
+    // External rater fields (populated when raterId is null)
+    raterEmail: varchar('rater_email', { length: 255 }),
+    raterFirstName: varchar('rater_first_name', { length: 100 }),
+    raterLastName: varchar('rater_last_name', { length: 100 }),
+    addedBy: varchar('added_by', { length: 20 }).default('admin'), // 'admin' | 'subject'
 
     // What type of rater
     raterType: raterTypeEnum('rater_type').notNull(),
@@ -158,6 +169,7 @@ export const assessmentInvitations = pgTable(
     index('assessment_invitations_rater_idx').on(table.raterId),
     index('assessment_invitations_status_idx').on(table.status),
     index('assessment_invitations_token_idx').on(table.accessToken),
+    index('invitations_rater_email_idx').on(table.raterEmail),
   ]
 );
 

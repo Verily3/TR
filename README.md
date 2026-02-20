@@ -46,16 +46,17 @@ packages/
 │   └── src/
 │       ├── routes/       # Route handlers
 │       ├── middleware/   # Auth, error handling
-│       └── lib/          # Email, PDF, assessment engine, notifications
+│       └── lib/          # Email, PDF, assessment/quiz engines, notifications
 │
 ├── db/           # PostgreSQL + Drizzle ORM
 │   ├── src/schema/       # Table definitions
-│   ├── drizzle/          # Generated migrations (0001–0012)
+│   ├── drizzle/          # Generated migrations (0001–0016)
 │   └── seed.ts           # Test data
 │
 └── web/          # Next.js frontend (port 3003)
     └── src/
         ├── app/(dashboard)/   # Authenticated pages
+        ├── app/survey/        # Public survey response page (no auth)
         ├── components/        # UI components by module
         ├── hooks/api/         # React Query hooks
         └── lib/               # API client, utilities
@@ -70,8 +71,8 @@ packages/
 - Impersonation system for agency admins to view tenant user experiences
 
 ### LMS / Programs
-- Curriculum builder: modules, lessons, 5 content types (`lesson`, `quiz`, `assignment`, `text_form`, `goal`)
-- Add-menu with 10 entries in 3 groups: Content, Reflection, Activity
+- Curriculum builder: modules, lessons, 6 content types (`lesson`, `quiz`, `assignment`, `text_form`, `goal`, `survey`)
+- Add-menu with 11 entries in 3 groups: Content, Reflection, Activity
 - Drip scheduling at module and lesson level
 - Learner sidebar with progress tracking, sequential module locking, completion modal
 - Program roles: Facilitator, Mentor, Learner
@@ -107,6 +108,21 @@ packages/
 - 3-layer resolution: hardcoded defaults → role DB override → user DB override
 - Admin screen at `/settings/permissions` for toggle-based management
 
+### Quizzes
+- Scored question sets embedded in program lessons
+- Three short-answer grading modes: `auto_complete`, `keyword` (match against keyword list), `manual` (awaits facilitator review)
+- Attempt tracking with `quiz_attempts` table; retake limit enforcement
+- Learner view: form → instant score + per-question breakdown → retake or pass state
+- Facilitator manual grading endpoint for `pending_grade` attempts
+
+### Surveys
+- Standalone feedback forms with public share link (no login required) or login-required mode
+- 7 question types: single choice, multiple choice, text, rating, NPS, yes/no, ranking
+- Results dashboard with per-question charts (bar charts, NPS breakdown, rating distribution)
+- Can be embedded in program lessons as a content type (`survey`)
+- Anonymous submission support with session-token dedup
+- Public page at `/survey/[token]` (outside the auth wrapper)
+
 ### Email & Notifications
 - Resend email service (10 typed helpers: assessment invites, welcome, digest, etc.)
 - In-app notification center with unread count badge
@@ -118,7 +134,8 @@ packages/
 ```bash
 pnpm --filter @tr/db db:generate   # Generate migration from schema changes
 pnpm --filter @tr/db db:migrate    # Apply pending migrations
-pnpm --filter @tr/db db:seed       # Seed test data
+pnpm --filter @tr/db db:seed       # Seed all test data (core + LeaderShift program)
+pnpm --filter @tr/db db:seed-leadershift  # Re-seed only the LeaderShift program
 pnpm --filter @tr/db db:studio     # Open Drizzle Studio (database browser)
 ```
 

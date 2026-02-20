@@ -6,3 +6,4 @@ export * from './lessons';
 export * from './enrollments';
 export * from './progress';
 export * from './tasks';
+export * from './quiz';

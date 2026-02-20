@@ -33,12 +33,23 @@ export const programStatusEnum = pgEnum('program_status', [
  * Program configuration stored as JSONB
  */
 export interface ProgramEmailSettings {
+  // Toggle which email types are active for this program
   welcome?: boolean;
-  weeklyDigest?: boolean;
-  weeklyDigestDay?: number; // 0=Sun, 1=Mon, ...
-  inactivityReminders?: boolean;
   kickoff?: boolean;
+  weeklyDigest?: boolean;
+  weeklyDigestDay?: number;              // 0=Sun … 6=Sat, default 1 (Mon)
+  inactivityReminders?: boolean;
+  inactivityDays?: number;              // days of inactivity before reminder, default 7
   milestones?: boolean;
+  completion?: boolean;
+  mentorSummary?: boolean;
+  mentorSummaryFrequency?: 'weekly' | 'biweekly';
+  // Due-date reminders (days relative to due date; negative = before, positive = after)
+  beforeDueReminders?: number[];        // e.g. [14, 7, 3, 1, 0]
+  afterDueReminders?: number[];         // e.g. [1, 3, 7]
+  // Per-program copy overrides (keyed by email type id)
+  subjectOverrides?: Record<string, string>;
+  bodyOverrides?: Record<string, string>;
 }
 
 export interface ProgramConfig {

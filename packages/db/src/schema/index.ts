@@ -20,3 +20,6 @@ export * from './assessments';
 
 // Mentoring tables (renamed from Coaching)
 export * from './mentoring';
+
+// Survey tables
+export * from './surveys';

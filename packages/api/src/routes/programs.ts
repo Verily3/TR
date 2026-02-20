@@ -1,13 +1,16 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { eq, and, isNull, desc, sql, asc, or } from 'drizzle-orm';
+import { eq, and, isNull, desc, sql, asc, or, count } from 'drizzle-orm';
 import { db, schema } from '@tr/db';
 import { requireTenantAccess, requirePermission } from '../middleware/permissions.js';
 import { NotFoundError, BadRequestError, ForbiddenError } from '../lib/errors.js';
 import { PERMISSIONS } from '@tr/shared';
 import type { Variables } from '../types/context.js';
 import type { PaginationMeta } from '@tr/shared';
+import { gradeQuizSubmission, applyManualGrades } from '../lib/quiz-engine.js';
+import { sendProgramCreated } from '../lib/email.js';
+import { env } from '../lib/env.js';
 
 const {
   programs,
@@ -15,6 +18,8 @@ const {
   lessons,
   enrollments,
   lessonTasks,
+  quizAttempts,
+  lessonProgress,
 } = schema;
 
 export const programsRoutes = new Hono<{ Variables: Variables }>();
@@ -92,7 +97,7 @@ const updateModuleSchema = createModuleSchema.partial();
 const createLessonSchema = z.object({
   title: z.string().min(1).max(255),
   contentType: z
-    .enum(['lesson', 'quiz', 'assignment', 'text_form', 'goal'])
+    .enum(['lesson', 'quiz', 'assignment', 'text_form', 'goal', 'survey'])
     .default('lesson'),
   content: z.record(z.unknown()).optional(),
   order: z.number().int().optional(),
@@ -379,6 +384,14 @@ programsRoutes.post(
       })
       .returning();
 
+    // Notify creator
+    sendProgramCreated({
+      to: user.email,
+      name: user.email,
+      programName: program.name,
+      programUrl: `${env.APP_URL}/program-builder/${program.id}`,
+    }).catch(() => {});
+
     return c.json({ data: program }, 201);
   }
 );
@@ -576,10 +589,14 @@ programsRoutes.delete(
       throw new NotFoundError('Program', programId);
     }
 
+    const now = new Date();
     await db
       .update(programs)
-      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .set({ deletedAt: now, updatedAt: now })
       .where(eq(programs.id, programId));
+
+    // Cascade: hard-delete all modules (lessons/tasks cascade via FK)
+    await db.delete(modules).where(eq(modules.programId, programId));
 
     return c.json({ data: { success: true } });
   }
@@ -1332,5 +1349,319 @@ programsRoutes.put(
     }
 
     return c.json({ data: { success: true } });
+  }
+);
+
+// ─── Quiz Endpoints ─────────────────────────────────────────────────────────
+
+const submitQuizSchema = z.object({
+  answers: z.record(z.string(), z.union([z.string(), z.number()])),
+});
+
+const gradeQuizSchema = z.object({
+  questionGrades: z.array(z.object({
+    questionId: z.string(),
+    pointsAwarded: z.number().min(0),
+  })).min(1),
+});
+
+/**
+ * Helper: verify lesson belongs to program+tenant and return it
+ */
+async function getQuizLesson(tenantId: string, programId: string, lessonId: string) {
+  const [row] = await db
+    .select({ lesson: lessons, program: programs })
+    .from(lessons)
+    .innerJoin(modules, eq(lessons.moduleId, modules.id))
+    .innerJoin(programs, eq(modules.programId, programs.id))
+    .where(
+      and(
+        eq(lessons.id, lessonId),
+        eq(programs.id, programId),
+        eq(programs.tenantId, tenantId),
+        eq(lessons.contentType, 'quiz')
+      )
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * POST /api/tenants/:tenantId/programs/:programId/lessons/:lessonId/quiz/submit
+ * Submit a quiz attempt
+ */
+programsRoutes.post(
+  '/:programId/lessons/:lessonId/quiz/submit',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_VIEW),
+  zValidator('json', submitQuizSchema),
+  async (c) => {
+    const tenant = c.get('tenant')!;
+    const user = c.get('user');
+    const { lessonId, programId } = c.req.param();
+    const { answers } = c.req.valid('json');
+
+    // Verify lesson is a quiz in this program
+    const row = await getQuizLesson(tenant.id, programId, lessonId);
+    if (!row) throw new NotFoundError('Quiz lesson', lessonId);
+
+    // Get user's learner enrollment
+    const [enrollment] = await db
+      .select()
+      .from(enrollments)
+      .where(
+        and(
+          eq(enrollments.programId, programId),
+          eq(enrollments.userId, user.id),
+          eq(enrollments.role, 'learner')
+        )
+      )
+      .limit(1);
+    if (!enrollment) throw new ForbiddenError('You are not enrolled in this program');
+
+    const content = row.lesson.content ?? {};
+    const maxAttempts = content.maxAttempts ?? null;
+    const allowRetakes = content.allowRetakes ?? false;
+
+    // Count existing attempts
+    const [{ attemptCount }] = await db
+      .select({ attemptCount: count() })
+      .from(quizAttempts)
+      .where(
+        and(
+          eq(quizAttempts.lessonId, lessonId),
+          eq(quizAttempts.enrollmentId, enrollment.id)
+        )
+      );
+
+    const currentCount = Number(attemptCount);
+
+    // Enforce retake limits
+    if (maxAttempts && currentCount >= maxAttempts && !allowRetakes) {
+      throw new ForbiddenError(`Maximum attempts (${maxAttempts}) reached`);
+    }
+    if (maxAttempts && allowRetakes && currentCount >= maxAttempts) {
+      throw new ForbiddenError(`Maximum attempts (${maxAttempts}) reached`);
+    }
+
+    // Grade the submission
+    const result = gradeQuizSubmission(content, answers);
+
+    // Persist attempt
+    const [attempt] = await db
+      .insert(quizAttempts)
+      .values({
+        lessonId,
+        enrollmentId: enrollment.id,
+        attemptNumber: currentCount + 1,
+        answers,
+        score: result.score.toString(),
+        pointsEarned: result.pointsEarned,
+        passed: result.passed,
+        breakdown: result.breakdown,
+        gradingStatus: result.gradingStatus,
+        completedAt: new Date(),
+      })
+      .returning();
+
+    // Update lessonProgress if passed (or no passing score and auto_graded)
+    if (result.passed === true) {
+      await db
+        .insert(lessonProgress)
+        .values({
+          enrollmentId: enrollment.id,
+          lessonId,
+          status: 'completed',
+          startedAt: new Date(),
+          completedAt: new Date(),
+          pointsEarned: result.pointsEarned,
+          submissionData: { quizAttemptId: attempt.id, score: result.score },
+        })
+        .onConflictDoUpdate({
+          target: [lessonProgress.enrollmentId, lessonProgress.lessonId],
+          set: {
+            status: 'completed',
+            completedAt: new Date(),
+            pointsEarned: result.pointsEarned,
+            submissionData: { quizAttemptId: attempt.id, score: result.score },
+            updatedAt: new Date(),
+          },
+        });
+    }
+
+    return c.json({ data: { attempt, score: result.score, passed: result.passed, gradingStatus: result.gradingStatus, breakdown: result.breakdown } });
+  }
+);
+
+/**
+ * GET /api/tenants/:tenantId/programs/:programId/lessons/:lessonId/quiz/attempts
+ * Get current user's quiz attempts for this lesson
+ */
+programsRoutes.get(
+  '/:programId/lessons/:lessonId/quiz/attempts',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_VIEW),
+  async (c) => {
+    const tenant = c.get('tenant')!;
+    const user = c.get('user');
+    const { lessonId, programId } = c.req.param();
+
+    // Verify lesson exists in program
+    const row = await getQuizLesson(tenant.id, programId, lessonId);
+    if (!row) throw new NotFoundError('Quiz lesson', lessonId);
+
+    // Get user's enrollment
+    const [enrollment] = await db
+      .select()
+      .from(enrollments)
+      .where(
+        and(
+          eq(enrollments.programId, programId),
+          eq(enrollments.userId, user.id)
+        )
+      )
+      .limit(1);
+
+    if (!enrollment) return c.json({ data: [] });
+
+    const attempts = await db
+      .select()
+      .from(quizAttempts)
+      .where(
+        and(
+          eq(quizAttempts.lessonId, lessonId),
+          eq(quizAttempts.enrollmentId, enrollment.id)
+        )
+      )
+      .orderBy(desc(quizAttempts.attemptNumber));
+
+    return c.json({ data: attempts });
+  }
+);
+
+/**
+ * GET /api/tenants/:tenantId/programs/:programId/lessons/:lessonId/quiz/stats
+ * Get aggregate quiz stats (facilitators/admins only)
+ */
+programsRoutes.get(
+  '/:programId/lessons/:lessonId/quiz/stats',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  async (c) => {
+    const tenant = c.get('tenant')!;
+    const { lessonId, programId } = c.req.param();
+
+    const row = await getQuizLesson(tenant.id, programId, lessonId);
+    if (!row) throw new NotFoundError('Quiz lesson', lessonId);
+
+    // Get all attempts for this lesson (latest per enrollment)
+    const allAttempts = await db
+      .select()
+      .from(quizAttempts)
+      .where(eq(quizAttempts.lessonId, lessonId))
+      .orderBy(desc(quizAttempts.attemptNumber));
+
+    // Keep only latest attempt per enrollment
+    const latestByEnrollment = new Map<string, typeof allAttempts[0]>();
+    for (const a of allAttempts) {
+      if (!latestByEnrollment.has(a.enrollmentId)) {
+        latestByEnrollment.set(a.enrollmentId, a);
+      }
+    }
+    const latest = Array.from(latestByEnrollment.values());
+
+    const totalAttempts = latest.length;
+    const passed = latest.filter((a) => a.passed === true).length;
+    const scores = latest.filter((a) => a.score !== null).map((a) => Number(a.score));
+    const avgScore = scores.length > 0 ? Math.round(scores.reduce((s, x) => s + x, 0) / scores.length) : 0;
+
+    return c.json({
+      data: {
+        totalAttempts,
+        passRate: totalAttempts > 0 ? Math.round((passed / totalAttempts) * 100) : 0,
+        avgScore,
+        pendingGrade: latest.filter((a) => a.gradingStatus === 'pending_grade').length,
+      },
+    });
+  }
+);
+
+/**
+ * PUT /api/tenants/:tenantId/programs/:programId/lessons/:lessonId/quiz/attempts/:attemptId/grade
+ * Manually grade short-answer questions in an attempt
+ */
+programsRoutes.put(
+  '/:programId/lessons/:lessonId/quiz/attempts/:attemptId/grade',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', gradeQuizSchema),
+  async (c) => {
+    const tenant = c.get('tenant')!;
+    const user = c.get('user');
+    const { lessonId, programId, attemptId } = c.req.param();
+    const { questionGrades } = c.req.valid('json');
+
+    const row = await getQuizLesson(tenant.id, programId, lessonId);
+    if (!row) throw new NotFoundError('Quiz lesson', lessonId);
+
+    // Load attempt
+    const [attempt] = await db
+      .select()
+      .from(quizAttempts)
+      .where(and(eq(quizAttempts.id, attemptId), eq(quizAttempts.lessonId, lessonId)))
+      .limit(1);
+    if (!attempt) throw new NotFoundError('Quiz attempt', attemptId);
+
+    if (attempt.gradingStatus === 'auto_graded') {
+      throw new BadRequestError('This attempt has no manually graded questions');
+    }
+
+    const content = row.lesson.content ?? {};
+    const passingScore = content.passingScore ?? null;
+    const existingBreakdown = (attempt.breakdown ?? []) as import('../lib/quiz-engine.js').QuizBreakdownItem[];
+
+    const updated = applyManualGrades(existingBreakdown, questionGrades, passingScore);
+
+    const [graded] = await db
+      .update(quizAttempts)
+      .set({
+        score: updated.score.toString(),
+        pointsEarned: updated.pointsEarned,
+        passed: updated.passed,
+        breakdown: updated.breakdown,
+        gradingStatus: 'graded',
+        gradedBy: user.id,
+        gradedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(quizAttempts.id, attemptId))
+      .returning();
+
+    // Update lessonProgress if now passed
+    if (updated.passed) {
+      await db
+        .insert(lessonProgress)
+        .values({
+          enrollmentId: attempt.enrollmentId,
+          lessonId,
+          status: 'completed',
+          startedAt: new Date(),
+          completedAt: new Date(),
+          pointsEarned: updated.pointsEarned,
+          submissionData: { quizAttemptId: attemptId, score: updated.score },
+        })
+        .onConflictDoUpdate({
+          target: [lessonProgress.enrollmentId, lessonProgress.lessonId],
+          set: {
+            status: 'completed',
+            completedAt: new Date(),
+            pointsEarned: updated.pointsEarned,
+            submissionData: { quizAttemptId: attemptId, score: updated.score },
+            updatedAt: new Date(),
+          },
+        });
+    }
+
+    return c.json({ data: graded });
   }
 );

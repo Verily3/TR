@@ -9,6 +9,7 @@ import { PERMISSIONS } from '@tr/shared';
 import type { Variables } from '../types/context.js';
 import type { PaginationMeta } from '@tr/shared';
 import { sendProgramWelcome } from '../lib/email.js';
+import { resolveEmailContent } from '../lib/email-resolver.js';
 import { createNotification } from '../lib/notifications.js';
 import { env } from '../lib/env.js';
 
@@ -246,9 +247,15 @@ enrollmentsRoutes.post(
     // Send welcome email + in-app notification for learner enrollments
     if (role === 'learner') {
       const emailSettings = program.config?.emailSettings;
-      const welcomeEnabled = !emailSettings || emailSettings?.welcome !== false;
+      const resolved = await resolveEmailContent({
+        emailType: 'welcome',
+        agencyId: program.agencyId,
+        programConfig: emailSettings,
+        userId: enrollUser.id,
+        defaults: { subject: `You've been enrolled in ${program.name}`, body: '' },
+      });
 
-      if (welcomeEnabled) {
+      if (resolved.enabled) {
         const startDate = program.startDate
           ? new Date(program.startDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
           : undefined;
@@ -260,6 +267,10 @@ enrollmentsRoutes.post(
           programName: program.name,
           startDate,
           programUrl,
+          overrides: {
+            subject: resolved.subject || undefined,
+            body: resolved.body || undefined,
+          },
         });
       }
 

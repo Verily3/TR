@@ -367,6 +367,11 @@ function ProgramTable({
                   <p className="text-xs text-gray-400 truncate">
                     {learningTrack || program.type?.replace('_', ' ')}
                   </p>
+                  {(program as { sourceTemplateName?: string | null }).sourceTemplateName && (
+                    <p className="text-xs text-purple-600 truncate mt-0.5">
+                      From: {(program as { sourceTemplateName?: string | null }).sourceTemplateName}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -463,6 +468,11 @@ function ProgramTable({
                       <p className="text-xs text-gray-400 mt-0.5">
                         {learningTrack || program.type?.replace('_', ' ')}
                       </p>
+                      {(program as { sourceTemplateName?: string | null }).sourceTemplateName && (
+                        <p className="text-xs text-purple-600 mt-0.5">
+                          From: {(program as { sourceTemplateName?: string | null }).sourceTemplateName}
+                        </p>
+                      )}
                     </div>
                     <ActionMenu
                       isOpen={openMenuId === program.id}

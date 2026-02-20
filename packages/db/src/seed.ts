@@ -67,6 +67,12 @@ async function seedData(db: any) {
   await db.delete(schema.assessmentTemplates);
   await db.delete(schema.lessonDiscussions);
   await db.delete(schema.enrollmentMentorships);
+  await db.delete(schema.surveyResponses);
+  await db.delete(schema.surveyQuestions);
+  await db.delete(schema.surveys);
+  await db.delete(schema.quizAttempts);
+  await db.delete(schema.taskProgress);
+  await db.delete(schema.lessonTasks);
   await db.delete(schema.lessonProgress);
   await db.delete(schema.goalReviews);
   await db.delete(schema.goalResponses);
@@ -75,6 +81,10 @@ async function seedData(db: any) {
   await db.delete(schema.lessons);
   await db.delete(schema.modules);
   await db.delete(schema.programs);
+  await db.delete(schema.notifications);
+  await db.delete(schema.notificationPreferences);
+  await db.delete(schema.tenantUserPermissions);
+  await db.delete(schema.tenantRolePermissions);
   await db.delete(schema.impersonationSessions);
   await db.delete(schema.sessions);
   await db.delete(schema.userRoles);
@@ -1659,6 +1669,84 @@ async function seedData(db: any) {
   console.log('\n✅ LeaderShift™ seed data complete!');
 
   // ============================================
+  // Survey Seed Data
+  // ============================================
+  console.log('\nCreating survey seed data...');
+
+  // Standalone program satisfaction survey
+  const [satisfactionSurvey] = await db.insert(schema.surveys).values({
+    tenantId: tenant.id,
+    title: 'Program Satisfaction Survey',
+    description: 'Help us improve your learning experience by sharing your feedback.',
+    status: 'active',
+    anonymous: false,
+    requireLogin: true,
+    allowMultipleResponses: false,
+    showResultsToRespondent: false,
+    shareToken: crypto.randomUUID().replace(/-/g, '').slice(0, 48),
+    createdBy: facilitator.id,
+  }).returning();
+
+  // Questions for satisfaction survey
+  const surveyQuestionsData = [
+    {
+      surveyId: satisfactionSurvey.id,
+      text: 'Overall, how satisfied are you with this program?',
+      type: 'rating' as const,
+      required: true,
+      order: 0,
+      config: { min: 1, max: 5, minLabel: 'Very Dissatisfied', maxLabel: 'Very Satisfied' },
+    },
+    {
+      surveyId: satisfactionSurvey.id,
+      text: 'How likely are you to recommend this program to a colleague?',
+      type: 'nps' as const,
+      required: true,
+      order: 1,
+      config: {},
+    },
+    {
+      surveyId: satisfactionSurvey.id,
+      text: 'Which aspects of the program did you find most valuable?',
+      type: 'multiple_choice' as const,
+      required: true,
+      order: 2,
+      config: {
+        options: [
+          'Content quality',
+          'Facilitator expertise',
+          'Peer collaboration',
+          'Practical exercises',
+          'Assessment & feedback',
+        ],
+      },
+    },
+    {
+      surveyId: satisfactionSurvey.id,
+      text: 'Did the program meet your learning objectives?',
+      type: 'yes_no' as const,
+      required: true,
+      order: 3,
+      config: { options: ['Yes', 'No', 'Partially'] },
+    },
+    {
+      surveyId: satisfactionSurvey.id,
+      text: 'What suggestions do you have for improving the program?',
+      type: 'text' as const,
+      required: false,
+      order: 4,
+      config: { placeholder: 'Share your thoughts...' },
+    },
+  ];
+
+  for (const q of surveyQuestionsData) {
+    await db.insert(schema.surveyQuestions).values(q);
+  }
+
+  console.log(`  ✓ Created survey: ${satisfactionSurvey.title} (active, 5 questions)`);
+  console.log('\n✅ Survey seed data complete!');
+
+  // ============================================
   // 15. Additional Tenant: Apex Financial Group
   // ============================================
   console.log('\nCreating Apex Financial Group tenant...');
@@ -1897,6 +1985,54 @@ async function seedData(db: any) {
     await db.insert(schema.userRoles).values({ userId: learner.id, roleId: novamedRoles.LEARNER.id });
     console.log(`  ✓ User created: ${learner.email} (Learner)`);
   }
+
+  // ============================================
+  // 17. Catch-all Tenant: External / Independent
+  // ============================================
+  console.log('\nCreating External / Independent tenant...');
+  const [externalTenant] = await db
+    .insert(schema.tenants)
+    .values({
+      agencyId: agency.id,
+      name: 'External / Independent',
+      slug: 'external',
+      industry: 'Independent',
+      status: 'active',
+      usersLimit: 500,
+      settings: {
+        timezone: 'America/New_York',
+        canCreatePrograms: false,
+        features: {
+          programs: false,
+          assessments: true,
+          mentoring: false,
+          goals: false,
+          analytics: false,
+          scorecard: false,
+          planning: false,
+        },
+      },
+    })
+    .returning();
+  console.log(`  ✓ Tenant created: ${externalTenant.name} (${externalTenant.id})`);
+
+  // Create tenant roles for External tenant
+  for (const [, roleDef] of Object.entries(SYSTEM_ROLES) as [string, SystemRoleDefinition][]) {
+    if (!roleDef.isAgencyRole) {
+      await db
+        .insert(schema.roles)
+        .values({
+          tenantId: externalTenant.id,
+          name: roleDef.name,
+          slug: roleDef.slug,
+          description: roleDef.description,
+          level: roleDef.level,
+          isSystem: true,
+          permissions: roleDef.permissions,
+        });
+    }
+  }
+  console.log(`  ✓ Created tenant roles for External / Independent`);
 
   console.log('\n✅ Additional tenants seeded successfully!');
 }

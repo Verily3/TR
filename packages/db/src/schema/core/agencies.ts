@@ -2,6 +2,27 @@ import { pgTable, uuid, varchar, text, timestamp, jsonb, index } from 'drizzle-o
 import { relations } from 'drizzle-orm';
 
 /**
+ * Per-email-type configuration for agency-level email customization
+ */
+export interface AgencyEmailTypeConfig {
+  subject?: string;     // custom subject line (overrides hardcoded default)
+  body?: string;        // custom body HTML snippet (injected into shared layout)
+  enabled?: boolean;    // default enabled state for new programs (default: true)
+  mandatory?: boolean;  // programs cannot disable this type (default: false)
+}
+
+/**
+ * Agency-level email configuration — global defaults applied to all programs.
+ * Keys match email type identifiers used in email-resolver.ts:
+ * 'welcome' | 'kickoff' | 'weeklyDigest' | 'inactivity' | 'milestones' |
+ * 'completion' | 'mentorSummary' | 'assessmentInvitation' | 'assessmentReminder' |
+ * 'subjectInvitation' | 'passwordReset' | 'userWelcome'
+ */
+export interface AgencyEmailConfig {
+  [emailType: string]: AgencyEmailTypeConfig;
+}
+
+/**
  * Agency settings stored as JSONB
  */
 export interface AgencySettings {
@@ -47,6 +68,9 @@ export const agencies = pgTable(
 
     // Settings (flexible JSONB)
     settings: jsonb('settings').$type<AgencySettings>().default({}),
+
+    // Email template customization (per-type subject/body/enabled/mandatory overrides)
+    emailConfig: jsonb('email_config').$type<AgencyEmailConfig>().default({}),
 
     // Audit timestamps
     createdAt: timestamp('created_at', { withTimezone: true })

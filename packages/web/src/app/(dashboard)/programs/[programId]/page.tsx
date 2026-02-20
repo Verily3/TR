@@ -229,15 +229,19 @@ export default function ProgramDetailPage() {
     };
   }, [modulesWithProgress, program?.modules?.length, progressData?.progress]);
 
-  // Derive learning outcomes from module titles/descriptions
+  // Derive learning outcomes — prefer saved objectives, fall back to module titles
   const learningOutcomes = useMemo(() => {
+    const objectives = (program?.config?.objectives as Array<{ id: string; text: string }> | undefined);
+    if (objectives && objectives.length > 0) {
+      return objectives.map(o => o.text).filter(Boolean);
+    }
     if (!program?.modules) return [];
     return program.modules
       .filter(m => m.depth === 0)
       .sort((a, b) => a.order - b.order)
       .map(m => m.description || m.title)
       .slice(0, 8);
-  }, [program?.modules]);
+  }, [program?.config?.objectives, program?.modules]);
 
   // Derive program structure from content types with average durations
   const programStructure = useMemo(() => {
@@ -356,7 +360,7 @@ export default function ProgramDetailPage() {
                     {program.name}
                   </h1>
                   <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-sm text-muted-foreground">
-                    <span>{program.type === 'cohort' ? 'Leadership Track' : 'Self-Paced'}</span>
+                    <span>{program.type === 'cohort' ? 'Cohort' : 'Self-Paced'}</span>
                     <span aria-hidden="true">&bull;</span>
                     <span>{totalModules} Modules</span>
                     {programDuration && (
@@ -401,7 +405,7 @@ export default function ProgramDetailPage() {
             icon={<Play className="w-4 h-4 text-accent" />}
             label="Progress"
             value={`${overallProgress}%`}
-            subtext={`${(completedModules + (modulesWithProgress.find(m => m.status === 'in-progress') ? 0.7 : 0)).toFixed(1)} of ${totalModules} modules`}
+            subtext={`${completedModules} of ${totalModules} modules`}
             animationIndex={1}
           />
           <StatCard
@@ -461,10 +465,12 @@ export default function ProgramDetailPage() {
                 </ul>
               </div>
 
-              <div className="pt-4 border-t border-border">
-                <div className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Estimated Time Commitment</div>
-                <div className="text-sm text-sidebar-foreground font-medium">3-4 hours per module</div>
-              </div>
+              {programDuration && (
+                <div className="pt-4 border-t border-border">
+                  <div className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Estimated Duration</div>
+                  <div className="text-sm text-sidebar-foreground font-medium">{programDuration}</div>
+                </div>
+              )}
             </div>
           </div>
         </section>

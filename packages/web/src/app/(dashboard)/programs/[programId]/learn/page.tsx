@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
 import {
   useProgram,
@@ -37,6 +37,7 @@ import {
   AssignmentContent,
   GoalContent,
   QuizContent,
+  SurveyContent,
   DiscussionContent,
   EventContent,
   TaskList,
@@ -46,7 +47,7 @@ import {
 // Types & Constants
 // ============================================
 
-type LessonType = 'reading' | 'video' | 'submission' | 'assignment' | 'goal' | 'quiz' | 'discussion';
+type LessonType = 'reading' | 'video' | 'submission' | 'assignment' | 'goal' | 'quiz' | 'discussion' | 'survey';
 
 interface LessonData {
   id: string;
@@ -92,6 +93,8 @@ const contentTypeToLessonType = (contentType: ContentType, content?: LessonConte
       return content?.enableDiscussion ? 'discussion' : 'submission';
     case 'goal':
       return 'goal';
+    case 'survey':
+      return 'survey';
     default:
       return 'reading';
   }
@@ -108,7 +111,13 @@ interface LessonContentRendererProps {
   moduleTitle: string;
   content: LessonContent;
   lessonTitle: string;
+  lessonId?: string;
   durationMinutes?: number;
+  // Quiz props
+  tenantId?: string | null;
+  programId?: string;
+  enrollmentId?: string | null;
+  onQuizPassed?: () => void;
   // Discussion props
   discussionPosts?: DiscussionPost[];
   isLoadingDiscussions?: boolean;
@@ -124,7 +133,12 @@ function LessonContentRenderer({
   moduleTitle,
   content,
   lessonTitle,
+  lessonId,
   durationMinutes,
+  tenantId,
+  programId,
+  enrollmentId,
+  onQuizPassed,
   discussionPosts,
   isLoadingDiscussions,
   currentUserId,
@@ -178,6 +192,21 @@ function LessonContentRenderer({
         <QuizContent
           content={content}
           lessonTitle={lessonTitle}
+          tenantId={tenantId}
+          programId={programId}
+          lessonId={lessonId}
+          enrollmentId={enrollmentId}
+          onQuizPassed={onQuizPassed}
+        />
+      );
+    case 'survey':
+      return (
+        <SurveyContent
+          surveyId={(content as { surveyId?: string })?.surveyId}
+          tenantId={tenantId}
+          enrollmentId={enrollmentId}
+          lessonTitle={lessonTitle}
+          onSurveyCompleted={onQuizPassed}
         />
       );
     case 'discussion':
@@ -205,6 +234,7 @@ function LessonContentRenderer({
 export default function ModuleViewLMS() {
   const params = useParams();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const programId = params.programId as string;
   const queryTenantId = searchParams.get('tenantId');
   const queryPreviewRole = searchParams.get('previewRole') as EnrollmentRole | null;
@@ -530,11 +560,24 @@ export default function ModuleViewLMS() {
     );
   }
 
-  if (!activeTenantId || isLoading || modulesData.length === 0) {
+  if (!activeTenantId || isLoading) {
     return (
       <div className="flex h-screen items-center justify-center" role="status">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent" aria-hidden="true"></div>
         <span className="sr-only">Loading lesson content...</span>
+      </div>
+    );
+  }
+
+  if (modulesData.length === 0) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center">
+          <p className="text-muted-foreground mb-4">No modules available in this program yet.</p>
+          <a href={`/programs/${programId}`} className="text-accent hover:underline text-sm">
+            Back to Program
+          </a>
+        </div>
       </div>
     );
   }
@@ -600,7 +643,7 @@ export default function ModuleViewLMS() {
               <button
                 onClick={() => {
                   const builderUrl = `/program-builder/${programId}${queryTenantId ? `?tenantId=${queryTenantId}` : ''}`;
-                  window.location.href = builderUrl;
+                  router.push(builderUrl);
                 }}
                 className="text-xs font-medium text-amber-700 hover:text-amber-900 underline underline-offset-2 transition-colors"
               >
@@ -683,7 +726,12 @@ export default function ModuleViewLMS() {
                 moduleTitle={currentModule.title}
                 content={currentLesson.content}
                 lessonTitle={currentLesson.title}
+                lessonId={currentLesson.id}
                 durationMinutes={currentLesson.duration}
+                tenantId={activeTenantId}
+                programId={programId}
+                enrollmentId={myEnrollment?.id}
+                onQuizPassed={refetchProgress}
                 discussionPosts={discussionPosts || []}
                 isLoadingDiscussions={isLoadingDiscussions}
                 currentUserId={user?.id}
@@ -774,7 +822,7 @@ export default function ModuleViewLMS() {
                     const typeColors: Record<string, string> = {
                       pdf: 'bg-red-50 text-red-600',
                       doc: 'bg-blue-50 text-blue-600',
-                      link: 'bg-gray-100 text-gray-600',
+                      link: 'bg-muted text-muted-foreground',
                       spreadsheet: 'bg-green-50 text-green-600',
                     };
                     const colorClass = typeColors[resource.type || 'link'] || typeColors.link;

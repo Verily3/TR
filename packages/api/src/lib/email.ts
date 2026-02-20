@@ -7,7 +7,7 @@ function getResend(): Resend {
   return _resend;
 }
 
-const FROM = 'Transformation OS <noreply@transformingresults.com>';
+const FROM = 'Transformation OS <onboarding@resend.dev>';
 
 /**
  * Core send wrapper. Returns silently if RESEND_API_KEY is not configured (dev without key).
@@ -47,25 +47,55 @@ export async function sendAssessmentInvitation(params: {
   assessmentName: string;
   respondUrl: string;
   expiresAt?: Date;
+  overrides?: { subject?: string; body?: string };
 }): Promise<void> {
   const expiry = params.expiresAt
     ? `This link expires on ${params.expiresAt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.`
     : '';
 
-  await send({
-    to: params.to,
-    subject: `You've been invited to complete an assessment`,
-    html: emailHtml({
-      title: "You've been invited to complete an assessment",
-      preheader: `${params.assessorName} has invited you to provide feedback`,
-      body: `
+  const defaultBody = `
         <p>Hi ${params.name},</p>
         <p><strong>${params.assessorName}</strong> has invited you to complete the <strong>${params.assessmentName}</strong> assessment.</p>
         <p>Your honest feedback helps support professional growth and development. The assessment should take about 10–15 minutes to complete.</p>
         ${expiry ? `<p style="color:#6b7280;font-size:14px;">${expiry}</p>` : ''}
-      `,
+      `;
+
+  await send({
+    to: params.to,
+    subject: params.overrides?.subject ?? `You've been invited to complete an assessment`,
+    html: emailHtml({
+      title: "You've been invited to complete an assessment",
+      preheader: `${params.assessorName} has invited you to provide feedback`,
+      body: params.overrides?.body ?? defaultBody,
       ctaUrl: params.respondUrl,
       ctaLabel: 'Start Assessment',
+    }),
+  });
+}
+
+export async function sendSubjectInvitation(params: {
+  to: string;
+  name: string;
+  assessmentName: string;
+  setupUrl: string;
+  overrides?: { subject?: string; body?: string };
+}): Promise<void> {
+  const defaultBody = `
+        <p>Hi ${params.name},</p>
+        <p>You have been selected as the subject for the <strong>${params.assessmentName}</strong> assessment.</p>
+        <p>Click the button below to review the details and add your reviewers. They'll receive invitations to provide their feedback.</p>
+        <p style="color:#6b7280;font-size:14px;">This link is personal to you — please don't share it.</p>
+      `;
+
+  await send({
+    to: params.to,
+    subject: params.overrides?.subject ?? `You've been selected as a subject for an assessment`,
+    html: emailHtml({
+      title: "You've been selected for an assessment",
+      preheader: `Add your reviewers to begin the ${params.assessmentName} assessment`,
+      body: params.overrides?.body ?? defaultBody,
+      ctaUrl: params.setupUrl,
+      ctaLabel: 'Add Your Reviewers',
     }),
   });
 }
@@ -77,18 +107,21 @@ export async function sendAssessmentReminder(params: {
   assessmentName: string;
   respondUrl: string;
   reminderCount: number;
+  overrides?: { subject?: string; body?: string };
 }): Promise<void> {
-  await send({
-    to: params.to,
-    subject: `Reminder: Your assessment response is due`,
-    html: emailHtml({
-      title: 'Friendly reminder',
-      preheader: `You still have an assessment waiting for your response`,
-      body: `
+  const defaultBody = `
         <p>Hi ${params.name},</p>
         <p>This is a friendly reminder that you have a pending <strong>${params.assessmentName}</strong> assessment from <strong>${params.assessorName}</strong>.</p>
         <p>Your response is still needed. It only takes 10–15 minutes and makes a real difference.</p>
-      `,
+      `;
+
+  await send({
+    to: params.to,
+    subject: params.overrides?.subject ?? `Reminder: Your assessment response is due`,
+    html: emailHtml({
+      title: 'Friendly reminder',
+      preheader: `You still have an assessment waiting for your response`,
+      body: params.overrides?.body ?? defaultBody,
       ctaUrl: params.respondUrl,
       ctaLabel: 'Complete Assessment',
     }),
@@ -102,19 +135,22 @@ export async function sendUserWelcome(params: {
   name: string;
   setPasswordUrl: string;
   organizationName?: string;
+  overrides?: { subject?: string; body?: string };
 }): Promise<void> {
   const org = params.organizationName ? ` at <strong>${params.organizationName}</strong>` : '';
-  await send({
-    to: params.to,
-    subject: 'Welcome to Transformation OS — Set your password',
-    html: emailHtml({
-      title: 'Welcome to Transformation OS',
-      preheader: 'Your account has been created — set your password to get started',
-      body: `
+  const defaultBody = `
         <p>Hi ${params.name},</p>
         <p>Your account${org} has been created on Transformation OS. Click the button below to set your password and access your account.</p>
         <p style="color:#6b7280;font-size:14px;">This link expires in 72 hours. If you did not expect this email, you can safely ignore it.</p>
-      `,
+      `;
+
+  await send({
+    to: params.to,
+    subject: params.overrides?.subject ?? 'Welcome to Transformation OS — Set your password',
+    html: emailHtml({
+      title: 'Welcome to Transformation OS',
+      preheader: 'Your account has been created — set your password to get started',
+      body: params.overrides?.body ?? defaultBody,
       ctaUrl: params.setPasswordUrl,
       ctaLabel: 'Set Your Password',
     }),
@@ -125,18 +161,21 @@ export async function sendPasswordReset(params: {
   to: string;
   name: string;
   resetUrl: string;
+  overrides?: { subject?: string; body?: string };
 }): Promise<void> {
-  await send({
-    to: params.to,
-    subject: 'Reset your password',
-    html: emailHtml({
-      title: 'Password reset request',
-      preheader: 'Click the link to reset your Transformation OS password',
-      body: `
+  const defaultBody = `
         <p>Hi ${params.name},</p>
         <p>We received a request to reset your password. Click the button below to choose a new one.</p>
         <p style="color:#6b7280;font-size:14px;">This link expires in 1 hour. If you didn't request a password reset, you can safely ignore this email — your password won't change.</p>
-      `,
+      `;
+
+  await send({
+    to: params.to,
+    subject: params.overrides?.subject ?? 'Reset your password',
+    html: emailHtml({
+      title: 'Password reset request',
+      preheader: 'Click the link to reset your Transformation OS password',
+      body: params.overrides?.body ?? defaultBody,
       ctaUrl: params.resetUrl,
       ctaLabel: 'Reset Password',
     }),
@@ -151,24 +190,50 @@ export async function sendProgramWelcome(params: {
   programName: string;
   startDate?: string;
   programUrl: string;
+  overrides?: { subject?: string; body?: string };
 }): Promise<void> {
   const dateNote = params.startDate
     ? `<p>The program begins on <strong>${params.startDate}</strong>. We'll send you a reminder when it's time to start.</p>`
     : '';
-  await send({
-    to: params.to,
-    subject: `You've been enrolled in ${params.programName}`,
-    html: emailHtml({
-      title: `Welcome to ${params.programName}`,
-      preheader: `You've been enrolled — here's everything you need to know`,
-      body: `
+  const defaultBody = `
         <p>Hi ${params.name},</p>
         <p>You've been enrolled in <strong>${params.programName}</strong>. We're excited to have you on this journey.</p>
         ${dateNote}
         <p>Click below to view your program and get started.</p>
-      `,
+      `;
+
+  await send({
+    to: params.to,
+    subject: params.overrides?.subject ?? `You've been enrolled in ${params.programName}`,
+    html: emailHtml({
+      title: `Welcome to ${params.programName}`,
+      preheader: `You've been enrolled — here's everything you need to know`,
+      body: params.overrides?.body ?? defaultBody,
       ctaUrl: params.programUrl,
       ctaLabel: 'View Program',
+    }),
+  });
+}
+
+export async function sendProgramCreated(params: {
+  to: string;
+  name: string;
+  programName: string;
+  programUrl: string;
+}): Promise<void> {
+  await send({
+    to: params.to,
+    subject: `Program created: ${params.programName}`,
+    html: emailHtml({
+      title: 'Program Created',
+      preheader: `Your new program "${params.programName}" is ready to build`,
+      body: `
+        <p>Hi ${params.name},</p>
+        <p>Your program <strong>${params.programName}</strong> has been created successfully.</p>
+        <p>Head to the Program Builder to add modules, lessons, and enroll participants.</p>
+      `,
+      ctaUrl: params.programUrl,
+      ctaLabel: 'Open Program Builder',
     }),
   });
 }
@@ -178,18 +243,21 @@ export async function sendProgramKickoff(params: {
   name: string;
   programName: string;
   programUrl: string;
+  overrides?: { subject?: string; body?: string };
 }): Promise<void> {
-  await send({
-    to: params.to,
-    subject: `${params.programName} starts today`,
-    html: emailHtml({
-      title: `Today's the day!`,
-      preheader: `${params.programName} is officially underway`,
-      body: `
+  const defaultBody = `
         <p>Hi ${params.name},</p>
         <p><strong>${params.programName}</strong> is officially underway. Your first module is ready and waiting.</p>
         <p>Log in to get started — your facilitator and fellow participants are ready to go.</p>
-      `,
+      `;
+
+  await send({
+    to: params.to,
+    subject: params.overrides?.subject ?? `${params.programName} starts today`,
+    html: emailHtml({
+      title: `Today's the day!`,
+      preheader: `${params.programName} is officially underway`,
+      body: params.overrides?.body ?? defaultBody,
       ctaUrl: params.programUrl,
       ctaLabel: 'Start Now',
     }),
@@ -204,14 +272,9 @@ export async function sendWeeklyDigest(params: {
   modulesCompleted: number;
   pointsEarned: number;
   nextUrl: string;
+  overrides?: { subject?: string; body?: string };
 }): Promise<void> {
-  await send({
-    to: params.to,
-    subject: `Your weekly progress in ${params.programName}`,
-    html: emailHtml({
-      title: 'Weekly Progress Summary',
-      preheader: `You're ${params.progress}% through ${params.programName}`,
-      body: `
+  const defaultBody = `
         <p>Hi ${params.name},</p>
         <p>Here's your progress update for <strong>${params.programName}</strong>:</p>
         <table style="width:100%;border-collapse:collapse;margin:16px 0;">
@@ -233,7 +296,15 @@ export async function sendWeeklyDigest(params: {
           </tr>
         </table>
         <p>Keep up the great work. Your next module is ready when you are.</p>
-      `,
+      `;
+
+  await send({
+    to: params.to,
+    subject: params.overrides?.subject ?? `Your weekly progress in ${params.programName}`,
+    html: emailHtml({
+      title: 'Weekly Progress Summary',
+      preheader: `You're ${params.progress}% through ${params.programName}`,
+      body: params.overrides?.body ?? defaultBody,
       ctaUrl: params.nextUrl,
       ctaLabel: 'Continue Learning',
     }),
@@ -246,18 +317,21 @@ export async function sendInactivityReminder(params: {
   programName: string;
   daysSinceActive: number;
   resumeUrl: string;
+  overrides?: { subject?: string; body?: string };
 }): Promise<void> {
-  await send({
-    to: params.to,
-    subject: `We miss you — pick up where you left off`,
-    html: emailHtml({
-      title: "It's been a while",
-      preheader: `You haven't visited ${params.programName} in ${params.daysSinceActive} days`,
-      body: `
+  const defaultBody = `
         <p>Hi ${params.name},</p>
         <p>You haven't logged into <strong>${params.programName}</strong> in ${params.daysSinceActive} days. Your progress is saved and your next module is ready whenever you are.</p>
         <p>Even 15 minutes a day makes a big difference. Jump back in below.</p>
-      `,
+      `;
+
+  await send({
+    to: params.to,
+    subject: params.overrides?.subject ?? `We miss you — pick up where you left off`,
+    html: emailHtml({
+      title: "It's been a while",
+      preheader: `You haven't visited ${params.programName} in ${params.daysSinceActive} days`,
+      body: params.overrides?.body ?? defaultBody,
       ctaUrl: params.resumeUrl,
       ctaLabel: 'Resume Program',
     }),
@@ -270,6 +344,7 @@ export async function sendMilestoneCelebration(params: {
   programName: string;
   milestone: 25 | 50 | 75 | 100;
   programUrl: string;
+  overrides?: { subject?: string; body?: string };
 }): Promise<void> {
   const messages: Record<number, string> = {
     25: "You're off to a great start! You've completed 25% of the program.",
@@ -278,17 +353,19 @@ export async function sendMilestoneCelebration(params: {
     100: "You did it! You've successfully completed the entire program. Congratulations!",
   };
 
-  await send({
-    to: params.to,
-    subject: `You've reached ${params.milestone}% in ${params.programName}!`,
-    html: emailHtml({
-      title: `🎉 ${params.milestone}% Complete!`,
-      preheader: messages[params.milestone],
-      body: `
+  const defaultBody = `
         <p>Hi ${params.name},</p>
         <p>${messages[params.milestone]}</p>
         <p>Program: <strong>${params.programName}</strong></p>
-      `,
+      `;
+
+  await send({
+    to: params.to,
+    subject: params.overrides?.subject ?? `You've reached ${params.milestone}% in ${params.programName}!`,
+    html: emailHtml({
+      title: `🎉 ${params.milestone}% Complete!`,
+      preheader: messages[params.milestone],
+      body: params.overrides?.body ?? defaultBody,
       ctaUrl: params.programUrl,
       ctaLabel: params.milestone === 100 ? 'View Certificate' : 'Continue Learning',
     }),
@@ -300,20 +377,74 @@ export async function sendProgramCompletion(params: {
   name: string;
   programName: string;
   programUrl: string;
+  overrides?: { subject?: string; body?: string };
 }): Promise<void> {
-  await send({
-    to: params.to,
-    subject: `Congratulations! You've completed ${params.programName}`,
-    html: emailHtml({
-      title: 'Program Complete!',
-      preheader: `You've successfully completed ${params.programName}`,
-      body: `
+  const defaultBody = `
         <p>Hi ${params.name},</p>
         <p>Congratulations on completing <strong>${params.programName}</strong>! This is a significant achievement that reflects your commitment to growth and development.</p>
         <p>Your certificate and results are available in your account.</p>
-      `,
+      `;
+
+  await send({
+    to: params.to,
+    subject: params.overrides?.subject ?? `Congratulations! You've completed ${params.programName}`,
+    html: emailHtml({
+      title: 'Program Complete!',
+      preheader: `You've successfully completed ${params.programName}`,
+      body: params.overrides?.body ?? defaultBody,
       ctaUrl: params.programUrl,
       ctaLabel: 'View Results',
+    }),
+  });
+}
+
+export async function sendMentorSummary(params: {
+  to: string;
+  name: string;
+  mentees: Array<{ name: string; programName: string; progress: number; lastActive?: string }>;
+  dashboardUrl: string;
+  overrides?: { subject?: string; body?: string };
+}): Promise<void> {
+  const menteeRows = params.mentees
+    .map(
+      (m) => `
+        <tr>
+          <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;">${m.name}</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;">${m.programName}</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;text-align:center;">
+            <span style="font-weight:600;color:#1f2937;">${m.progress}%</span>
+          </td>
+          <td style="padding:10px 12px;border-bottom:1px solid #e5e7eb;color:#6b7280;font-size:13px;">${m.lastActive ?? 'No activity'}</td>
+        </tr>`
+    )
+    .join('');
+
+  const defaultBody = `
+        <p>Hi ${params.name},</p>
+        <p>Here's a summary of your mentees' progress this week:</p>
+        <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px;">
+          <thead>
+            <tr style="background:#f9fafb;">
+              <th style="padding:10px 12px;text-align:left;color:#374151;font-weight:600;">Mentee</th>
+              <th style="padding:10px 12px;text-align:left;color:#374151;font-weight:600;">Program</th>
+              <th style="padding:10px 12px;text-align:center;color:#374151;font-weight:600;">Progress</th>
+              <th style="padding:10px 12px;text-align:left;color:#374151;font-weight:600;">Last Active</th>
+            </tr>
+          </thead>
+          <tbody>${menteeRows}</tbody>
+        </table>
+        <p>Click below to view detailed mentee activity and session notes.</p>
+      `;
+
+  await send({
+    to: params.to,
+    subject: params.overrides?.subject ?? `Weekly mentee progress summary`,
+    html: emailHtml({
+      title: 'Mentee Progress Summary',
+      preheader: `Progress update for your ${params.mentees.length} mentee${params.mentees.length !== 1 ? 's' : ''}`,
+      body: params.overrides?.body ?? defaultBody,
+      ctaUrl: params.dashboardUrl,
+      ctaLabel: 'View Mentoring Dashboard',
     }),
   });
 }

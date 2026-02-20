@@ -229,17 +229,18 @@ Located in `packages/web/src/components/programs/`:
 
 ### Programs Module Architecture
 
-**Content Types** (5 types in `content_type` DB enum):
+**Content Types** (6 types in `content_type` DB enum):
 - `lesson` - Rich content with video + text (used for both "Reading" and "Video" add-menu entries)
-- `quiz` - Scored questions
+- `quiz` - Scored questions with three per-question grading modes
 - `assignment` - Work submission
 - `text_form` - Multi-line text input
 - `goal` - Goal setting with review workflow
+- `survey` - Embedded survey form (links to a `surveys` entity by ID)
 
-> **Note:** The add menu in the Curriculum Builder shows 10 entries grouped into sections:
+> **Note:** The add menu in the Curriculum Builder shows 11 entries grouped into sections:
 > - **Content**: Reading, Video, Key Concepts (all create `lesson` records)
 > - **Reflection**: Quiz, Most Useful Idea, How You Used This Idea, Text Form (latter two create `text_form`)
-> - **Activity**: Assignment, Food for Thought (both create `assignment`), Goal
+> - **Activity**: Assignment, Food for Thought (both create `assignment`), Goal, Survey
 >
 > "Reading", "Video", and "Key Concepts" all create a `lesson` DB record. "Most Useful Idea" and "How You Used This Idea" both create `text_form`. "Assignment" and "Food for Thought" both create `assignment`. The add-menu label becomes the lesson title.
 
@@ -342,9 +343,8 @@ pnpm --filter @tr/web dev
 # Database operations
 pnpm --filter @tr/db db:generate          # Generate migrations
 pnpm --filter @tr/db db:migrate           # Run migrations
-pnpm --filter @tr/db db:seed              # Seed core data (users, tenants, programs, assessments)
-pnpm --filter @tr/db db:seed-leadershift  # Seed LeaderShift LMS program (separate script)
-pnpm --filter @tr/db db:seed-all          # Run both seeds in sequence
+pnpm --filter @tr/db db:seed              # Seed all data: core (users, tenants, programs, assessments) + LeaderShift program
+pnpm --filter @tr/db db:seed-leadershift  # Re-seed only the LeaderShift LMS program (standalone)
 pnpm --filter @tr/db db:studio            # Open Drizzle Studio
 ```
 
@@ -413,14 +413,14 @@ NEXT_PUBLIC_API_URL=http://localhost:3002
     - Linked Goals section with progress
   - Module View LMS (`/programs/[programId]/learn`) - Full learning interface
     - Left sidebar (w-80) with course outline, expandable modules/lessons (max-h-[2000px] to accommodate long lesson lists)
-    - 5 DB content types rendered: reading/video/key_concepts (lesson), submission (text_form), assignment/food_for_thought, goal
+    - 6 DB content types rendered: reading/video/key_concepts (lesson), submission (text_form), assignment/food_for_thought, goal, quiz, survey
     - Video resources render as inline iframes (YouTube/Vimeo); other resources open as external links
     - Preview mode (`?previewRole=learner`) bypasses sequential module locking
     - Top navigation bar (breadcrumb, points badge, completed badge)
     - Bottom navigation bar (Previous/Next, lesson counter)
     - Completion modal for marking lessons done
 - **Program Builder Features:**
-  - 5 DB content types (`lesson`, `quiz`, `assignment`, `text_form`, `goal`); 10-entry grouped add menu (see Programs Module Architecture above)
+  - 6 DB content types (`lesson`, `quiz`, `assignment`, `text_form`, `goal`, `survey`); 11-entry grouped add menu (see Programs Module Architecture above)
   - Video resources in builder show inline iframe preview (YouTube/Vimeo via `getEmbedUrl`)
   - Drip scheduling (module and lesson level)
   - Goal responses and reviews API
@@ -561,9 +561,32 @@ NEXT_PUBLIC_API_URL=http://localhost:3002
   - `packages/web/src/hooks/api/useNotifications.ts` — 7 React Query hooks
   - Env vars added to `packages/api/src/lib/env.ts`: `RESEND_API_KEY`, `APP_URL`, `CRON_SECRET`
 
+- **Quiz System (full stack, end-to-end):**
+  - DB: `quiz_attempts` table (migration 0015) with `quiz_grading_status` enum (`auto_graded`, `pending_grade`, `graded`)
+  - Engine: `packages/api/src/lib/quiz-engine.ts` — scores MC/T-F instantly; 3 short-answer modes: `auto_complete` (always passes), `keyword` (match against list), `manual` (awaits facilitator review)
+  - API endpoints (in `packages/api/src/routes/programs.ts`): `POST .../quiz/submit`, `GET .../quiz/attempts`, `GET .../quiz/stats`, `PUT .../quiz/attempts/:id/grade`
+  - Builder: `packages/web/src/components/programs/QuizEditor.tsx` — MC, T/F, short-answer questions; grading mode selector; keyword textarea; passing score and retake settings
+  - Learner: `packages/web/src/components/programs/lesson-content/QuizContent.tsx` — form view → score + breakdown; pending review badge; retake button
+  - Hooks: `packages/web/src/hooks/api/useQuiz.ts` (`useMyQuizAttempts`, `useSubmitQuiz`, `useQuizStats`, `useGradeQuizAttempt`)
+  - Types: `QuizGradingStatus`, `QuizAttempt`, `QuizBreakdownItem` in `packages/web/src/types/programs.ts`
+
+- **Survey System (full stack, end-to-end):**
+  - DB: `surveys`, `survey_questions`, `survey_responses` tables (migration 0016); `survey_status` + `survey_question_type` enums
+  - 7 question types: `single_choice`, `multiple_choice`, `text`, `rating`, `nps`, `yes_no`, `ranking`
+  - API routes: `packages/api/src/routes/surveys.ts` — three routers:
+    - Tenant-scoped: full CRUD, question management, results aggregation, respond, my-response
+    - Agency-scoped: same pattern for agency-owned surveys
+    - Public (mounted before auth middleware): `GET /api/surveys/:shareToken`, `POST /api/surveys/:shareToken/respond`
+  - Survey pages: `/surveys` (list with filter tabs), `/surveys/[surveyId]` (editor: Questions / Settings / Results tabs)
+  - Public page: `packages/web/src/app/survey/[token]/page.tsx` — outside `(dashboard)` auth, uses localStorage session token for anonymous dedup
+  - In-program viewer: `packages/web/src/components/programs/lesson-content/SurveyContent.tsx` — renders inline, checks prior response, marks lesson complete on submit
+  - Results charts: `packages/web/src/components/surveys/SurveyResults.tsx` — bar charts, NPS breakdown, rating distribution, text list
+  - Hooks: `packages/web/src/hooks/api/useSurveys.ts` (14 hooks)
+  - Types: `packages/web/src/types/surveys.ts`
+  - Sidebar nav: surveys entry (between assessments and people) in NAV_ITEMS + NAVIGATION_BY_ROLE constants
+  - Seed: "Program Satisfaction Survey" with 5 questions in `seed.ts`
+
 ### In Progress
-- Specialized content type editors (quiz builder, form builder)
-- Connect Programs UI to real enrollment/progress data (currently using mock data)
 - Connect Notifications page to real API (hooks + API routes built; frontend page still uses mock data)
 
 ### Pages Using Mock Data (No API Routes Yet)
@@ -598,7 +621,7 @@ NEXT_PUBLIC_API_URL=http://localhost:3002
 4. **Imports**: Absolute imports using `@/` alias
 5. **State**: Zustand for global state, React Query for server state
 6. **API calls**: Use the API client from `@/lib/api.ts`
-7. **Hooks**: Use hooks from `@/hooks/api/` for data fetching (usePrograms, useGoals, useTenants, useMentoringSessions, useActionItems, useMentoringRelationships, useMentoringStats, useTemplates, useAssessments, useAssessmentResults, useComputeResults, useDownloadReport, useAssessmentBenchmarks, useAgencyPrograms, useAgencyUserSearch, useMyProfile, useImpersonate, useMyNav, useRolePermissions, useUserPermissionOverrides, etc.)
+7. **Hooks**: Use hooks from `@/hooks/api/` for data fetching (usePrograms, useGoals, useTenants, useMentoringSessions, useActionItems, useMentoringRelationships, useMentoringStats, useTemplates, useAssessments, useAssessmentResults, useComputeResults, useDownloadReport, useAssessmentBenchmarks, useAgencyPrograms, useAgencyUserSearch, useMyProfile, useImpersonate, useMyNav, useRolePermissions, useUserPermissionOverrides, useSurveys, useSubmitSurveyResponse, usePublicSurvey, useMyQuizAttempts, useSubmitQuiz, etc.)
 
 ## UI Prototype (components/)
 

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Check, Upload, Sparkles, Info, Clock } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Check, Upload, Sparkles, Info, Clock, RotateCcw } from 'lucide-react';
 import { useCreateAgencyProgram } from '@/hooks/api/useAgencyPrograms';
 import { useCreateProgram } from '@/hooks/api/usePrograms';
 import { useTenants } from '@/hooks/api/useTenants';
@@ -47,8 +47,28 @@ export function ProgramWizardForm({
   onSuccess,
   onCancel,
 }: ProgramWizardFormProps) {
-  const [currentStep, setCurrentStep] = useState<WizardStep>(1);
-  const [formData, setFormData] = useState<WizardFormData>(defaultWizardFormData);
+  const DRAFT_KEY = 'program-wizard-draft';
+
+  const [currentStep, setCurrentStep] = useState<WizardStep>(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) return (JSON.parse(saved).step as WizardStep) || 1;
+    } catch {}
+    return 1;
+  });
+  const [formData, setFormData] = useState<WizardFormData>(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_KEY);
+      if (saved) return JSON.parse(saved).formData as WizardFormData;
+    } catch {}
+    return {
+      ...defaultWizardFormData,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || defaultWizardFormData.timeZone,
+    };
+  });
+  const [draftRestored, setDraftRestored] = useState(() => {
+    try { return !!localStorage.getItem(DRAFT_KEY); } catch { return false; }
+  });
   const [selectedTenantId, setSelectedTenantId] = useState('');
   const [error, setError] = useState('');
 
@@ -57,6 +77,27 @@ export function ProgramWizardForm({
   const { data: tenants } = useTenants();
 
   const isPending = createAgencyProgram.isPending || createTenantProgram.isPending;
+
+  // Persist draft to localStorage on every change
+  useEffect(() => {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ step: currentStep, formData }));
+    } catch {}
+  }, [currentStep, formData]);
+
+  const clearDraft = () => {
+    try { localStorage.removeItem(DRAFT_KEY); } catch {}
+    setDraftRestored(false);
+  };
+
+  const discardDraft = () => {
+    clearDraft();
+    setCurrentStep(1);
+    setFormData({
+      ...defaultWizardFormData,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || defaultWizardFormData.timeZone,
+    });
+  };
 
   // ---- Form helpers ----
 
@@ -90,11 +131,28 @@ export function ProgramWizardForm({
     return null;
   };
 
+  const [expandedEmailCustomize, setExpandedEmailCustomize] = useState<Set<string>>(new Set());
+
   const toggleEmailSetting = (emailId: string) => {
     updateFormData({
       emailSettings: formData.emailSettings.map((e) =>
         e.id === emailId ? { ...e, enabled: !e.enabled } : e
       ),
+    });
+  };
+
+  const updateEmailField = (emailId: string, patch: Partial<import('./wizard-types').EmailSetting>) => {
+    updateFormData({
+      emailSettings: formData.emailSettings.map((e) => e.id === emailId ? { ...e, ...patch } : e),
+    });
+  };
+
+  const toggleEmailCustomize = (emailId: string) => {
+    setExpandedEmailCustomize((prev) => {
+      const next = new Set(prev);
+      if (next.has(emailId)) next.delete(emailId);
+      else next.add(emailId);
+      return next;
     });
   };
 
@@ -136,7 +194,8 @@ export function ProgramWizardForm({
         return formData.objectives.some((o) => o.text.trim());
       case 3:
         if (formData.programType === 'cohort') {
-          return !!formData.startDate && !!formData.endDate;
+          if (!formData.startDate || !formData.endDate) return false;
+          return new Date(formData.startDate) < new Date(formData.endDate);
         }
         return true;
       default:
@@ -152,6 +211,15 @@ export function ProgramWizardForm({
 
     const filteredObjectives = formData.objectives.filter((o) => o.text.trim());
 
+    // Build a flat ProgramEmailSettings object from the wizard email settings array
+    const emailSettingsMap = Object.fromEntries(formData.emailSettings.map((e) => [e.id, e]));
+    const subjectOverrides: Record<string, string> = {};
+    const bodyOverrides: Record<string, string> = {};
+    for (const e of formData.emailSettings) {
+      if (e.subjectOverride) subjectOverrides[e.id] = e.subjectOverride;
+      if (e.bodyOverride) bodyOverrides[e.id] = e.bodyOverride;
+    }
+
     const config = {
       learningTrack: formData.learningTrack || undefined,
       objectives: filteredObjectives.length > 0 ? filteredObjectives : undefined,
@@ -159,9 +227,32 @@ export function ProgramWizardForm({
       startOffset: formData.startOffset,
       deadlineFlexibility: formData.deadlineFlexibility,
       estimatedDuration: formData.programType === 'self_paced' ? formData.estimatedDuration : undefined,
-      emailSettings: formData.emailSettings,
-      beforeDueReminders: formData.beforeDueReminders,
-      afterDueReminders: formData.afterDueReminders,
+      allowSelfEnrollment: formData.allowSelfEnrollment,
+      requireManagerApproval: formData.requireManagerApproval,
+      programCapacity: formData.programCapacity ?? undefined,
+      enableWaitlist: formData.enableWaitlist,
+      emailSettings: {
+        welcome: emailSettingsMap['welcome']?.enabled ?? true,
+        kickoff: emailSettingsMap['kickoff']?.enabled ?? true,
+        weeklyDigest: emailSettingsMap['weeklyDigest']?.enabled ?? true,
+        weeklyDigestDay: emailSettingsMap['weeklyDigest']?.weeklyDigestDay ?? 1,
+        inactivityReminders: emailSettingsMap['inactivity']?.enabled ?? true,
+        inactivityDays: emailSettingsMap['inactivity']?.inactivityDays ?? 7,
+        milestones: emailSettingsMap['milestones']?.enabled ?? true,
+        completion: emailSettingsMap['completion']?.enabled ?? true,
+        mentorSummary: emailSettingsMap['mentorSummary']?.enabled ?? true,
+        mentorSummaryFrequency: emailSettingsMap['mentorSummary']?.mentorSummaryFrequency ?? 'weekly',
+        beforeDueReminders: formData.beforeDueReminders.filter((r) => r.enabled).map((r) => {
+          const days: Record<string, number> = { '2-weeks': 14, '1-week': 7, '3-days': 3, '1-day': 1, 'day-of': 0 };
+          return days[r.id] ?? 0;
+        }),
+        afterDueReminders: formData.afterDueReminders.filter((r) => r.enabled).map((r) => {
+          const days: Record<string, number> = { '1-day-after': 1, '3-days-after': 3, '1-week-after': 7 };
+          return days[r.id] ?? 1;
+        }),
+        subjectOverrides: Object.keys(subjectOverrides).length > 0 ? subjectOverrides : undefined,
+        bodyOverrides: Object.keys(bodyOverrides).length > 0 ? bodyOverrides : undefined,
+      },
       targetAudience: formData.targetAudience || undefined,
       prerequisites: formData.prerequisites || undefined,
       recommendedFor: formData.recommendedFor || undefined,
@@ -189,6 +280,7 @@ export function ProgramWizardForm({
       } else {
         created = await createTenantProgram.mutateAsync(baseInput);
       }
+      clearDraft();
       onSuccess(created);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to create program';
@@ -509,6 +601,13 @@ export function ProgramWizardForm({
             </div>
           </div>
 
+          {/* Date validation error */}
+          {formData.startDate && formData.endDate && new Date(formData.startDate) >= new Date(formData.endDate) && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+              <span className="text-sm text-red-700">End date must be after start date.</span>
+            </div>
+          )}
+
           {/* Calculated Duration */}
           {calculateDuration() && (
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -624,6 +723,76 @@ export function ProgramWizardForm({
           Used for scheduling emails and displaying deadlines to participants
         </p>
       </div>
+
+      {/* Enrollment Settings */}
+      <div className="bg-gray-50 border border-border rounded-lg p-4 space-y-4">
+        <div className="font-medium text-sidebar-foreground text-sm">Enrollment Settings</div>
+
+        {/* Self-enrollment toggle */}
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="text-sm text-sidebar-foreground">Allow Self-Enrollment</div>
+            <div className="text-xs text-muted-foreground mt-0.5">Learners can enroll themselves without an admin</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => updateFormData({ allowSelfEnrollment: !formData.allowSelfEnrollment })}
+            className={`relative w-11 h-6 rounded-full transition-colors ${formData.allowSelfEnrollment ? 'bg-accent' : 'bg-gray-300'}`}
+          >
+            <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${formData.allowSelfEnrollment ? 'translate-x-5' : ''}`} />
+          </button>
+        </div>
+
+        {/* Manager approval (only when self-enrollment on) */}
+        {formData.allowSelfEnrollment && (
+          <div className="flex items-start justify-between pl-4 border-l-2 border-gray-200">
+            <div className="flex-1">
+              <div className="text-sm text-sidebar-foreground">Require Manager Approval</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Enrollment requests need manager sign-off</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => updateFormData({ requireManagerApproval: !formData.requireManagerApproval })}
+              className={`relative w-11 h-6 rounded-full transition-colors ${formData.requireManagerApproval ? 'bg-accent' : 'bg-gray-300'}`}
+            >
+              <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${formData.requireManagerApproval ? 'translate-x-5' : ''}`} />
+            </button>
+          </div>
+        )}
+
+        {/* Capacity */}
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <div className="text-sm text-sidebar-foreground">Program Capacity</div>
+            <div className="text-xs text-muted-foreground mt-0.5">Maximum number of learners (leave blank for unlimited)</div>
+          </div>
+          <input
+            type="number"
+            min={1}
+            value={formData.programCapacity ?? ''}
+            onChange={(e) => updateFormData({ programCapacity: e.target.value ? parseInt(e.target.value) : null })}
+            placeholder="Unlimited"
+            className="w-28 px-3 py-1.5 bg-white border border-border rounded-lg text-sm text-sidebar-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent text-right"
+          />
+        </div>
+
+        {/* Waitlist (only when capacity is set) */}
+        {formData.programCapacity !== null && (
+          <div className="flex items-start justify-between pl-4 border-l-2 border-gray-200">
+            <div className="flex-1">
+              <div className="text-sm text-sidebar-foreground">Enable Waitlist</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Accept waitlist applications when capacity is full</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => updateFormData({ enableWaitlist: !formData.enableWaitlist })}
+              className={`relative w-11 h-6 rounded-full transition-colors ${formData.enableWaitlist ? 'bg-accent' : 'bg-gray-300'}`}
+            >
+              <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${formData.enableWaitlist ? 'translate-x-5' : ''}`} />
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 
@@ -631,14 +800,24 @@ export function ProgramWizardForm({
   // Step 4: Communication Settings
   // ============================================
 
+  const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
   const renderStep4 = () => (
     <div className="space-y-4">
       {/* Email Settings */}
-      {formData.emailSettings.map((email) => (
+      {formData.emailSettings.map((email) => {
+        const isCustomizeOpen = expandedEmailCustomize.has(email.id);
+        const hasOverride = !!(email.subjectOverride || email.bodyOverride);
+        return (
         <div key={email.id} className="bg-gray-50 border border-border rounded-lg p-4">
           <div className="flex items-start justify-between">
             <div className="flex-1">
-              <div className="font-medium text-sidebar-foreground mb-1">{email.name}</div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-medium text-sidebar-foreground">{email.name}</span>
+                {hasOverride && (
+                  <span className="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded border border-blue-200">Customized</span>
+                )}
+              </div>
               <div className="text-sm text-muted-foreground">{email.description}</div>
             </div>
             <button
@@ -655,13 +834,102 @@ export function ProgramWizardForm({
               />
             </button>
           </div>
-          {email.timing && (
-            <div className="mt-3 text-xs text-muted-foreground">
-              Timing: {email.timing}
+
+          {/* Timing controls — only when enabled */}
+          {email.enabled && (
+            <div className="mt-3 space-y-2">
+              {email.id === 'weeklyDigest' && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Send on:</span>
+                  <select
+                    value={email.weeklyDigestDay ?? 1}
+                    onChange={(e) => updateEmailField(email.id, { weeklyDigestDay: Number(e.target.value) })}
+                    className="text-xs border border-border rounded px-2 py-1 bg-white"
+                  >
+                    {DAY_NAMES.map((d, i) => <option key={d} value={i}>{d}</option>)}
+                  </select>
+                </div>
+              )}
+              {email.id === 'inactivity' && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">After</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={90}
+                    value={email.inactivityDays ?? 7}
+                    onChange={(e) => updateEmailField(email.id, { inactivityDays: Number(e.target.value) })}
+                    className="w-16 text-xs border border-border rounded px-2 py-1 bg-white text-center"
+                  />
+                  <span className="text-xs text-muted-foreground">days of inactivity</span>
+                </div>
+              )}
+              {email.id === 'mentorSummary' && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Frequency:</span>
+                  <select
+                    value={email.mentorSummaryFrequency ?? 'weekly'}
+                    onChange={(e) => updateEmailField(email.id, { mentorSummaryFrequency: e.target.value as 'weekly' | 'biweekly' })}
+                    className="text-xs border border-border rounded px-2 py-1 bg-white"
+                  >
+                    <option value="weekly">Weekly</option>
+                    <option value="biweekly">Biweekly</option>
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Customize subject & body */}
+          {email.enabled && (
+            <button
+              type="button"
+              onClick={() => toggleEmailCustomize(email.id)}
+              className="mt-3 flex items-center gap-1 text-xs text-muted-foreground hover:text-sidebar-foreground transition-colors"
+            >
+              <span>{isCustomizeOpen ? '▾' : '▸'}</span>
+              Customize subject &amp; body
+            </button>
+          )}
+          {email.enabled && isCustomizeOpen && (
+            <div className="mt-3 space-y-3 pl-3 border-l-2 border-gray-200">
+              <div>
+                <label className="block text-xs font-medium text-sidebar-foreground mb-1">Subject line</label>
+                <input
+                  type="text"
+                  value={email.subjectOverride ?? ''}
+                  onChange={(e) => updateEmailField(email.id, { subjectOverride: e.target.value || undefined })}
+                  placeholder="Leave blank to use agency/system default"
+                  className="w-full text-xs border border-border rounded px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-sidebar-foreground mb-1">Body copy</label>
+                <textarea
+                  rows={3}
+                  value={email.bodyOverride ?? ''}
+                  onChange={(e) => updateEmailField(email.id, { bodyOverride: e.target.value || undefined })}
+                  placeholder="Leave blank to use agency/system default"
+                  className="w-full text-xs border border-border rounded px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-accent resize-none"
+                />
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Use <code>[Name]</code>, <code>[Program]</code> etc. as placeholders.
+                </p>
+              </div>
+              {hasOverride && (
+                <button
+                  type="button"
+                  onClick={() => updateEmailField(email.id, { subjectOverride: undefined, bodyOverride: undefined })}
+                  className="text-xs text-muted-foreground hover:text-red-600 transition-colors"
+                >
+                  Reset to default
+                </button>
+              )}
             </div>
           )}
         </div>
-      ))}
+        );
+      })}
 
       {/* Lesson Due Date Reminders */}
       <div className="bg-gray-50 border border-border rounded-lg p-4">
@@ -954,6 +1222,23 @@ export function ProgramWizardForm({
 
   return (
     <div>
+      {/* Draft restored banner */}
+      {draftRestored && (
+        <div className="flex items-center justify-between gap-3 mb-4 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-sm">
+          <div className="flex items-center gap-2 text-amber-800">
+            <RotateCcw className="w-4 h-4 flex-shrink-0" />
+            <span>Draft restored from your last session.</span>
+          </div>
+          <button
+            type="button"
+            onClick={discardDraft}
+            className="text-xs text-amber-700 hover:text-amber-900 underline underline-offset-2 flex-shrink-0"
+          >
+            Start fresh
+          </button>
+        </div>
+      )}
+
       {/* Step subtitle */}
       <p className="text-sm text-muted-foreground mb-4">
         Step {currentStep} of 6: {stepTitles[currentStep]}

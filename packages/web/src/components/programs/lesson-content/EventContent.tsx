@@ -45,7 +45,7 @@ export function EventContent({ title, eventConfig }: EventContentProps) {
             Program Event
           </div>
         </div>
-        <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
+        <h2 className="text-2xl font-bold text-sidebar-foreground">{title}</h2>
       </div>
 
       {/* Info Cards */}
@@ -54,8 +54,8 @@ export function EventContent({ title, eventConfig }: EventContentProps) {
           <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl border border-blue-100">
             <Calendar className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
             <div>
-              <p className="text-sm font-medium text-gray-900">{formatDate(date)}</p>
-              {timezone && <p className="text-xs text-gray-500 mt-0.5">{timezone}</p>}
+              <p className="text-sm font-medium text-sidebar-foreground">{formatDate(date)}</p>
+              {timezone && <p className="text-xs text-muted-foreground mt-0.5">{timezone}</p>}
             </div>
           </div>
         )}
@@ -63,20 +63,20 @@ export function EventContent({ title, eventConfig }: EventContentProps) {
           <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl border border-blue-100">
             <Clock className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
             <div>
-              <p className="text-sm font-medium text-gray-900">
+              <p className="text-sm font-medium text-sidebar-foreground">
                 {startTime && formatTime(startTime)}
                 {startTime && endTime && ' – '}
                 {endTime && formatTime(endTime)}
               </p>
-              {timezone && <p className="text-xs text-gray-500 mt-0.5">{timezone}</p>}
+              {timezone && <p className="text-xs text-muted-foreground mt-0.5">{timezone}</p>}
             </div>
           </div>
         )}
         {location && (
-          <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl border border-gray-200">
-            <MapPin className="w-5 h-5 text-gray-600 mt-0.5 shrink-0" />
+          <div className="flex items-start gap-3 p-4 bg-muted/30 rounded-xl border border-border">
+            <MapPin className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" />
             <div>
-              <p className="text-sm font-medium text-gray-900">{location}</p>
+              <p className="text-sm font-medium text-sidebar-foreground">{location}</p>
             </div>
           </div>
         )}
@@ -92,8 +92,8 @@ export function EventContent({ title, eventConfig }: EventContentProps) {
               >
                 Join Meeting <ExternalLink className="w-3.5 h-3.5" />
               </a>
-              {meetingId && <p className="text-xs text-gray-500 mt-1">ID: {meetingId}</p>}
-              {meetingPassword && <p className="text-xs text-gray-500">Password: {meetingPassword}</p>}
+              {meetingId && <p className="text-xs text-muted-foreground mt-1">ID: {meetingId}</p>}
+              {meetingPassword && <p className="text-xs text-muted-foreground">Password: {meetingPassword}</p>}
             </div>
           </div>
         )}
@@ -101,10 +101,10 @@ export function EventContent({ title, eventConfig }: EventContentProps) {
 
       {/* Description */}
       {description && (
-        <div className="prose prose-sm max-w-none">
-          <h3 className="text-base font-semibold text-gray-900 mb-2">Details</h3>
+        <div>
+          <h3 className="text-base font-semibold text-sidebar-foreground mb-2">Details</h3>
           <div
-            className="text-gray-700"
+            className="text-sm text-muted-foreground prose prose-sm max-w-none prose-headings:text-sidebar-foreground prose-p:text-muted-foreground prose-strong:text-sidebar-foreground"
             dangerouslySetInnerHTML={{ __html: description }}
           />
         </div>
@@ -117,8 +117,8 @@ export function EventContent({ title, eventConfig }: EventContentProps) {
         if (embedUrl && provider) {
           return (
             <div>
-              <h3 className="text-base font-semibold text-gray-900 mb-3">Event Video</h3>
-              <div className="rounded-xl overflow-hidden border border-gray-200">
+              <h3 className="text-base font-semibold text-sidebar-foreground mb-3">Event Video</h3>
+              <div className="rounded-xl overflow-hidden border border-border">
                 <div className="aspect-video bg-black">
                   <iframe
                     src={embedUrl}

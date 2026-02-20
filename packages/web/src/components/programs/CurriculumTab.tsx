@@ -33,6 +33,7 @@ import {
   Lightbulb,
   Brain,
   Layers,
+  ClipboardCheck,
 } from 'lucide-react';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { getEmbedUrl, getVideoProvider } from '@/lib/video-utils';
@@ -59,6 +60,7 @@ import {
 } from '@/hooks/api/useAgencyPrograms';
 import { EventEditor } from './EventEditor';
 import { TaskEditor } from './TaskEditor';
+import { QuizEditor } from './QuizEditor';
 import type {
   ProgramWithModules,
   Module,
@@ -91,6 +93,7 @@ const CONTENT_TYPE_CONFIG: Partial<Record<ContentType, ContentTypeConfig>> = {
   assignment: { icon: ClipboardList, label: 'Assignment', color: 'text-orange-600' },
   text_form: { icon: FileText, label: 'Text Form', color: 'text-cyan-600' },
   goal: { icon: Target, label: 'Goal', color: 'text-yellow-600' },
+  survey: { icon: ClipboardCheck, label: 'Survey', color: 'text-teal-600' },
 };
 
 type AddMenuKey =
@@ -114,6 +117,7 @@ const ADD_MENU_MAP: Record<AddMenuKey, { contentType: ContentType; defaultTitle:
   most_useful_idea: { contentType: 'text_form',   defaultTitle: 'Most Useful Idea'       },
   how_you_used:     { contentType: 'text_form',   defaultTitle: 'How You Used This Idea' },
   goal:             { contentType: 'goal',        defaultTitle: 'New Goal'               },
+  survey:           { contentType: 'survey',      defaultTitle: 'New Survey'             },
 };
 
 // Add menu config — displayed in the "Add lesson" dropdown in the builder.
@@ -131,6 +135,7 @@ const ADD_MENU_CONFIG: { key: AddMenuKey; icon: React.ComponentType<{ className?
   { key: 'assignment',       icon: ClipboardList,label: 'Assignment',           color: 'text-orange-600', group: 'Activity'     },
   { key: 'food_for_thought', icon: Brain,        label: 'Food for Thought',     color: 'text-rose-600',   group: 'Activity'     },
   { key: 'goal',             icon: Target,       label: 'Goal',                 color: 'text-yellow-600', group: 'Activity'     },
+  { key: 'survey',          icon: ClipboardCheck, label: 'Survey',             color: 'text-teal-600',   group: 'Activity'     },
 ];
 
 // ============================================
@@ -818,12 +823,37 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
 
       case 'quiz':
         return (
-          <div className="bg-gray-50 rounded-lg p-8 text-center">
-            <HelpCircle className="w-10 h-10 text-purple-400 mx-auto mb-3" />
-            <h4 className="text-base font-medium text-gray-900 mb-1">Quiz Builder Coming Soon</h4>
-            <p className="text-sm text-gray-500">
-              The interactive quiz builder is currently in development.
-            </p>
+          <QuizEditor
+            content={editContent}
+            onChange={(updated) => setEditContent(updated)}
+          />
+        );
+
+      case 'survey':
+        return (
+          <div className="space-y-4 p-4 bg-teal-50 rounded-xl border border-teal-200">
+            <div className="flex items-center gap-3">
+              <ClipboardCheck className="w-6 h-6 text-teal-600" />
+              <div>
+                <p className="font-medium text-gray-800">Survey Lesson</p>
+                <p className="text-sm text-gray-500">
+                  Learners will complete a survey as part of this lesson.
+                </p>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Survey ID (optional)</label>
+              <input
+                type="text"
+                value={(editContent as { surveyId?: string })?.surveyId ?? ''}
+                onChange={(e) => setEditContent((prev) => ({ ...prev, surveyId: e.target.value }))}
+                placeholder="Link to an existing survey by ID"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Leave blank to prompt learners to complete any active survey.
+              </p>
+            </div>
           </div>
         );
 

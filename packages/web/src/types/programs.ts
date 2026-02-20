@@ -11,7 +11,8 @@ export type ContentType =
   | 'quiz'
   | 'assignment'
   | 'text_form'
-  | 'goal';
+  | 'goal'
+  | 'survey';
 export type ModuleDripType = 'immediate' | 'days_after_enrollment' | 'days_after_previous' | 'on_date';
 export type LessonDripType = 'immediate' | 'sequential' | 'days_after_module_start' | 'on_date';
 export type LessonStatus = 'draft' | 'active';
@@ -32,7 +33,22 @@ export interface ProgramConfig {
   startOffset?: number;
   deadlineFlexibility?: number;
   estimatedDuration?: number;
-  emailSettings?: { id: string; name: string; description: string; enabled: boolean; timing?: string }[];
+  emailSettings?: {
+    welcome?: boolean;
+    kickoff?: boolean;
+    weeklyDigest?: boolean;
+    weeklyDigestDay?: number;
+    inactivityReminders?: boolean;
+    inactivityDays?: number;
+    milestones?: boolean;
+    completion?: boolean;
+    mentorSummary?: boolean;
+    mentorSummaryFrequency?: 'weekly' | 'biweekly';
+    beforeDueReminders?: number[];
+    afterDueReminders?: number[];
+    subjectOverrides?: Record<string, string>;
+    bodyOverrides?: Record<string, string>;
+  };
   beforeDueReminders?: { id: string; label: string; enabled: boolean }[];
   afterDueReminders?: { id: string; label: string; enabled: boolean }[];
   targetAudience?: string;
@@ -76,6 +92,8 @@ export interface LessonContent {
     options?: string[];
     correctAnswer?: string | number;
     points?: number;
+    gradingMode?: 'auto_complete' | 'keyword' | 'manual';
+    keywords?: string[];
   }[];
   passingScore?: number;
   allowRetakes?: boolean;
@@ -527,6 +545,38 @@ export interface TaskWithProgress {
   completedAt: string | null;
   pointsEarned: number;
   submissionData: Record<string, unknown> | null;
+}
+
+// Quiz attempt types
+export type QuizGradingStatus = 'auto_graded' | 'pending_grade' | 'graded';
+
+export interface QuizBreakdownItem {
+  questionId: string;
+  question: string;
+  type: 'multiple_choice' | 'true_false' | 'short_answer';
+  yourAnswer: string | number | null;
+  correctAnswer?: string | number;
+  pointsEarned: number;
+  pointsPossible: number;
+  isCorrect?: boolean;
+  gradingMode?: 'auto_complete' | 'keyword' | 'manual';
+}
+
+export interface QuizAttempt {
+  id: string;
+  lessonId: string;
+  enrollmentId: string;
+  attemptNumber: number;
+  answers: Record<string, string | number>;
+  score: string | null;         // numeric string e.g. "85.00"
+  pointsEarned: number;
+  passed: boolean | null;
+  breakdown: QuizBreakdownItem[];
+  gradingStatus: QuizGradingStatus;
+  gradedBy: string | null;
+  gradedAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
 }
 
 // Discussion types

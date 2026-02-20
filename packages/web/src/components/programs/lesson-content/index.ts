@@ -9,3 +9,4 @@ export { ApprovalContent } from './ApprovalContent';
 export { DiscussionContent } from './DiscussionContent';
 export { EventContent } from './EventContent';
 export { TaskList } from './TaskList';
+export { SurveyContent } from './SurveyContent';

@@ -50,17 +50,17 @@ export function TaskList({
     <div className="mt-8">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base font-semibold text-gray-900">
+        <h3 className="text-base font-semibold text-sidebar-foreground">
           Tasks ({completedCount}/{sortedTasks.length} completed)
         </h3>
         <div className="flex items-center gap-2">
-          <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
             <div
-              className="h-full bg-green-500 rounded-full transition-all"
+              className="h-full bg-accent rounded-full transition-all"
               style={{ width: `${sortedTasks.length > 0 ? (completedCount / sortedTasks.length) * 100 : 0}%` }}
             />
           </div>
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-muted-foreground">
             {sortedTasks.length > 0 ? Math.round((completedCount / sortedTasks.length) * 100) : 0}%
           </span>
         </div>
@@ -81,7 +81,7 @@ export function TaskList({
 
       {/* Footer message */}
       {completedCount < sortedTasks.length && (
-        <p className="mt-4 text-xs text-gray-500 text-center">
+        <p className="mt-4 text-xs text-muted-foreground text-center">
           Complete all tasks to finish this lesson.
         </p>
       )}
@@ -112,7 +112,7 @@ function TaskItem({
       className={`border rounded-xl p-4 transition-colors ${
         isCompleted
           ? 'border-green-200 bg-green-50/50'
-          : 'border-gray-200 bg-white'
+          : 'border-border bg-card'
       }`}
     >
       <div className="flex items-start gap-3">
@@ -123,15 +123,15 @@ function TaskItem({
           ) : status === 'in_progress' ? (
             <Clock className="w-5 h-5 text-amber-500" />
           ) : (
-            <Circle className="w-5 h-5 text-gray-300" />
+            <Circle className="w-5 h-5 text-muted-foreground/40" />
           )}
         </div>
 
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <Icon className={`w-4 h-4 shrink-0 ${isCompleted ? 'text-green-500' : 'text-gray-400'}`} />
-            <h4 className={`text-sm font-medium ${isCompleted ? 'text-green-700 line-through' : 'text-gray-900'}`}>
+            <Icon className={`w-4 h-4 shrink-0 ${isCompleted ? 'text-green-500' : 'text-muted-foreground'}`} />
+            <h4 className={`text-sm font-medium ${isCompleted ? 'text-green-700 line-through' : 'text-sidebar-foreground'}`}>
               {task.title}
             </h4>
           </div>
@@ -139,20 +139,20 @@ function TaskItem({
           {task.description && (
             <button
               onClick={() => setExpanded(!expanded)}
-              className="text-xs text-gray-500 hover:text-gray-700 mt-1"
+              className="text-xs text-muted-foreground hover:text-sidebar-foreground mt-1 transition-colors focus:outline-none"
             >
               {expanded ? 'Hide details' : 'Show details'}
             </button>
           )}
 
           {expanded && task.description && (
-            <p className="text-sm text-gray-600 mt-2">{task.description}</p>
+            <p className="text-sm text-muted-foreground mt-2">{task.description}</p>
           )}
 
           {/* Meta */}
           <div className="flex items-center gap-3 mt-2">
             {task.points > 0 && (
-              <span className="text-xs text-gray-500">{task.points} pts</span>
+              <span className="text-xs text-muted-foreground">{task.points} pts</span>
             )}
             {needsApproval && (
               <span className="inline-flex items-center gap-1 text-xs text-amber-600">
@@ -161,7 +161,7 @@ function TaskItem({
               </span>
             )}
             {task.dueDaysOffset != null && (
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-muted-foreground">
                 Due {task.dueDaysOffset} days after enrollment
               </span>
             )}
@@ -176,7 +176,7 @@ function TaskItem({
             <button
               onClick={() => onComplete?.(task.id)}
               disabled={isCompleting}
-              className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+              className="px-3 py-1.5 bg-accent text-accent-foreground rounded-lg text-xs font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1"
             >
               {isCompleting ? 'Completing...' : 'Mark Done'}
             </button>
@@ -186,7 +186,7 @@ function TaskItem({
               Pending Review
             </span>
           ) : (
-            <span className="text-xs text-gray-400">To do</span>
+            <span className="text-xs text-muted-foreground">To do</span>
           )}
         </div>
       </div>

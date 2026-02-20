@@ -8,6 +8,7 @@ import { NotFoundError, BadRequestError, ForbiddenError } from '../lib/errors.js
 import { PERMISSIONS } from '@tr/shared';
 import type { Variables } from '../types/context.js';
 import { sendMilestoneCelebration, sendProgramCompletion } from '../lib/email.js';
+import { resolveEmailContent } from '../lib/email-resolver.js';
 import { createNotification } from '../lib/notifications.js';
 import { env } from '../lib/env.js';
 
@@ -1539,25 +1540,40 @@ async function updateEnrollmentProgress(enrollmentId: string) {
       .limit(1);
 
     const [program] = await db
-      .select({ id: programs.id, name: programs.name })
+      .select({ id: programs.id, name: programs.name, agencyId: programs.agencyId, config: programs.config })
       .from(programs)
       .where(eq(programs.id, enrollment.programId))
       .limit(1);
 
     if (user && program) {
       const programUrl = `${env.APP_URL}/programs/${program.id}`;
+      const emailSettings = program.config?.emailSettings;
 
       // Milestone emails — fire once when crossing 25/50/75/100%
       const milestones = [25, 50, 75, 100] as const;
       for (const m of milestones) {
         if (prevProgress < m && percentage >= m) {
-          await sendMilestoneCelebration({
-            to: user.email,
-            name: user.firstName,
-            programName: program.name,
-            milestone: m,
-            programUrl,
-          }).catch(() => {});
+          const resolved = await resolveEmailContent({
+            emailType: 'milestones',
+            agencyId: program.agencyId,
+            programConfig: emailSettings,
+            userId: user.id,
+            defaults: {
+              subject: `You've reached ${m}% in ${program.name}!`,
+              body: '',
+            },
+          });
+
+          if (resolved.enabled) {
+            await sendMilestoneCelebration({
+              to: user.email,
+              name: user.firstName,
+              programName: program.name,
+              milestone: m,
+              programUrl,
+              overrides: { subject: resolved.subject || undefined },
+            }).catch(() => {});
+          }
 
           await createNotification({
             userId: user.id,
@@ -1575,12 +1591,23 @@ async function updateEnrollmentProgress(enrollmentId: string) {
 
       // Completion email
       if (isNowComplete) {
-        await sendProgramCompletion({
-          to: user.email,
-          name: user.firstName,
-          programName: program.name,
-          programUrl,
-        }).catch(() => {});
+        const resolved = await resolveEmailContent({
+          emailType: 'completion',
+          agencyId: program.agencyId,
+          programConfig: emailSettings,
+          userId: user.id,
+          defaults: { subject: `Congratulations! You've completed ${program.name}`, body: '' },
+        });
+
+        if (resolved.enabled) {
+          await sendProgramCompletion({
+            to: user.email,
+            name: user.firstName,
+            programName: program.name,
+            programUrl,
+            overrides: { subject: resolved.subject || undefined },
+          }).catch(() => {});
+        }
       }
     }
   }

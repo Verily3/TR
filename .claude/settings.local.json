@@ -97,7 +97,11 @@
       "Bash(test:*)",
       "Bash(git -C \"C:\\\\Users\\\\Admin\\\\Documents\\\\VERILYASSIST PROJECTS\\\\04-APPS\\\\TR v2\" status -s)",
       "Bash(git -C \"C:\\\\Users\\\\Admin\\\\Documents\\\\VERILYASSIST PROJECTS\\\\04-APPS\\\\TR v2\" add .claude/settings.local.json)",
-      "Bash(git -C:*)"
+      "Bash(git -C:*)",
+      "Bash(gcloud config list:*)",
+      "Bash(\"/c/Users/Admin/Documents/VERILYASSIST PROJECTS/04-APPS/TR:*)",
+      "Bash(python3:*)",
+      "Bash(py -3:*)"
     ]
   }
 }

@@ -10,7 +10,8 @@ import { NotFoundError, BadRequestError, ConflictError, ForbiddenError } from '.
 import { PERMISSIONS } from '@tr/shared';
 import type { Variables } from '../types/context.js';
 import type { PaginationMeta } from '@tr/shared';
-import { sendUserWelcome } from '../lib/email.js';
+import { sendUserWelcome, sendProgramCreated } from '../lib/email.js';
+import { invalidateAgencyEmailConfigCache } from '../lib/email-resolver.js';
 import { env } from '../lib/env.js';
 
 const { agencies, tenants, users, programs, modules, lessons, enrollments, roles, userRoles, lessonTasks } = schema;
@@ -86,6 +87,57 @@ agenciesRoutes.put(
     }
 
     return c.json({ data: updated });
+  }
+);
+
+/**
+ * GET /api/agencies/me/email-config
+ * Get agency-level email configuration (per-type subject/body/enabled/mandatory overrides)
+ */
+agenciesRoutes.get('/me/email-config', requireAgencyAccess(), async (c) => {
+  const user = c.get('user');
+
+  const [agency] = await db
+    .select({ emailConfig: agencies.emailConfig })
+    .from(agencies)
+    .where(eq(agencies.id, user.agencyId!))
+    .limit(1);
+
+  return c.json({ data: (agency?.emailConfig ?? {}) });
+});
+
+/**
+ * PUT /api/agencies/me/email-config
+ * Save agency-level email configuration (deep-merges into existing config)
+ */
+agenciesRoutes.put(
+  '/me/email-config',
+  requireAgencyAccess(),
+  requirePermission(PERMISSIONS.AGENCY_MANAGE),
+  async (c) => {
+    const user = c.get('user');
+    const body = await c.req.json();
+
+    // Load existing config and deep-merge
+    const [current] = await db
+      .select({ emailConfig: agencies.emailConfig })
+      .from(agencies)
+      .where(eq(agencies.id, user.agencyId!))
+      .limit(1);
+
+    const existingConfig = (current?.emailConfig ?? {}) as Record<string, unknown>;
+    const merged = { ...existingConfig, ...body };
+
+    const [updated] = await db
+      .update(agencies)
+      .set({ emailConfig: merged, updatedAt: new Date() })
+      .where(eq(agencies.id, user.agencyId!))
+      .returning({ emailConfig: agencies.emailConfig });
+
+    // Bust resolver cache
+    invalidateAgencyEmailConfigCache(user.agencyId!);
+
+    return c.json({ data: updated?.emailConfig ?? merged });
   }
 );
 
@@ -533,6 +585,11 @@ agenciesRoutes.get(
           WHERE u."id" = "programs"."created_by"
           LIMIT 1
         )`,
+        sourceTemplateName: sql<string | null>`(
+          SELECT p."name" FROM "programs" p
+          WHERE p."id" = "programs"."source_template_id"
+          LIMIT 1
+        )`,
       })
       .from(programs)
       .where(and(...conditions))
@@ -626,6 +683,14 @@ agenciesRoutes.post(
         createdBy: user.id,
       })
       .returning();
+
+    // Notify creator
+    sendProgramCreated({
+      to: user.email,
+      name: user.email,
+      programName: program.name,
+      programUrl: `${env.APP_URL}/program-builder/${program.id}`,
+    }).catch(() => {});
 
     return c.json({ data: program }, 201);
   }
@@ -820,10 +885,14 @@ agenciesRoutes.delete(
       throw new NotFoundError('Program', programId);
     }
 
+    const now = new Date();
     await db
       .update(programs)
-      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .set({ deletedAt: now, updatedAt: now })
       .where(eq(programs.id, programId));
+
+    // Cascade: hard-delete all modules (lessons/tasks cascade via FK)
+    await db.delete(modules).where(eq(modules.programId, programId));
 
     return c.json({ data: { success: true } });
   }
@@ -861,101 +930,105 @@ agenciesRoutes.post(
 
     const newName = overrideName ?? `Copy of ${original.name}`;
 
-    const [newProgram] = await db
-      .insert(programs)
-      .values({
-        agencyId: user.agencyId!,
-        tenantId: null,
-        allowedTenantIds: [],
-        name: newName,
-        internalName: original.internalName ? `${original.internalName} (Copy)` : null,
-        description: original.description,
-        type: original.type,
-        coverImage: original.coverImage,
-        timezone: original.timezone,
-        config: original.config,
-        status: 'draft',
-        isTemplate: original.isTemplate,
-        sourceTemplateId: null,
-        createdBy: user.id,
-      })
-      .returning();
-
-    // Deep copy modules → lessons → tasks
-    const originalModules = await db
-      .select()
-      .from(modules)
-      .where(eq(modules.programId, programId))
-      .orderBy(asc(modules.order));
-
-    const moduleIdMap = new Map<string, string>();
-
-    for (const mod of originalModules) {
-      const [newModule] = await db
-        .insert(modules)
+    const newProgram = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(programs)
         .values({
-          programId: newProgram.id,
-          parentModuleId: mod.parentModuleId ? moduleIdMap.get(mod.parentModuleId) : null,
-          title: mod.title,
-          description: mod.description,
-          order: mod.order,
-          depth: mod.depth,
-          type: mod.type,
-          eventConfig: mod.eventConfig,
-          dripType: mod.dripType,
-          dripValue: mod.dripValue,
-          dripDate: mod.dripDate,
+          agencyId: user.agencyId!,
+          tenantId: null,
+          allowedTenantIds: [],
+          name: newName,
+          internalName: original.internalName ? `${original.internalName} (Copy)` : null,
+          description: original.description,
+          type: original.type,
+          coverImage: original.coverImage,
+          timezone: original.timezone,
+          config: original.config,
           status: 'draft',
+          isTemplate: false,
+          sourceTemplateId: null,
+          createdBy: user.id,
         })
         .returning();
 
-      moduleIdMap.set(mod.id, newModule.id);
-
-      const moduleLessons = await db
+      // Deep copy modules → lessons → tasks
+      const originalModules = await tx
         .select()
-        .from(lessons)
-        .where(eq(lessons.moduleId, mod.id))
-        .orderBy(asc(lessons.order));
+        .from(modules)
+        .where(eq(modules.programId, programId))
+        .orderBy(asc(modules.order));
 
-      for (const lesson of moduleLessons) {
-        const [newLesson] = await db.insert(lessons).values({
-          moduleId: newModule.id,
-          title: lesson.title,
-          contentType: lesson.contentType,
-          content: lesson.content,
-          order: lesson.order,
-          durationMinutes: lesson.durationMinutes,
-          points: lesson.points,
-          dripType: lesson.dripType,
-          dripValue: lesson.dripValue,
-          dripDate: lesson.dripDate,
-          visibleTo: lesson.visibleTo,
-          approvalRequired: lesson.approvalRequired,
-          status: 'draft',
-        }).returning();
+      const moduleIdMap = new Map<string, string>();
 
-        const lessonTaskList = await db
-          .select()
-          .from(lessonTasks)
-          .where(eq(lessonTasks.lessonId, lesson.id))
-          .orderBy(asc(lessonTasks.order));
-
-        for (const task of lessonTaskList) {
-          await db.insert(lessonTasks).values({
-            lessonId: newLesson.id,
-            title: task.title,
-            description: task.description,
-            order: task.order,
-            responseType: task.responseType,
-            approvalRequired: task.approvalRequired,
-            dueDaysOffset: task.dueDaysOffset,
-            points: task.points,
-            config: task.config,
+      for (const mod of originalModules) {
+        const [newModule] = await tx
+          .insert(modules)
+          .values({
+            programId: created.id,
+            parentModuleId: mod.parentModuleId ? moduleIdMap.get(mod.parentModuleId) : null,
+            title: mod.title,
+            description: mod.description,
+            order: mod.order,
+            depth: mod.depth,
+            type: mod.type,
+            eventConfig: mod.eventConfig,
+            dripType: mod.dripType,
+            dripValue: mod.dripValue,
+            dripDate: mod.dripDate,
             status: 'draft',
-          });
+          })
+          .returning();
+
+        moduleIdMap.set(mod.id, newModule.id);
+
+        const moduleLessons = await tx
+          .select()
+          .from(lessons)
+          .where(eq(lessons.moduleId, mod.id))
+          .orderBy(asc(lessons.order));
+
+        for (const lesson of moduleLessons) {
+          const [newLesson] = await tx.insert(lessons).values({
+            moduleId: newModule.id,
+            title: lesson.title,
+            contentType: lesson.contentType,
+            content: lesson.content,
+            order: lesson.order,
+            durationMinutes: lesson.durationMinutes,
+            points: lesson.points,
+            dripType: lesson.dripType,
+            dripValue: lesson.dripValue,
+            dripDate: lesson.dripDate,
+            visibleTo: lesson.visibleTo,
+            approvalRequired: lesson.approvalRequired,
+            status: 'draft',
+          }).returning();
+
+          const lessonTaskList = await tx
+            .select()
+            .from(lessonTasks)
+            .where(eq(lessonTasks.lessonId, lesson.id))
+            .orderBy(asc(lessonTasks.order));
+
+          for (const task of lessonTaskList) {
+            await tx.insert(lessonTasks).values({
+              lessonId: newLesson.id,
+              title: task.title,
+              description: task.description,
+              order: task.order,
+              responseType: task.responseType,
+              approvalRequired: task.approvalRequired,
+              dueDaysOffset: task.dueDaysOffset,
+              points: task.points,
+              config: task.config,
+              status: 'draft',
+            });
+          }
         }
       }
-    }
+
+      return created;
+    });
 
     return c.json({ data: newProgram }, 201);
   }
@@ -1033,101 +1106,105 @@ agenciesRoutes.post(
 
     const newName = overrideName ?? `Copy of ${template.name}`;
 
-    const [newProgram] = await db
-      .insert(programs)
-      .values({
-        agencyId: user.agencyId!,
-        tenantId: null,
-        allowedTenantIds: [],
-        name: newName,
-        internalName: template.internalName ? `${template.internalName} (Copy)` : null,
-        description: template.description,
-        type: template.type,
-        coverImage: template.coverImage,
-        timezone: template.timezone,
-        config: template.config,
-        status: 'draft',
-        isTemplate: false,
-        sourceTemplateId: template.id,
-        createdBy: user.id,
-      })
-      .returning();
-
-    // Deep copy modules → lessons → tasks
-    const originalModules = await db
-      .select()
-      .from(modules)
-      .where(eq(modules.programId, programId))
-      .orderBy(asc(modules.order));
-
-    const moduleIdMap = new Map<string, string>();
-
-    for (const mod of originalModules) {
-      const [newModule] = await db
-        .insert(modules)
+    const newProgram = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(programs)
         .values({
-          programId: newProgram.id,
-          parentModuleId: mod.parentModuleId ? moduleIdMap.get(mod.parentModuleId) : null,
-          title: mod.title,
-          description: mod.description,
-          order: mod.order,
-          depth: mod.depth,
-          type: mod.type,
-          eventConfig: mod.eventConfig,
-          dripType: mod.dripType,
-          dripValue: mod.dripValue,
-          dripDate: mod.dripDate,
+          agencyId: user.agencyId!,
+          tenantId: null,
+          allowedTenantIds: [],
+          name: newName,
+          internalName: template.internalName ? `${template.internalName} (Copy)` : null,
+          description: template.description,
+          type: template.type,
+          coverImage: template.coverImage,
+          timezone: template.timezone,
+          config: template.config,
           status: 'draft',
+          isTemplate: false,
+          sourceTemplateId: template.id,
+          createdBy: user.id,
         })
         .returning();
 
-      moduleIdMap.set(mod.id, newModule.id);
-
-      const moduleLessons = await db
+      // Deep copy modules → lessons → tasks
+      const originalModules = await tx
         .select()
-        .from(lessons)
-        .where(eq(lessons.moduleId, mod.id))
-        .orderBy(asc(lessons.order));
+        .from(modules)
+        .where(eq(modules.programId, programId))
+        .orderBy(asc(modules.order));
 
-      for (const lesson of moduleLessons) {
-        const [newLesson] = await db.insert(lessons).values({
-          moduleId: newModule.id,
-          title: lesson.title,
-          contentType: lesson.contentType,
-          content: lesson.content,
-          order: lesson.order,
-          durationMinutes: lesson.durationMinutes,
-          points: lesson.points,
-          dripType: lesson.dripType,
-          dripValue: lesson.dripValue,
-          dripDate: lesson.dripDate,
-          visibleTo: lesson.visibleTo,
-          approvalRequired: lesson.approvalRequired,
-          status: 'draft',
-        }).returning();
+      const moduleIdMap = new Map<string, string>();
 
-        const lessonTaskList = await db
-          .select()
-          .from(lessonTasks)
-          .where(eq(lessonTasks.lessonId, lesson.id))
-          .orderBy(asc(lessonTasks.order));
-
-        for (const task of lessonTaskList) {
-          await db.insert(lessonTasks).values({
-            lessonId: newLesson.id,
-            title: task.title,
-            description: task.description,
-            order: task.order,
-            responseType: task.responseType,
-            approvalRequired: task.approvalRequired,
-            dueDaysOffset: task.dueDaysOffset,
-            points: task.points,
-            config: task.config,
+      for (const mod of originalModules) {
+        const [newModule] = await tx
+          .insert(modules)
+          .values({
+            programId: created.id,
+            parentModuleId: mod.parentModuleId ? moduleIdMap.get(mod.parentModuleId) : null,
+            title: mod.title,
+            description: mod.description,
+            order: mod.order,
+            depth: mod.depth,
+            type: mod.type,
+            eventConfig: mod.eventConfig,
+            dripType: mod.dripType,
+            dripValue: mod.dripValue,
+            dripDate: mod.dripDate,
             status: 'draft',
-          });
+          })
+          .returning();
+
+        moduleIdMap.set(mod.id, newModule.id);
+
+        const moduleLessons = await tx
+          .select()
+          .from(lessons)
+          .where(eq(lessons.moduleId, mod.id))
+          .orderBy(asc(lessons.order));
+
+        for (const lesson of moduleLessons) {
+          const [newLesson] = await tx.insert(lessons).values({
+            moduleId: newModule.id,
+            title: lesson.title,
+            contentType: lesson.contentType,
+            content: lesson.content,
+            order: lesson.order,
+            durationMinutes: lesson.durationMinutes,
+            points: lesson.points,
+            dripType: lesson.dripType,
+            dripValue: lesson.dripValue,
+            dripDate: lesson.dripDate,
+            visibleTo: lesson.visibleTo,
+            approvalRequired: lesson.approvalRequired,
+            status: 'draft',
+          }).returning();
+
+          const lessonTaskList = await tx
+            .select()
+            .from(lessonTasks)
+            .where(eq(lessonTasks.lessonId, lesson.id))
+            .orderBy(asc(lessonTasks.order));
+
+          for (const task of lessonTaskList) {
+            await tx.insert(lessonTasks).values({
+              lessonId: newLesson.id,
+              title: task.title,
+              description: task.description,
+              order: task.order,
+              responseType: task.responseType,
+              approvalRequired: task.approvalRequired,
+              dueDaysOffset: task.dueDaysOffset,
+              points: task.points,
+              config: task.config,
+              status: 'draft',
+            });
+          }
         }
       }
-    }
+
+      return created;
+    });
 
     return c.json({ data: newProgram }, 201);
   }
@@ -1185,101 +1262,105 @@ agenciesRoutes.post(
 
     const newName = overrideName ?? sourceProgram.name;
 
-    const [newProgram] = await db
-      .insert(programs)
-      .values({
-        agencyId: user.agencyId!,
-        tenantId,
-        allowedTenantIds: [],
-        name: newName,
-        internalName: sourceProgram.internalName,
-        description: sourceProgram.description,
-        type: sourceProgram.type,
-        coverImage: sourceProgram.coverImage,
-        timezone: sourceProgram.timezone,
-        config: sourceProgram.config,
-        status: 'draft',
-        isTemplate: false,
-        sourceTemplateId: sourceProgram.id,
-        createdBy: user.id,
-      })
-      .returning();
-
-    // Deep copy modules → lessons → tasks
-    const originalModules = await db
-      .select()
-      .from(modules)
-      .where(eq(modules.programId, programId))
-      .orderBy(asc(modules.order));
-
-    const moduleIdMap = new Map<string, string>();
-
-    for (const mod of originalModules) {
-      const [newModule] = await db
-        .insert(modules)
+    const newProgram = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(programs)
         .values({
-          programId: newProgram.id,
-          parentModuleId: mod.parentModuleId ? moduleIdMap.get(mod.parentModuleId) : null,
-          title: mod.title,
-          description: mod.description,
-          order: mod.order,
-          depth: mod.depth,
-          type: mod.type,
-          eventConfig: mod.eventConfig,
-          dripType: mod.dripType,
-          dripValue: mod.dripValue,
-          dripDate: mod.dripDate,
+          agencyId: user.agencyId!,
+          tenantId,
+          allowedTenantIds: [],
+          name: newName,
+          internalName: sourceProgram.internalName,
+          description: sourceProgram.description,
+          type: sourceProgram.type,
+          coverImage: sourceProgram.coverImage,
+          timezone: sourceProgram.timezone,
+          config: sourceProgram.config,
           status: 'draft',
+          isTemplate: false,
+          sourceTemplateId: sourceProgram.id,
+          createdBy: user.id,
         })
         .returning();
 
-      moduleIdMap.set(mod.id, newModule.id);
-
-      const moduleLessons = await db
+      // Deep copy modules → lessons → tasks
+      const originalModules = await tx
         .select()
-        .from(lessons)
-        .where(eq(lessons.moduleId, mod.id))
-        .orderBy(asc(lessons.order));
+        .from(modules)
+        .where(eq(modules.programId, programId))
+        .orderBy(asc(modules.order));
 
-      for (const lesson of moduleLessons) {
-        const [newLesson] = await db.insert(lessons).values({
-          moduleId: newModule.id,
-          title: lesson.title,
-          contentType: lesson.contentType,
-          content: lesson.content,
-          order: lesson.order,
-          durationMinutes: lesson.durationMinutes,
-          points: lesson.points,
-          dripType: lesson.dripType,
-          dripValue: lesson.dripValue,
-          dripDate: lesson.dripDate,
-          visibleTo: lesson.visibleTo,
-          approvalRequired: lesson.approvalRequired,
-          status: 'draft',
-        }).returning();
+      const moduleIdMap = new Map<string, string>();
 
-        const lessonTaskList = await db
-          .select()
-          .from(lessonTasks)
-          .where(eq(lessonTasks.lessonId, lesson.id))
-          .orderBy(asc(lessonTasks.order));
-
-        for (const task of lessonTaskList) {
-          await db.insert(lessonTasks).values({
-            lessonId: newLesson.id,
-            title: task.title,
-            description: task.description,
-            order: task.order,
-            responseType: task.responseType,
-            approvalRequired: task.approvalRequired,
-            dueDaysOffset: task.dueDaysOffset,
-            points: task.points,
-            config: task.config,
+      for (const mod of originalModules) {
+        const [newModule] = await tx
+          .insert(modules)
+          .values({
+            programId: created.id,
+            parentModuleId: mod.parentModuleId ? moduleIdMap.get(mod.parentModuleId) : null,
+            title: mod.title,
+            description: mod.description,
+            order: mod.order,
+            depth: mod.depth,
+            type: mod.type,
+            eventConfig: mod.eventConfig,
+            dripType: mod.dripType,
+            dripValue: mod.dripValue,
+            dripDate: mod.dripDate,
             status: 'draft',
-          });
+          })
+          .returning();
+
+        moduleIdMap.set(mod.id, newModule.id);
+
+        const moduleLessons = await tx
+          .select()
+          .from(lessons)
+          .where(eq(lessons.moduleId, mod.id))
+          .orderBy(asc(lessons.order));
+
+        for (const lesson of moduleLessons) {
+          const [newLesson] = await tx.insert(lessons).values({
+            moduleId: newModule.id,
+            title: lesson.title,
+            contentType: lesson.contentType,
+            content: lesson.content,
+            order: lesson.order,
+            durationMinutes: lesson.durationMinutes,
+            points: lesson.points,
+            dripType: lesson.dripType,
+            dripValue: lesson.dripValue,
+            dripDate: lesson.dripDate,
+            visibleTo: lesson.visibleTo,
+            approvalRequired: lesson.approvalRequired,
+            status: 'draft',
+          }).returning();
+
+          const lessonTaskList = await tx
+            .select()
+            .from(lessonTasks)
+            .where(eq(lessonTasks.lessonId, lesson.id))
+            .orderBy(asc(lessonTasks.order));
+
+          for (const task of lessonTaskList) {
+            await tx.insert(lessonTasks).values({
+              lessonId: newLesson.id,
+              title: task.title,
+              description: task.description,
+              order: task.order,
+              responseType: task.responseType,
+              approvalRequired: task.approvalRequired,
+              dueDaysOffset: task.dueDaysOffset,
+              points: task.points,
+              config: task.config,
+              status: 'draft',
+            });
+          }
         }
       }
-    }
+
+      return created;
+    });
 
     return c.json({ data: newProgram }, 201);
   }
@@ -1319,7 +1400,7 @@ const agencyModuleSchema = z.object({
 const agencyLessonSchema = z.object({
   title: z.string().min(1).max(255),
   contentType: z
-    .enum(['lesson', 'quiz', 'assignment', 'text_form', 'goal'])
+    .enum(['lesson', 'quiz', 'assignment', 'text_form', 'goal', 'survey'])
     .default('lesson'),
   content: z.record(z.unknown()).optional(),
   order: z.number().int().optional(),

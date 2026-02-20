@@ -11,7 +11,10 @@ import type {
   AddInvitationsInput,
   AssessmentInvitation,
   ComputedAssessmentResults,
+  AssessmentSetupInfo,
 } from '@/types/assessments';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002';
 
 // ============ Assessment Queries ============
 
@@ -310,6 +313,45 @@ export function useDownloadReport(tenantId: string | undefined) {
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
+    },
+  });
+}
+
+// ============ Subject Setup Portal (Public — no auth) ============
+
+export function useAssessmentSetup(token: string | undefined) {
+  return useQuery({
+    queryKey: ['assessmentSetup', token],
+    queryFn: async () => {
+      const response = await fetch(`${API_BASE}/api/assessments/setup/${token}`);
+      if (!response.ok) throw new Error('Invalid or expired setup link');
+      const json = await response.json() as { data: AssessmentSetupInfo };
+      return json.data;
+    },
+    enabled: !!token,
+    retry: false,
+  });
+}
+
+export function useSubmitSetupRaters(token: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (raters: { firstName: string; lastName: string; email: string; raterType: string }[]) => {
+      const response = await fetch(`${API_BASE}/api/assessments/setup/${token}/raters`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ raters }),
+      });
+      if (!response.ok) {
+        const err = await response.json() as { error?: { message?: string } };
+        throw new Error(err.error?.message || 'Failed to submit raters');
+      }
+      const json = await response.json() as { data: { added: number } };
+      return json.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['assessmentSetup', token] });
     },
   });
 }

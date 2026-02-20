@@ -82,7 +82,7 @@ export interface AssessmentRater {
 
 export interface AssessmentInvitation {
   id: string;
-  raterId: string;
+  raterId: string | null;
   raterType: RaterType;
   status: InvitationStatus;
   accessToken: string | null;
@@ -92,6 +92,7 @@ export interface AssessmentInvitation {
   completedAt: string | null;
   reminderCount: string | null;
   lastReminderAt?: string | null;
+  addedBy?: string;
   rater: AssessmentRater;
 }
 
@@ -99,7 +100,13 @@ export interface Assessment {
   id: string;
   templateId: string;
   tenantId: string;
-  subjectId: string;
+  subjectId: string | null;
+  subjectEmail?: string | null;
+  subjectFirstName?: string | null;
+  subjectLastName?: string | null;
+  subjectSetupToken?: string | null;
+  subjectSetupCompletedAt?: string | null;
+  subjectCanAddRaters?: boolean;
   createdBy: string | null;
   name: string;
   description: string | null;
@@ -113,6 +120,62 @@ export interface Assessment {
   enrollmentId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// ─── Create/Update Input Types ───────────────────────────────────────────────
+
+export interface CreateAssessmentInput {
+  templateId: string;
+  subjectId?: string;
+  subjectEmail?: string;
+  subjectFirstName?: string;
+  subjectLastName?: string;
+  name: string;
+  description?: string;
+  openDate?: string;
+  closeDate?: string;
+  anonymizeResults?: boolean;
+  showResultsToSubject?: boolean;
+  subjectCanAddRaters?: boolean;
+  programId?: string;
+  enrollmentId?: string;
+}
+
+export interface AddInvitationItem {
+  raterId?: string;
+  raterEmail?: string;
+  raterFirstName?: string;
+  raterLastName?: string;
+  raterType: RaterType;
+  addedBy?: 'admin' | 'subject';
+}
+
+export interface AddInvitationsInput {
+  invitations: AddInvitationItem[];
+}
+
+// ─── Setup Portal Types ───────────────────────────────────────────────────────
+
+export interface AssessmentSetupInfo {
+  id: string;
+  name: string;
+  description: string | null;
+  subjectFirstName: string | null;
+  subjectLastName: string | null;
+  subjectEmail: string | null;
+  subjectCanAddRaters: boolean;
+  subjectSetupCompletedAt: string | null;
+  closeDate: string | null;
+  template: { name: string; assessmentType: string } | null;
+  raters: {
+    id: string;
+    raterType: RaterType;
+    status: InvitationStatus;
+    addedBy: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string | null;
+  }[];
 }
 
 export interface AssessmentListItem extends Assessment {
@@ -245,19 +308,6 @@ export interface ComputedAssessmentResults {
 
 // ─── API Input Types ────────────────────────────────────────────────────────
 
-export interface CreateAssessmentInput {
-  templateId: string;
-  subjectId: string;
-  name: string;
-  description?: string;
-  openDate?: string;
-  closeDate?: string;
-  anonymizeResults?: boolean;
-  showResultsToSubject?: boolean;
-  programId?: string;
-  enrollmentId?: string;
-}
-
 export interface UpdateAssessmentInput {
   name?: string;
   description?: string;
@@ -266,13 +316,7 @@ export interface UpdateAssessmentInput {
   closeDate?: string | null;
   anonymizeResults?: boolean;
   showResultsToSubject?: boolean;
-}
-
-export interface AddInvitationsInput {
-  invitations: {
-    raterId: string;
-    raterType: RaterType;
-  }[];
+  subjectCanAddRaters?: boolean;
 }
 
 export interface CreateTemplateInput {

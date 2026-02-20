@@ -18,7 +18,7 @@ import { onboardingRoutes } from './routes/onboarding.js';
 import { agencyEnrollmentsRoutes } from './routes/agency-enrollments.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { agencyTemplatesRoutes } from './routes/agency-templates.js';
-import { assessmentsRoutes } from './routes/assessments.js';
+import { assessmentsRoutes, publicAssessmentSetupRoutes } from './routes/assessments.js';
 import { assessmentResponseRoutes, publicAssessmentRoutes } from './routes/assessment-responses.js';
 import { assessmentBenchmarksRoutes } from './routes/assessment-benchmarks.js';
 import { adminDbRoutes } from './routes/admin/db.js';
@@ -27,6 +27,7 @@ import { cronRoutes } from './routes/cron.js';
 import { mentoringRoutes } from './routes/mentoring.js';
 import { permissionsRoutes } from './routes/permissions.js';
 import { analyticsRoutes } from './routes/analytics.js';
+import { surveysRoutes, agencySurveysRoutes, publicSurveyRoutes } from './routes/surveys.js';
 import type { Variables } from './types/context.js';
 
 // Create Hono app with typed variables
@@ -79,6 +80,12 @@ app.route('/api/cron', cronRoutes);
 // Public assessment response routes (token-based, no auth required)
 app.route('/api/assessments/respond', publicAssessmentRoutes);
 
+// Public assessment setup routes (subject portal, no auth required)
+app.route('/api/assessments/setup', publicAssessmentSetupRoutes);
+
+// Public survey routes (share token, no auth required)
+app.route('/api/surveys', publicSurveyRoutes);
+
 // Protected routes - require authentication
 app.use('/api/*', authMiddleware());
 
@@ -127,6 +134,10 @@ app.route('/api/tenants/:tenantId/permissions', permissionsRoutes);
 
 // Analytics routes (agency + tenant)
 app.route('/api/analytics', analyticsRoutes);
+
+// Survey routes (protected)
+app.route('/api/tenants/:tenantId/surveys', surveysRoutes);
+app.route('/api/agencies/me/surveys', agencySurveysRoutes);
 
 // 404 handler
 app.notFound((c) =>
