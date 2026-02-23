@@ -418,6 +418,7 @@ programsRoutes.post(
         endDate: body.endDate ? new Date(body.endDate) : null,
         timezone: body.timezone,
         config: body.config || {},
+        creationSource: 'wizard',
         createdBy: user.id,
       })
       .returning();
@@ -948,6 +949,7 @@ programsRoutes.post(
         timezone: existing.timezone,
         config: existing.config,
         status: 'draft',
+        creationSource: 'duplicate',
         createdBy: user.id,
       })
       .returning();

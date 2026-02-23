@@ -3,7 +3,8 @@
 > Date: 2026-02-20
 > Scope: Full program creation — wizard, APIs, templates, emails, deep copy
 > Status: 23 issues found (5 critical, 5 high, 9 medium, 4 low)
-> Fixed (2026-02-20): C-01✓, C-02✓, C-03✓, C-05✓, H-01✓, H-02✓, H-03✓, H-04✓, H-05✓, M-01✓, M-02✓, M-04✓, M-05✓, M-06✓, M-07✓, L-01✓, L-03✓, L-04✓ — 18/23 fixed; 4 deferred (C-04, M-03, M-08, L-02); 1 N/A (M-09)
+> Fixed (2026-02-20): C-01✓, C-02✓, C-03✓, C-05✓, H-01✓, H-02✓, H-03✓, H-04✓, H-05✓, M-01✓, M-02✓, M-04✓, M-05✓, M-06✓, M-07✓, L-01✓, L-03✓, L-04✓ — 18/23 fixed
+> Fixed (2026-02-22): C-04✓, L-02✓ — 20/23 fixed; 2 deferred (M-03, M-08); 1 N/A (M-09)
 
 ---
 
@@ -14,7 +15,7 @@
 | 1    | internalName              | ✓                   | ✓             | ✓                                          |
 | 1    | title                     | ✓                   | ✓ (as `name`) | ✓                                          |
 | 1    | description               | ✓                   | ✓             | ✓                                          |
-| 1    | coverImage                | ✓ (UI only)         | ✓             | ✗ upload not implemented                   |
+| 1    | coverImage                | ✓                   | ✓             | ✓ file upload post-creation                |
 | 1    | learningTrack             | ✓                   | ✗ direct      | ✓ via `config` JSONB                       |
 | 2    | objectives (3+)           | ✓                   | ✗ direct      | ✓ via `config.objectives` JSONB            |
 | 3    | programType               | ✓                   | ✓ (as `type`) | ✓                                          |
@@ -57,11 +58,12 @@
 **Problem:** Step 2 collects 3+ learning objectives (`{ id, text }`). The `objectives` array is not in either program creation API schema and is not saved anywhere. No `program_objectives` table exists.
 **Effect:** Objectives disappear after creation. The program overview page has no objectives to display; the field shown in the program detail is likely a static string.
 
-### C-04: Cover Image Upload Not Implemented
+### C-04: Cover Image Upload Not Implemented ✓ Fixed 2026-02-22
 
 **Where:** Wizard Step 1 drag-drop zone
 **Problem:** The UI shows a drag-and-drop image upload zone that accepts PNG/JPG up to 5MB. There is no upload handler, no presigned S3 URL request, and no multipart form submission. The field `coverImageUrl` accepts a text string in the form state but is never sent.
 **Effect:** Programs cannot have cover images. The API field `coverImage` exists in the schema and DB but is always null.
+**Fix:** Wizard Step 1 now has a file upload zone (click to pick, client-side 5MB/image validation). File is stored in browser state during wizard and uploaded via `POST /api/upload/cover/:programId` immediately after program creation. URL paste kept as fallback. Non-blocking — program created even if upload fails.
 
 ### C-05: No Date Validation in Tenant Program Route
 
@@ -115,9 +117,10 @@ Step 3 self-paced path collects `estimatedDuration` (weeks). Not in API schema. 
 
 Programs track `sourceTemplateId` when created from a template. No UI shows which template a program derived from, and no "template lineage" view exists. Cannot track template → derived program relationships.
 
-### M-03: Timezone Not Used Downstream
+### M-03: Timezone Not Used Downstream (Deferred)
 
 `programs.timezone` is saved but not applied to any scheduling logic — lesson due dates, cron jobs, and email sends all use UTC. The timezone field is decorative.
+**Status:** Deferred — no lifecycle cron jobs or scheduled email sends exist yet to consume the timezone. Will be addressed when lifecycle scheduling is implemented.
 
 ### M-04: Default Timezone Hard-Coded as America/New_York
 
@@ -135,9 +138,10 @@ API and `ProgramConfig` support `allowSelfEnrollment`, `requireManagerApproval`,
 
 Closing the wizard mid-way loses all entered data. No auto-save, no localStorage draft, no resume flow.
 
-### M-08: Multi-Tenant allowedTenantIds No UI
+### M-08: Multi-Tenant allowedTenantIds No UI (Deferred)
 
 `POST /api/agencies/me/programs` accepts `allowedTenantIds` array to share a single program across multiple tenants without copying. No UI exposes this; must be set via raw API call.
+**Status:** Deferred — niche agency-only feature. API already supports it; UI would add wizard complexity for an edge case.
 
 ### M-09: Agency Route Creates Program With agencyId but No tenantId by Default
 
@@ -151,9 +155,10 @@ Agency program creation results in a program not scoped to any tenant until expl
 
 No email sent to the creator or any admin when a program is created.
 
-### L-02: No `creationSource` Audit Field
+### L-02: No `creationSource` Audit Field ✓ Fixed 2026-02-22
 
 No way to distinguish programs created via wizard vs. API vs. template vs. duplicate.
+**Fix:** Added `creation_source varchar(30)` column to programs table (migration 0019). Values: `'wizard'` (default), `'template'`, `'duplicate'`, `'assign'`. Set in all 6 program insert handlers across `programs.ts` and `agencies.ts`.
 
 ### L-03: Soft Delete Doesn't Cascade to Children
 

@@ -116,6 +116,9 @@ export const programs = pgTable(
     isTemplate: boolean('is_template').notNull().default(false),
     sourceTemplateId: uuid('source_template_id'),
 
+    // Audit — how the program was created
+    creationSource: varchar('creation_source', { length: 30 }).default('wizard'),
+
     // Tracking
     createdBy: uuid('created_by').references(() => users.id, {
       onDelete: 'set null',

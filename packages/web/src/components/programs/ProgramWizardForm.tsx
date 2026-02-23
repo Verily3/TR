@@ -1,17 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Check, Upload, Sparkles, Info, Clock, RotateCcw } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Check, Upload, Sparkles, Info, Clock, RotateCcw, X } from 'lucide-react';
 import { useCreateAgencyProgram } from '@/hooks/api/useAgencyPrograms';
 import { useCreateProgram } from '@/hooks/api/usePrograms';
 import { useTenants } from '@/hooks/api/useTenants';
+import { api } from '@/lib/api';
 import type { Program } from '@/types/programs';
 import type { WizardStep, WizardFormData } from './wizard-types';
-import {
-  defaultWizardFormData,
-  learningTracks,
-  timeZones,
-} from './wizard-data';
+import { defaultWizardFormData, learningTracks, timeZones } from './wizard-data';
 
 // ============================================
 // Constants
@@ -67,16 +64,28 @@ export function ProgramWizardForm({
     };
   });
   const [draftRestored, setDraftRestored] = useState(() => {
-    try { return !!localStorage.getItem(DRAFT_KEY); } catch { return false; }
+    try {
+      return !!localStorage.getItem(DRAFT_KEY);
+    } catch {
+      return false;
+    }
   });
   const [selectedTenantId, setSelectedTenantId] = useState('');
   const [error, setError] = useState('');
+
+  // Cover image file upload state (separate from formData — File objects can't be serialized to localStorage)
+  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
+  const [coverError, setCoverError] = useState<string | null>(null);
+  const [coverUploading, setCoverUploading] = useState(false);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   const createAgencyProgram = useCreateAgencyProgram();
   const createTenantProgram = useCreateProgram(tenantId);
   const { data: tenants } = useTenants();
 
-  const isPending = createAgencyProgram.isPending || createTenantProgram.isPending;
+  const isPending =
+    createAgencyProgram.isPending || createTenantProgram.isPending || coverUploading;
 
   // Persist draft to localStorage on every change
   useEffect(() => {
@@ -85,8 +94,20 @@ export function ProgramWizardForm({
     } catch {}
   }, [currentStep, formData]);
 
+  // Generate and clean up object URL for cover image preview
+  useEffect(() => {
+    if (coverImageFile) {
+      const url = URL.createObjectURL(coverImageFile);
+      setCoverPreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    setCoverPreviewUrl(null);
+  }, [coverImageFile]);
+
   const clearDraft = () => {
-    try { localStorage.removeItem(DRAFT_KEY); } catch {}
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {}
     setDraftRestored(false);
   };
 
@@ -97,6 +118,8 @@ export function ProgramWizardForm({
       ...defaultWizardFormData,
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || defaultWizardFormData.timeZone,
     });
+    setCoverImageFile(null);
+    setCoverError(null);
   };
 
   // ---- Form helpers ----
@@ -114,9 +137,7 @@ export function ProgramWizardForm({
 
   const updateObjective = (id: string, text: string) => {
     updateFormData({
-      objectives: formData.objectives.map((obj) =>
-        obj.id === id ? { ...obj, text } : obj
-      ),
+      objectives: formData.objectives.map((obj) => (obj.id === id ? { ...obj, text } : obj)),
     });
   };
 
@@ -141,9 +162,12 @@ export function ProgramWizardForm({
     });
   };
 
-  const updateEmailField = (emailId: string, patch: Partial<import('./wizard-types').EmailSetting>) => {
+  const updateEmailField = (
+    emailId: string,
+    patch: Partial<import('./wizard-types').EmailSetting>
+  ) => {
     updateFormData({
-      emailSettings: formData.emailSettings.map((e) => e.id === emailId ? { ...e, ...patch } : e),
+      emailSettings: formData.emailSettings.map((e) => (e.id === emailId ? { ...e, ...patch } : e)),
     });
   };
 
@@ -226,7 +250,8 @@ export function ProgramWizardForm({
       allowIndividualPacing: formData.allowIndividualPacing,
       startOffset: formData.startOffset,
       deadlineFlexibility: formData.deadlineFlexibility,
-      estimatedDuration: formData.programType === 'self_paced' ? formData.estimatedDuration : undefined,
+      estimatedDuration:
+        formData.programType === 'self_paced' ? formData.estimatedDuration : undefined,
       allowSelfEnrollment: formData.allowSelfEnrollment,
       requireManagerApproval: formData.requireManagerApproval,
       programCapacity: formData.programCapacity ?? undefined,
@@ -241,15 +266,30 @@ export function ProgramWizardForm({
         milestones: emailSettingsMap['milestones']?.enabled ?? true,
         completion: emailSettingsMap['completion']?.enabled ?? true,
         mentorSummary: emailSettingsMap['mentorSummary']?.enabled ?? true,
-        mentorSummaryFrequency: emailSettingsMap['mentorSummary']?.mentorSummaryFrequency ?? 'weekly',
-        beforeDueReminders: formData.beforeDueReminders.filter((r) => r.enabled).map((r) => {
-          const days: Record<string, number> = { '2-weeks': 14, '1-week': 7, '3-days': 3, '1-day': 1, 'day-of': 0 };
-          return days[r.id] ?? 0;
-        }),
-        afterDueReminders: formData.afterDueReminders.filter((r) => r.enabled).map((r) => {
-          const days: Record<string, number> = { '1-day-after': 1, '3-days-after': 3, '1-week-after': 7 };
-          return days[r.id] ?? 1;
-        }),
+        mentorSummaryFrequency:
+          emailSettingsMap['mentorSummary']?.mentorSummaryFrequency ?? 'weekly',
+        beforeDueReminders: formData.beforeDueReminders
+          .filter((r) => r.enabled)
+          .map((r) => {
+            const days: Record<string, number> = {
+              '2-weeks': 14,
+              '1-week': 7,
+              '3-days': 3,
+              '1-day': 1,
+              'day-of': 0,
+            };
+            return days[r.id] ?? 0;
+          }),
+        afterDueReminders: formData.afterDueReminders
+          .filter((r) => r.enabled)
+          .map((r) => {
+            const days: Record<string, number> = {
+              '1-day-after': 1,
+              '3-days-after': 3,
+              '1-week-after': 7,
+            };
+            return days[r.id] ?? 1;
+          }),
         subjectOverrides: Object.keys(subjectOverrides).length > 0 ? subjectOverrides : undefined,
         bodyOverrides: Object.keys(bodyOverrides).length > 0 ? bodyOverrides : undefined,
       },
@@ -280,6 +320,21 @@ export function ProgramWizardForm({
       } else {
         created = await createTenantProgram.mutateAsync(baseInput);
       }
+
+      // Upload cover image file if one was selected (non-blocking — program already created)
+      if (coverImageFile) {
+        setCoverUploading(true);
+        try {
+          const fd = new FormData();
+          fd.append('file', coverImageFile);
+          await api.uploadFile(`/api/upload/cover/${created.id}`, fd);
+        } catch {
+          console.warn('Cover image upload failed; program created without cover.');
+        } finally {
+          setCoverUploading(false);
+        }
+      }
+
       clearDraft();
       onSuccess(created);
     } catch (err: unknown) {
@@ -310,11 +365,7 @@ export function ProgramWizardForm({
             </div>
           )}
           {step < 6 && (
-            <div
-              className={`w-8 h-0.5 mx-1 ${
-                step < currentStep ? 'bg-green-200' : 'bg-muted'
-              }`}
-            />
+            <div className={`w-8 h-0.5 mx-1 ${step < currentStep ? 'bg-green-200' : 'bg-muted'}`} />
           )}
         </div>
       ))}
@@ -346,7 +397,8 @@ export function ProgramWizardForm({
             ))}
           </select>
           <p className="text-xs text-muted-foreground mt-1.5">
-            Leave as Agency Level for a program accessible to all clients, or select a specific client.
+            Leave as Agency Level for a program accessible to all clients, or select a specific
+            client.
           </p>
         </div>
       )}
@@ -386,24 +438,97 @@ export function ProgramWizardForm({
         </p>
       </div>
 
-      {/* Cover Image URL */}
+      {/* Cover Image */}
       <div>
         <label className="block text-sm font-medium text-sidebar-foreground mb-2">
           Cover Image
         </label>
-        <div className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-border rounded-lg hover:border-accent/50 transition-colors">
-          <Upload className="w-6 h-6 text-muted-foreground mb-2" />
-          <input
-            type="url"
-            value={formData.coverImageUrl}
-            onChange={(e) => updateFormData({ coverImageUrl: e.target.value })}
-            placeholder="Paste image URL..."
-            className="w-3/4 px-3 py-1.5 bg-white border border-border rounded text-sm text-sidebar-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent text-center"
-          />
-          <p className="text-xs text-muted-foreground mt-1.5">
-            PNG, JPG (Recommended: 1200x600px)
-          </p>
-        </div>
+        <input
+          ref={coverInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            setCoverError(null);
+            if (!file.type.startsWith('image/')) {
+              setCoverError('Please select an image file (JPG, PNG, or WebP).');
+              return;
+            }
+            if (file.size > 5 * 1024 * 1024) {
+              setCoverError(
+                `File is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Maximum is 5 MB.`
+              );
+              return;
+            }
+            setCoverImageFile(file);
+            updateFormData({ coverImageUrl: '' });
+            if (coverInputRef.current) coverInputRef.current.value = '';
+          }}
+        />
+
+        {coverPreviewUrl ? (
+          <div className="relative rounded-lg overflow-hidden border border-border">
+            <img src={coverPreviewUrl} alt="Cover preview" className="w-full h-32 object-cover" />
+            <div className="absolute top-2 right-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => coverInputRef.current?.click()}
+                className="p-1.5 bg-white/90 rounded-lg hover:bg-white text-sidebar-foreground shadow-sm"
+                title="Change cover image"
+              >
+                <Upload className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCoverImageFile(null);
+                  setCoverError(null);
+                }}
+                className="p-1.5 bg-white/90 rounded-lg hover:bg-white text-red-600 shadow-sm"
+                title="Remove cover image"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => coverInputRef.current?.click()}
+            className="w-full flex flex-col items-center justify-center h-32 border-2 border-dashed border-border rounded-lg hover:border-accent/50 transition-colors cursor-pointer"
+          >
+            <Upload className="w-6 h-6 text-muted-foreground mb-2" />
+            <p className="text-sm font-medium text-sidebar-foreground">
+              Click to upload program cover
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              PNG, JPG, WebP up to 5MB (Recommended: 1200x600px)
+            </p>
+          </button>
+        )}
+
+        {coverError && <p className="text-sm text-red-600 mt-1.5">{coverError}</p>}
+
+        {/* URL paste fallback */}
+        {!coverImageFile && (
+          <div className="mt-2">
+            <input
+              type="url"
+              value={formData.coverImageUrl}
+              onChange={(e) => updateFormData({ coverImageUrl: e.target.value })}
+              placeholder="Or paste an image URL..."
+              className="w-full px-3 py-1.5 bg-white border border-border rounded text-sm text-sidebar-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+          </div>
+        )}
+
+        <p className="text-xs text-muted-foreground mt-1.5">
+          {coverImageFile
+            ? 'Image will be uploaded when you create the program'
+            : 'Upload a file or paste a URL'}
+        </p>
       </div>
 
       {/* Description */}
@@ -444,12 +569,10 @@ export function ProgramWizardForm({
         <div className="flex items-start gap-3">
           <Sparkles className="w-5 h-5 text-accent flex-shrink-0 mt-0.5" />
           <div className="flex-1">
-            <h3 className="text-sm font-medium text-sidebar-foreground mb-2">
-              AI Smart Builder
-            </h3>
+            <h3 className="text-sm font-medium text-sidebar-foreground mb-2">AI Smart Builder</h3>
             <p className="text-sm text-muted-foreground mb-3">
-              Let AI analyze your program details and suggest an optimal
-              structure, module sequence, and content outline.
+              Let AI analyze your program details and suggest an optimal structure, module sequence,
+              and content outline.
             </p>
             <button className="text-sm text-accent hover:text-accent/80 font-medium">
               Generate Program Structure →
@@ -479,8 +602,8 @@ export function ProgramWizardForm({
               index === 0
                 ? 'Distinguish between leadership and management responsibilities'
                 : index === 1
-                ? 'Develop self-awareness and emotional intelligence'
-                : 'Build strategic thinking capabilities'
+                  ? 'Develop self-awareness and emotional intelligence'
+                  : 'Build strategic thinking capabilities'
             }`}
             className="w-full px-4 py-2.5 bg-white border border-border rounded-lg text-sidebar-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent resize-none"
           />
@@ -501,9 +624,9 @@ export function ProgramWizardForm({
           <div>
             <h3 className="text-sm font-medium text-blue-900 mb-1">Best Practice</h3>
             <p className="text-sm text-blue-700">
-              Start each objective with an action verb (e.g., &quot;Master,&quot; &quot;Develop,&quot;
-              &quot;Build,&quot; &quot;Navigate&quot;). Focus on measurable outcomes and specific
-              competencies.
+              Start each objective with an action verb (e.g., &quot;Master,&quot;
+              &quot;Develop,&quot; &quot;Build,&quot; &quot;Navigate&quot;). Focus on measurable
+              outcomes and specific competencies.
             </p>
           </div>
         </div>
@@ -518,8 +641,8 @@ export function ProgramWizardForm({
               AI Objective Optimizer
             </h3>
             <p className="text-sm text-muted-foreground mb-3">
-              AI can refine your objectives to make them more specific, measurable,
-              and aligned with best practices.
+              AI can refine your objectives to make them more specific, measurable, and aligned with
+              best practices.
             </p>
             <button className="text-sm text-accent hover:text-accent/80 font-medium">
               Optimize Objectives →
@@ -602,11 +725,13 @@ export function ProgramWizardForm({
           </div>
 
           {/* Date validation error */}
-          {formData.startDate && formData.endDate && new Date(formData.startDate) >= new Date(formData.endDate) && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <span className="text-sm text-red-700">End date must be after start date.</span>
-            </div>
-          )}
+          {formData.startDate &&
+            formData.endDate &&
+            new Date(formData.startDate) >= new Date(formData.endDate) && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+                <span className="text-sm text-red-700">End date must be after start date.</span>
+              </div>
+            )}
 
           {/* Calculated Duration */}
           {calculateDuration() && (
@@ -657,9 +782,7 @@ export function ProgramWizardForm({
                   <input
                     type="number"
                     value={formData.startOffset}
-                    onChange={(e) =>
-                      updateFormData({ startOffset: parseInt(e.target.value) || 0 })
-                    }
+                    onChange={(e) => updateFormData({ startOffset: parseInt(e.target.value) || 0 })}
                     className="w-full px-3 py-2 bg-white border border-border rounded-lg text-sidebar-foreground text-sm focus:outline-none focus:ring-2 focus:ring-accent"
                   />
                 </div>
@@ -705,9 +828,7 @@ export function ProgramWizardForm({
 
       {/* Time Zone */}
       <div>
-        <label className="block text-sm font-medium text-sidebar-foreground mb-2">
-          Time Zone
-        </label>
+        <label className="block text-sm font-medium text-sidebar-foreground mb-2">Time Zone</label>
         <select
           value={formData.timeZone}
           onChange={(e) => updateFormData({ timeZone: e.target.value })}
@@ -732,14 +853,18 @@ export function ProgramWizardForm({
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <div className="text-sm text-sidebar-foreground">Allow Self-Enrollment</div>
-            <div className="text-xs text-muted-foreground mt-0.5">Learners can enroll themselves without an admin</div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Learners can enroll themselves without an admin
+            </div>
           </div>
           <button
             type="button"
             onClick={() => updateFormData({ allowSelfEnrollment: !formData.allowSelfEnrollment })}
             className={`relative w-11 h-6 rounded-full transition-colors ${formData.allowSelfEnrollment ? 'bg-accent' : 'bg-gray-300'}`}
           >
-            <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${formData.allowSelfEnrollment ? 'translate-x-5' : ''}`} />
+            <div
+              className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${formData.allowSelfEnrollment ? 'translate-x-5' : ''}`}
+            />
           </button>
         </div>
 
@@ -748,14 +873,20 @@ export function ProgramWizardForm({
           <div className="flex items-start justify-between pl-4 border-l-2 border-gray-200">
             <div className="flex-1">
               <div className="text-sm text-sidebar-foreground">Require Manager Approval</div>
-              <div className="text-xs text-muted-foreground mt-0.5">Enrollment requests need manager sign-off</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Enrollment requests need manager sign-off
+              </div>
             </div>
             <button
               type="button"
-              onClick={() => updateFormData({ requireManagerApproval: !formData.requireManagerApproval })}
+              onClick={() =>
+                updateFormData({ requireManagerApproval: !formData.requireManagerApproval })
+              }
               className={`relative w-11 h-6 rounded-full transition-colors ${formData.requireManagerApproval ? 'bg-accent' : 'bg-gray-300'}`}
             >
-              <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${formData.requireManagerApproval ? 'translate-x-5' : ''}`} />
+              <div
+                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${formData.requireManagerApproval ? 'translate-x-5' : ''}`}
+              />
             </button>
           </div>
         )}
@@ -764,13 +895,17 @@ export function ProgramWizardForm({
         <div className="flex items-center justify-between">
           <div className="flex-1">
             <div className="text-sm text-sidebar-foreground">Program Capacity</div>
-            <div className="text-xs text-muted-foreground mt-0.5">Maximum number of learners (leave blank for unlimited)</div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Maximum number of learners (leave blank for unlimited)
+            </div>
           </div>
           <input
             type="number"
             min={1}
             value={formData.programCapacity ?? ''}
-            onChange={(e) => updateFormData({ programCapacity: e.target.value ? parseInt(e.target.value) : null })}
+            onChange={(e) =>
+              updateFormData({ programCapacity: e.target.value ? parseInt(e.target.value) : null })
+            }
             placeholder="Unlimited"
             className="w-28 px-3 py-1.5 bg-white border border-border rounded-lg text-sm text-sidebar-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-accent text-right"
           />
@@ -781,14 +916,18 @@ export function ProgramWizardForm({
           <div className="flex items-start justify-between pl-4 border-l-2 border-gray-200">
             <div className="flex-1">
               <div className="text-sm text-sidebar-foreground">Enable Waitlist</div>
-              <div className="text-xs text-muted-foreground mt-0.5">Accept waitlist applications when capacity is full</div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Accept waitlist applications when capacity is full
+              </div>
             </div>
             <button
               type="button"
               onClick={() => updateFormData({ enableWaitlist: !formData.enableWaitlist })}
               className={`relative w-11 h-6 rounded-full transition-colors ${formData.enableWaitlist ? 'bg-accent' : 'bg-gray-300'}`}
             >
-              <div className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${formData.enableWaitlist ? 'translate-x-5' : ''}`} />
+              <div
+                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${formData.enableWaitlist ? 'translate-x-5' : ''}`}
+              />
             </button>
           </div>
         )}
@@ -809,134 +948,159 @@ export function ProgramWizardForm({
         const isCustomizeOpen = expandedEmailCustomize.has(email.id);
         const hasOverride = !!(email.subjectOverride || email.bodyOverride);
         return (
-        <div key={email.id} className="bg-gray-50 border border-border rounded-lg p-4">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-medium text-sidebar-foreground">{email.name}</span>
-                {hasOverride && (
-                  <span className="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded border border-blue-200">Customized</span>
+          <div key={email.id} className="bg-gray-50 border border-border rounded-lg p-4">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-medium text-sidebar-foreground">{email.name}</span>
+                  {hasOverride && (
+                    <span className="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded border border-blue-200">
+                      Customized
+                    </span>
+                  )}
+                </div>
+                <div className="text-sm text-muted-foreground">{email.description}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggleEmailSetting(email.id)}
+                className={`relative w-11 h-6 rounded-full transition-colors ${
+                  email.enabled ? 'bg-accent' : 'bg-gray-300'
+                }`}
+              >
+                <div
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
+                    email.enabled ? 'translate-x-5' : ''
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Timing controls — only when enabled */}
+            {email.enabled && (
+              <div className="mt-3 space-y-2">
+                {email.id === 'weeklyDigest' && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Send on:</span>
+                    <select
+                      value={email.weeklyDigestDay ?? 1}
+                      onChange={(e) =>
+                        updateEmailField(email.id, { weeklyDigestDay: Number(e.target.value) })
+                      }
+                      className="text-xs border border-border rounded px-2 py-1 bg-white"
+                    >
+                      {DAY_NAMES.map((d, i) => (
+                        <option key={d} value={i}>
+                          {d}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {email.id === 'inactivity' && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">After</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={90}
+                      value={email.inactivityDays ?? 7}
+                      onChange={(e) =>
+                        updateEmailField(email.id, { inactivityDays: Number(e.target.value) })
+                      }
+                      className="w-16 text-xs border border-border rounded px-2 py-1 bg-white text-center"
+                    />
+                    <span className="text-xs text-muted-foreground">days of inactivity</span>
+                  </div>
+                )}
+                {email.id === 'mentorSummary' && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Frequency:</span>
+                    <select
+                      value={email.mentorSummaryFrequency ?? 'weekly'}
+                      onChange={(e) =>
+                        updateEmailField(email.id, {
+                          mentorSummaryFrequency: e.target.value as 'weekly' | 'biweekly',
+                        })
+                      }
+                      className="text-xs border border-border rounded px-2 py-1 bg-white"
+                    >
+                      <option value="weekly">Weekly</option>
+                      <option value="biweekly">Biweekly</option>
+                    </select>
+                  </div>
                 )}
               </div>
-              <div className="text-sm text-muted-foreground">{email.description}</div>
-            </div>
-            <button
-              type="button"
-              onClick={() => toggleEmailSetting(email.id)}
-              className={`relative w-11 h-6 rounded-full transition-colors ${
-                email.enabled ? 'bg-accent' : 'bg-gray-300'
-              }`}
-            >
-              <div
-                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
-                  email.enabled ? 'translate-x-5' : ''
-                }`}
-              />
-            </button>
-          </div>
+            )}
 
-          {/* Timing controls — only when enabled */}
-          {email.enabled && (
-            <div className="mt-3 space-y-2">
-              {email.id === 'weeklyDigest' && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">Send on:</span>
-                  <select
-                    value={email.weeklyDigestDay ?? 1}
-                    onChange={(e) => updateEmailField(email.id, { weeklyDigestDay: Number(e.target.value) })}
-                    className="text-xs border border-border rounded px-2 py-1 bg-white"
-                  >
-                    {DAY_NAMES.map((d, i) => <option key={d} value={i}>{d}</option>)}
-                  </select>
-                </div>
-              )}
-              {email.id === 'inactivity' && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">After</span>
+            {/* Customize subject & body */}
+            {email.enabled && (
+              <button
+                type="button"
+                onClick={() => toggleEmailCustomize(email.id)}
+                className="mt-3 flex items-center gap-1 text-xs text-muted-foreground hover:text-sidebar-foreground transition-colors"
+              >
+                <span>{isCustomizeOpen ? '▾' : '▸'}</span>
+                Customize subject &amp; body
+              </button>
+            )}
+            {email.enabled && isCustomizeOpen && (
+              <div className="mt-3 space-y-3 pl-3 border-l-2 border-gray-200">
+                <div>
+                  <label className="block text-xs font-medium text-sidebar-foreground mb-1">
+                    Subject line
+                  </label>
                   <input
-                    type="number"
-                    min={1}
-                    max={90}
-                    value={email.inactivityDays ?? 7}
-                    onChange={(e) => updateEmailField(email.id, { inactivityDays: Number(e.target.value) })}
-                    className="w-16 text-xs border border-border rounded px-2 py-1 bg-white text-center"
+                    type="text"
+                    value={email.subjectOverride ?? ''}
+                    onChange={(e) =>
+                      updateEmailField(email.id, { subjectOverride: e.target.value || undefined })
+                    }
+                    placeholder="Leave blank to use agency/system default"
+                    className="w-full text-xs border border-border rounded px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-accent"
                   />
-                  <span className="text-xs text-muted-foreground">days of inactivity</span>
                 </div>
-              )}
-              {email.id === 'mentorSummary' && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">Frequency:</span>
-                  <select
-                    value={email.mentorSummaryFrequency ?? 'weekly'}
-                    onChange={(e) => updateEmailField(email.id, { mentorSummaryFrequency: e.target.value as 'weekly' | 'biweekly' })}
-                    className="text-xs border border-border rounded px-2 py-1 bg-white"
+                <div>
+                  <label className="block text-xs font-medium text-sidebar-foreground mb-1">
+                    Body copy
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={email.bodyOverride ?? ''}
+                    onChange={(e) =>
+                      updateEmailField(email.id, { bodyOverride: e.target.value || undefined })
+                    }
+                    placeholder="Leave blank to use agency/system default"
+                    className="w-full text-xs border border-border rounded px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-accent resize-none"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    Use <code>[Name]</code>, <code>[Program]</code> etc. as placeholders.
+                  </p>
+                </div>
+                {hasOverride && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateEmailField(email.id, {
+                        subjectOverride: undefined,
+                        bodyOverride: undefined,
+                      })
+                    }
+                    className="text-xs text-muted-foreground hover:text-red-600 transition-colors"
                   >
-                    <option value="weekly">Weekly</option>
-                    <option value="biweekly">Biweekly</option>
-                  </select>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Customize subject & body */}
-          {email.enabled && (
-            <button
-              type="button"
-              onClick={() => toggleEmailCustomize(email.id)}
-              className="mt-3 flex items-center gap-1 text-xs text-muted-foreground hover:text-sidebar-foreground transition-colors"
-            >
-              <span>{isCustomizeOpen ? '▾' : '▸'}</span>
-              Customize subject &amp; body
-            </button>
-          )}
-          {email.enabled && isCustomizeOpen && (
-            <div className="mt-3 space-y-3 pl-3 border-l-2 border-gray-200">
-              <div>
-                <label className="block text-xs font-medium text-sidebar-foreground mb-1">Subject line</label>
-                <input
-                  type="text"
-                  value={email.subjectOverride ?? ''}
-                  onChange={(e) => updateEmailField(email.id, { subjectOverride: e.target.value || undefined })}
-                  placeholder="Leave blank to use agency/system default"
-                  className="w-full text-xs border border-border rounded px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-accent"
-                />
+                    Reset to default
+                  </button>
+                )}
               </div>
-              <div>
-                <label className="block text-xs font-medium text-sidebar-foreground mb-1">Body copy</label>
-                <textarea
-                  rows={3}
-                  value={email.bodyOverride ?? ''}
-                  onChange={(e) => updateEmailField(email.id, { bodyOverride: e.target.value || undefined })}
-                  placeholder="Leave blank to use agency/system default"
-                  className="w-full text-xs border border-border rounded px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-accent resize-none"
-                />
-                <p className="text-[10px] text-muted-foreground mt-0.5">
-                  Use <code>[Name]</code>, <code>[Program]</code> etc. as placeholders.
-                </p>
-              </div>
-              {hasOverride && (
-                <button
-                  type="button"
-                  onClick={() => updateEmailField(email.id, { subjectOverride: undefined, bodyOverride: undefined })}
-                  className="text-xs text-muted-foreground hover:text-red-600 transition-colors"
-                >
-                  Reset to default
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+            )}
+          </div>
         );
       })}
 
       {/* Lesson Due Date Reminders */}
       <div className="bg-gray-50 border border-border rounded-lg p-4">
         <div className="flex-1 mb-3">
-          <div className="font-medium text-sidebar-foreground mb-1">
-            Lesson Due Date Reminders
-          </div>
+          <div className="font-medium text-sidebar-foreground mb-1">Lesson Due Date Reminders</div>
           <div className="text-sm text-muted-foreground">
             Automated reminders before and after lesson due dates
           </div>
@@ -1069,15 +1233,11 @@ export function ProgramWizardForm({
     <div className="space-y-4">
       {/* Basic Information Summary */}
       <div className="bg-white border border-border rounded-lg p-4">
-        <h3 className="text-sm font-medium text-sidebar-foreground mb-3">
-          Basic Information
-        </h3>
+        <h3 className="text-sm font-medium text-sidebar-foreground mb-3">Basic Information</h3>
         <div className="space-y-2 text-sm">
           <div className="flex">
             <span className="text-muted-foreground w-32">Title:</span>
-            <span className="text-sidebar-foreground">
-              {formData.title || 'Not specified'}
-            </span>
+            <span className="text-sidebar-foreground">{formData.title || 'Not specified'}</span>
           </div>
           {formData.internalName && (
             <div className="flex">
@@ -1102,9 +1262,7 @@ export function ProgramWizardForm({
 
       {/* Learning Objectives Summary */}
       <div className="bg-white border border-border rounded-lg p-4">
-        <h3 className="text-sm font-medium text-sidebar-foreground mb-3">
-          Learning Objectives
-        </h3>
+        <h3 className="text-sm font-medium text-sidebar-foreground mb-3">Learning Objectives</h3>
         <ul className="space-y-1.5 text-sm text-sidebar-foreground list-disc list-inside">
           {formData.objectives
             .filter((obj) => obj.text)
@@ -1119,9 +1277,7 @@ export function ProgramWizardForm({
 
       {/* Schedule Summary */}
       <div className="bg-white border border-border rounded-lg p-4">
-        <h3 className="text-sm font-medium text-sidebar-foreground mb-3">
-          Schedule & Dates
-        </h3>
+        <h3 className="text-sm font-medium text-sidebar-foreground mb-3">Schedule & Dates</h3>
         <div className="space-y-2 text-sm">
           {formData.programType === 'cohort' ? (
             <>
@@ -1147,9 +1303,7 @@ export function ProgramWizardForm({
           ) : (
             <div className="flex">
               <span className="text-muted-foreground w-32">Est. Duration:</span>
-              <span className="text-sidebar-foreground">
-                {formData.estimatedDuration} weeks
-              </span>
+              <span className="text-sidebar-foreground">{formData.estimatedDuration} weeks</span>
             </div>
           )}
         </div>
@@ -1157,17 +1311,12 @@ export function ProgramWizardForm({
 
       {/* Communication Summary */}
       <div className="bg-white border border-border rounded-lg p-4">
-        <h3 className="text-sm font-medium text-sidebar-foreground mb-3">
-          Communication Settings
-        </h3>
+        <h3 className="text-sm font-medium text-sidebar-foreground mb-3">Communication Settings</h3>
         <div className="flex flex-wrap gap-2">
           {formData.emailSettings
             .filter((e) => e.enabled)
             .map((email) => (
-              <span
-                key={email.id}
-                className="px-2 py-1 bg-accent/10 text-accent rounded text-xs"
-              >
+              <span key={email.id} className="px-2 py-1 bg-accent/10 text-accent rounded text-xs">
                 {email.name}
               </span>
             ))}
@@ -1176,9 +1325,7 @@ export function ProgramWizardForm({
 
       {/* Target Audience Summary */}
       <div className="bg-white border border-border rounded-lg p-4">
-        <h3 className="text-sm font-medium text-sidebar-foreground mb-3">
-          Target Audience
-        </h3>
+        <h3 className="text-sm font-medium text-sidebar-foreground mb-3">Target Audience</h3>
         <p className="text-sm text-sidebar-foreground">
           {formData.targetAudience || 'Not specified'}
         </p>
@@ -1186,9 +1333,7 @@ export function ProgramWizardForm({
 
       {/* Error */}
       {error && (
-        <div className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2.5">
-          {error}
-        </div>
+        <div className="text-sm text-red-600 bg-red-50 rounded-lg px-4 py-2.5">{error}</div>
       )}
     </div>
   );

@@ -25,7 +25,8 @@ function createApp(throwFn: () => never) {
 
 async function getErrorBody(app: Hono, path = '/test') {
   const res = await app.request(path);
-  return { status: res.status, body: await res.json() };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return { status: res.status, body: (await res.json()) as any };
 }
 
 // Suppress console.error during tests

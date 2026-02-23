@@ -1,0 +1,1 @@
+ALTER TABLE "programs" ADD COLUMN "creation_source" varchar(30) DEFAULT 'wizard';

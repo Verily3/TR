@@ -710,6 +710,7 @@ agenciesRoutes.post(
         endDate: body.endDate ? new Date(body.endDate) : null,
         timezone: body.timezone,
         config: body.config || {},
+        creationSource: 'wizard',
         createdBy: user.id,
       })
       .returning();
@@ -976,6 +977,7 @@ agenciesRoutes.post(
           status: 'draft',
           isTemplate: false,
           sourceTemplateId: null,
+          creationSource: 'duplicate',
           createdBy: user.id,
         })
         .returning();
@@ -1155,6 +1157,7 @@ agenciesRoutes.post(
           status: 'draft',
           isTemplate: false,
           sourceTemplateId: template.id,
+          creationSource: 'template',
           createdBy: user.id,
         })
         .returning();
@@ -1317,6 +1320,7 @@ agenciesRoutes.post(
           status: 'draft',
           isTemplate: false,
           sourceTemplateId: sourceProgram.id,
+          creationSource: 'assign',
           createdBy: user.id,
         })
         .returning();
