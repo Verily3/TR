@@ -964,11 +964,13 @@ export async function generateAssessmentReport(assessmentId: string): Promise<Bu
   if (!template) throw new Error(`Template ${assessment.templateId} not found`);
 
   // 3. Fetch subject
-  const [subject] = await db
-    .select({ firstName: users.firstName, lastName: users.lastName, title: users.title })
-    .from(users)
-    .where(eq(users.id, assessment.subjectId))
-    .limit(1);
+  const [subject] = assessment.subjectId
+    ? await db
+        .select({ firstName: users.firstName, lastName: users.lastName, title: users.title })
+        .from(users)
+        .where(eq(users.id, assessment.subjectId))
+        .limit(1)
+    : [];
 
   // 4. Build report data
   const reportData: ReportData = {
@@ -984,6 +986,7 @@ export async function generateAssessmentReport(assessmentId: string): Promise<Bu
 
   // 5. Render PDF
   const pdfBuffer = await renderToBuffer(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- renderToBuffer expects ReactElement<DocumentProps> but createElement returns ReactElement<unknown>
     React.createElement(AssessmentReportDocument, { data: reportData }) as any
   );
 

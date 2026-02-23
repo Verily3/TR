@@ -32,26 +32,15 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg">
         <div>
-          <h1 className="text-2xl font-bold text-center text-gray-900">
-            Transformation OS
-          </h1>
-          <p className="mt-2 text-center text-gray-600">
-            Sign in to your account
-          </p>
+          <h1 className="text-2xl font-bold text-center text-gray-900">Results Tracking System</h1>
+          <p className="mt-2 text-center text-gray-600">Sign in to your account</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {error && (
-            <div className="p-3 text-sm text-red-600 bg-red-50 rounded-lg">
-              {error}
-            </div>
-          )}
+          {error && <div className="p-3 text-sm text-red-600 bg-red-50 rounded-lg">{error}</div>}
 
           <div>
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-gray-700"
-            >
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
               Email
             </label>
             <input
@@ -66,10 +55,7 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium text-gray-700"
-            >
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
               Password
             </label>
             <input
@@ -94,7 +80,10 @@ export default function LoginPage() {
           </div>
 
           <div className="text-center">
-            <Link href="/forgot-password" className="text-sm text-gray-500 hover:text-red-600 transition-colors">
+            <Link
+              href="/forgot-password"
+              className="text-sm text-gray-500 hover:text-red-600 transition-colors"
+            >
               Forgot your password?
             </Link>
           </div>

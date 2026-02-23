@@ -26,9 +26,7 @@ export default function ForgotPasswordPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg">
         <div>
-          <h1 className="text-2xl font-bold text-center text-gray-900">
-            Transformation OS
-          </h1>
+          <h1 className="text-2xl font-bold text-center text-gray-900">Results Tracking System</h1>
           <p className="mt-2 text-center text-gray-600">
             {submitted ? 'Check your email' : 'Reset your password'}
           </p>
@@ -38,7 +36,8 @@ export default function ForgotPasswordPage() {
           <div className="text-center space-y-4">
             <div className="p-4 bg-green-50 rounded-lg">
               <p className="text-sm text-green-800">
-                If an account exists for <strong>{email}</strong>, we've sent a password reset link. Check your inbox — it expires in 1 hour.
+                If an account exists for <strong>{email}</strong>, we've sent a password reset link.
+                Check your inbox — it expires in 1 hour.
               </p>
             </div>
             <Link

@@ -1,5 +1,5 @@
 /**
- * Permission-related types for Transformation OS
+ * Permission-related types for Results Tracking System
  */
 
 import type { Permission } from '../constants/permissions.js';

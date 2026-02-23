@@ -2,7 +2,7 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: transformation_os
+      POSTGRES_DB: results_tracking_system
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
@@ -21,18 +21,26 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3003:8080"
+    # Load secrets from .env.docker if present (overrides defaults below)
+    env_file:
+      - path: .env.docker
+        required: false
     environment:
-      DATABASE_URL: postgres://postgres:postgres@db:5432/transformation_os
-      JWT_ACCESS_SECRET: docker-dev-access-secret-minimum-32-characters!!
-      JWT_REFRESH_SECRET: docker-dev-refresh-secret-minimum-32-characters!!
+      DATABASE_URL: postgres://postgres:postgres@db:5432/results_tracking_system
+      # Dev-only defaults — override via .env.docker in any shared environment
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-docker-dev-access-secret-minimum-32-characters!!}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-docker-dev-refresh-secret-minimum-32-characters!!}
       API_PORT: "3002"
       WEB_URL: http://localhost:3003
       PORT: "8080"
       NODE_ENV: production
       RUN_MIGRATIONS: "true"
+    volumes:
+      - uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
 
 volumes:
   pgdata:
+  uploads:

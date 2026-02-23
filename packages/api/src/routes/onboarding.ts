@@ -41,13 +41,13 @@ const ONBOARDING_STEPS = {
     { id: 'goals', title: 'Goals', description: 'Set your initial goals' },
   ],
   full_platform: [
-    { id: 'welcome', title: 'Welcome', description: 'Welcome to Transformation OS' },
+    { id: 'welcome', title: 'Welcome', description: 'Welcome to Results Tracking System' },
     { id: 'profile', title: 'Profile', description: 'Complete your profile' },
     { id: 'organization', title: 'Organization', description: 'Set up your organization' },
     { id: 'team', title: 'Team', description: 'Invite your team' },
     { id: 'programs', title: 'Programs', description: 'Explore available programs' },
     { id: 'goals', title: 'Goals', description: 'Set your initial goals' },
-    { id: 'complete', title: 'Complete', description: 'You\'re all set!' },
+    { id: 'complete', title: 'Complete', description: "You're all set!" },
   ],
 };
 
@@ -180,93 +180,89 @@ onboardingRoutes.get('/resume', async (c) => {
  * PUT /api/onboarding/progress
  * Auto-save onboarding progress
  */
-onboardingRoutes.put(
-  '/progress',
-  zValidator('json', updateProgressSchema),
-  async (c) => {
-    const user = c.get('user');
-    const body = c.req.valid('json');
-    const programId = c.req.query('programId');
+onboardingRoutes.put('/progress', zValidator('json', updateProgressSchema), async (c) => {
+  const user = c.get('user');
+  const body = c.req.valid('json');
+  const programId = c.req.query('programId');
 
-    // Check for existing progress
-    const [existing] = await db
-      .select()
-      .from(onboardingProgress)
-      .where(
-        and(
-          eq(onboardingProgress.userId, user.id),
-          programId
-            ? eq(onboardingProgress.programId, programId)
-            : isNull(onboardingProgress.programId)
-        )
+  // Check for existing progress
+  const [existing] = await db
+    .select()
+    .from(onboardingProgress)
+    .where(
+      and(
+        eq(onboardingProgress.userId, user.id),
+        programId
+          ? eq(onboardingProgress.programId, programId)
+          : isNull(onboardingProgress.programId)
       )
-      .limit(1);
+    )
+    .limit(1);
 
-    // Determine onboarding type
-    const onboardingType = await determineOnboardingType(
-      user.id,
-      user.tenantId || undefined,
-      programId
-    );
+  // Determine onboarding type
+  const onboardingType = await determineOnboardingType(
+    user.id,
+    user.tenantId || undefined,
+    programId
+  );
 
-    const now = new Date();
+  const now = new Date();
 
-    if (existing) {
-      // Update existing progress
-      const updateData: Partial<typeof existing> = {
-        currentStep: body.currentStep,
-        lastActivityAt: now,
-        updatedAt: now,
-      };
+  if (existing) {
+    // Update existing progress
+    const updateData: Partial<typeof existing> = {
+      currentStep: body.currentStep,
+      lastActivityAt: now,
+      updatedAt: now,
+    };
 
-      if (body.completedSteps) {
-        updateData.completedSteps = body.completedSteps;
-      }
-
-      if (body.formData) {
-        // Merge form data (don't replace entirely)
-        updateData.formData = {
-          ...(existing.formData || {}),
-          ...body.formData,
-        };
-      }
-
-      if (body.status) {
-        updateData.status = body.status;
-        if (body.status === 'completed') {
-          updateData.completedAt = now;
-        }
-      }
-
-      const [updated] = await db
-        .update(onboardingProgress)
-        .set(updateData)
-        .where(eq(onboardingProgress.id, existing.id))
-        .returning();
-
-      return c.json({ data: updated });
-    } else {
-      // Create new progress record
-      const [created] = await db
-        .insert(onboardingProgress)
-        .values({
-          userId: user.id,
-          tenantId: user.tenantId,
-          programId: programId || null,
-          onboardingType,
-          currentStep: body.currentStep,
-          completedSteps: body.completedSteps || [],
-          formData: body.formData || {},
-          status: body.status || 'in_progress',
-          startedAt: now,
-          lastActivityAt: now,
-        })
-        .returning();
-
-      return c.json({ data: created }, 201);
+    if (body.completedSteps) {
+      updateData.completedSteps = body.completedSteps;
     }
+
+    if (body.formData) {
+      // Merge form data (don't replace entirely)
+      updateData.formData = {
+        ...(existing.formData || {}),
+        ...body.formData,
+      };
+    }
+
+    if (body.status) {
+      updateData.status = body.status;
+      if (body.status === 'completed') {
+        updateData.completedAt = now;
+      }
+    }
+
+    const [updated] = await db
+      .update(onboardingProgress)
+      .set(updateData)
+      .where(eq(onboardingProgress.id, existing.id))
+      .returning();
+
+    return c.json({ data: updated });
+  } else {
+    // Create new progress record
+    const [created] = await db
+      .insert(onboardingProgress)
+      .values({
+        userId: user.id,
+        tenantId: user.tenantId,
+        programId: programId || null,
+        onboardingType,
+        currentStep: body.currentStep,
+        completedSteps: body.completedSteps || [],
+        formData: body.formData || {},
+        status: body.status || 'in_progress',
+        startedAt: now,
+        lastActivityAt: now,
+      })
+      .returning();
+
+    return c.json({ data: created }, 201);
   }
-);
+});
 
 /**
  * POST /api/onboarding/complete

@@ -34,7 +34,11 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { useAgency, useAgencyStats, useAgencyUsers, useUpdateAgency } from '@/hooks/api/useAgency';
-import { useAgencyEmailConfig, useUpdateAgencyEmailConfig, type AgencyEmailConfig } from '@/hooks/api/useAgencyEmailConfig';
+import {
+  useAgencyEmailConfig,
+  useUpdateAgencyEmailConfig,
+  type AgencyEmailConfig,
+} from '@/hooks/api/useAgencyEmailConfig';
 import { useTenants } from '@/hooks/api/useTenants';
 import { useUsers, type TenantUser } from '@/hooks/api/useUsers';
 import {
@@ -53,7 +57,14 @@ import { CreateUserModal } from '@/components/agency/CreateUserModal';
 import { ChangeRoleModal } from '@/components/agency/ChangeRoleModal';
 import { ImpersonateUserModal } from '@/components/agency/ImpersonateUserModal';
 
-type Tab = 'overview' | 'clients' | 'people' | 'templates' | 'branding' | 'communications' | 'billing';
+type Tab =
+  | 'overview'
+  | 'clients'
+  | 'people'
+  | 'templates'
+  | 'branding'
+  | 'communications'
+  | 'billing';
 
 const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'overview', label: 'Overview', icon: <TrendingUp className="w-4 h-4" /> },
@@ -68,7 +79,15 @@ const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
 export default function AgencyPage() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
-  const validTabs: Tab[] = ['overview', 'clients', 'people', 'templates', 'branding', 'communications', 'billing'];
+  const validTabs: Tab[] = [
+    'overview',
+    'clients',
+    'people',
+    'templates',
+    'branding',
+    'communications',
+    'billing',
+  ];
   const [activeTab, setActiveTab] = useState<Tab>(() => {
     const t = searchParams.get('tab') as Tab | null;
     return t && validTabs.includes(t) ? t : 'overview';
@@ -114,9 +133,7 @@ export default function AgencyPage() {
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 px-4 py-2 rounded text-sm transition-colors whitespace-nowrap ${
-              activeTab === tab.id
-                ? 'bg-red-600 text-white'
-                : 'text-gray-700 hover:bg-white'
+              activeTab === tab.id ? 'bg-red-600 text-white' : 'text-gray-700 hover:bg-white'
             }`}
           >
             {tab.icon}
@@ -200,7 +217,8 @@ function OverviewTab({ onSwitchTab }: { onSwitchTab: (tab: Tab) => void }) {
           <div className="text-3xl font-bold text-gray-900">
             {stats?.activeTenants && stats?.totalTenants
               ? Math.round((stats.activeTenants / stats.totalTenants) * 100)
-              : 0}%
+              : 0}
+            %
           </div>
           <div className="text-sm text-gray-500">Active Rate</div>
         </div>
@@ -233,9 +251,7 @@ function OverviewTab({ onSwitchTab }: { onSwitchTab: (tab: Tab) => void }) {
                     </div>
                     <div>
                       <div className="font-medium text-gray-900">{client.name}</div>
-                      <div className="text-sm text-gray-500">
-                        {client.userCount ?? 0} users
-                      </div>
+                      <div className="text-sm text-gray-500">{client.userCount ?? 0} users</div>
                     </div>
                   </div>
                   <TenantStatusBadge status={client.status} />
@@ -257,9 +273,7 @@ function OverviewTab({ onSwitchTab }: { onSwitchTab: (tab: Tab) => void }) {
                 <span className="font-medium text-green-700">Active Clients</span>
               </div>
               <div className="text-2xl font-bold text-green-700">{stats?.activeTenants ?? 0}</div>
-              <div className="text-xs text-green-600 mt-1">
-                of {stats?.totalTenants ?? 0} total
-              </div>
+              <div className="text-xs text-green-600 mt-1">of {stats?.totalTenants ?? 0} total</div>
             </div>
 
             <div className="p-4 bg-blue-50 rounded-lg">
@@ -306,7 +320,9 @@ function ClientsTab() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Client Management</h2>
-          <p className="text-sm text-gray-500">Manage your client organizations and subscriptions</p>
+          <p className="text-sm text-gray-500">
+            Manage your client organizations and subscriptions
+          </p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
@@ -379,18 +395,31 @@ function ClientsTab() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50/50">
-                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Client</th>
-                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Industry</th>
-                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Users</th>
-                  <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Client
+                  </th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
+                    Industry
+                  </th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                    Users
+                  </th>
+                  <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {filtered.map((tenant) => (
                   <tr key={tenant.id} className="hover:bg-gray-50 transition-colors">
                     <td className="py-4 px-4">
-                      <Link href={`/agency/clients/${tenant.id}`} className="flex items-center gap-3 group">
+                      <Link
+                        href={`/agency/clients/${tenant.id}`}
+                        className="flex items-center gap-3 group"
+                      >
                         <div className="w-10 h-10 rounded-lg bg-red-50 text-red-600 flex items-center justify-center font-medium text-sm shrink-0">
                           {tenant.name.slice(0, 2).toUpperCase()}
                         </div>
@@ -470,9 +499,12 @@ function PeopleTab() {
     email: string;
   } | null>(null);
 
-  const activeTenantId = selectedTenant !== 'all' && selectedTenant !== 'agency'
-    ? selectedTenant
-    : (tenants && tenants.length > 0 ? tenants[0].id : undefined);
+  const activeTenantId =
+    selectedTenant !== 'all' && selectedTenant !== 'agency'
+      ? selectedTenant
+      : tenants && tenants.length > 0
+        ? tenants[0].id
+        : undefined;
 
   const { data: tenantUsersResponse } = useUsers(
     selectedTenant === 'agency' ? undefined : activeTenantId,
@@ -530,7 +562,9 @@ function PeopleTab() {
             <option value="all">All</option>
             <option value="agency">Agency Staff</option>
             {(tenants || []).map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
             ))}
           </select>
           <select
@@ -567,11 +601,21 @@ function PeopleTab() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50">
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Organization</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Status</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  User
+                </th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
+                  Organization
+                </th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Role
+                </th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
+                  Status
+                </th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -596,12 +640,14 @@ function PeopleTab() {
                     <div className="flex items-center justify-end gap-3">
                       {u.tenantId && (
                         <button
-                          onClick={() => setImpersonateUser({
-                            id: u.id,
-                            firstName: u.firstName,
-                            lastName: u.lastName,
-                            email: u.email,
-                          })}
+                          onClick={() =>
+                            setImpersonateUser({
+                              id: u.id,
+                              firstName: u.firstName,
+                              lastName: u.lastName,
+                              email: u.email,
+                            })
+                          }
                           className="text-sm text-amber-600 hover:text-amber-700 font-medium"
                         >
                           Login As
@@ -609,12 +655,14 @@ function PeopleTab() {
                       )}
                       {u.tenantId && (
                         <button
-                          onClick={() => setChangeRoleUser({
-                            userId: u.id,
-                            userName: `${u.firstName} ${u.lastName}`,
-                            currentRole: u.roleSlug,
-                            tenantId: u.tenantId,
-                          })}
+                          onClick={() =>
+                            setChangeRoleUser({
+                              userId: u.id,
+                              userName: `${u.firstName} ${u.lastName}`,
+                              currentRole: u.roleSlug,
+                              tenantId: u.tenantId,
+                            })
+                          }
                           className="text-sm text-red-600 hover:text-red-700 font-medium"
                         >
                           Change Role
@@ -666,18 +714,23 @@ function PeopleTab() {
 
 function defaultConfig(assessmentType: '180' | '360' | 'custom'): TemplateConfig {
   return {
-    competencies: [{
-      id: crypto.randomUUID(),
-      name: 'Leadership Effectiveness',
-      questions: [{ id: crypto.randomUUID(), text: 'Demonstrates strong leadership capabilities' }],
-    }],
+    competencies: [
+      {
+        id: crypto.randomUUID(),
+        name: 'Leadership Effectiveness',
+        questions: [
+          { id: crypto.randomUUID(), text: 'Demonstrates strong leadership capabilities' },
+        ],
+      },
+    ],
     scaleMin: 1,
     scaleMax: 5,
     scaleLabels: ['Strongly Disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly Agree'],
     allowComments: true,
     requireComments: false,
     anonymizeResponses: true,
-    raterTypes: assessmentType === '180' ? ['self', 'manager'] : ['self', 'manager', 'peer', 'direct_report'],
+    raterTypes:
+      assessmentType === '180' ? ['self', 'manager'] : ['self', 'manager', 'peer', 'direct_report'],
   };
 }
 
@@ -768,26 +821,39 @@ function TemplatesTab() {
     custom: 'bg-teal-100 text-teal-700',
   };
   const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; classes: string }> = {
-    published: { label: 'Published', icon: <CheckCircle2 className="w-3 h-3" />, classes: 'bg-green-100 text-green-700' },
-    draft:     { label: 'Draft',     icon: <Clock className="w-3 h-3" />,         classes: 'bg-yellow-100 text-yellow-700' },
-    archived:  { label: 'Archived',  icon: <Archive className="w-3 h-3" />,       classes: 'bg-gray-100 text-gray-500' },
+    published: {
+      label: 'Published',
+      icon: <CheckCircle2 className="w-3 h-3" />,
+      classes: 'bg-green-100 text-green-700',
+    },
+    draft: {
+      label: 'Draft',
+      icon: <Clock className="w-3 h-3" />,
+      classes: 'bg-yellow-100 text-yellow-700',
+    },
+    archived: {
+      label: 'Archived',
+      icon: <Archive className="w-3 h-3" />,
+      classes: 'bg-gray-100 text-gray-500',
+    },
   };
 
   const STATUS_TABS: { id: StatusFilter; label: string }[] = [
-    { id: 'all',       label: `All (${stats?.total ?? 0})` },
+    { id: 'all', label: `All (${stats?.total ?? 0})` },
     { id: 'published', label: `Published (${stats?.published ?? 0})` },
-    { id: 'draft',     label: `Draft (${stats?.draft ?? 0})` },
-    { id: 'archived',  label: `Archived (${stats?.archived ?? 0})` },
+    { id: 'draft', label: `Draft (${stats?.draft ?? 0})` },
+    { id: 'archived', label: `Archived (${stats?.archived ?? 0})` },
   ];
 
   return (
     <div className="space-y-6">
-
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Assessment Templates</h2>
-          <p className="text-sm text-gray-500">Build and publish 180° / 360° templates for your clients</p>
+          <p className="text-sm text-gray-500">
+            Build and publish 180° / 360° templates for your clients
+          </p>
         </div>
         <button
           onClick={() => openCreateModal()}
@@ -800,12 +866,35 @@ function TemplatesTab() {
       {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total', value: stats?.total ?? 0, icon: <FileText className="w-4 h-4 text-red-600" />, bg: 'bg-red-50' },
-          { label: 'Published', value: stats?.published ?? 0, icon: <CheckCircle2 className="w-4 h-4 text-green-600" />, bg: 'bg-green-50' },
-          { label: 'Draft', value: stats?.draft ?? 0, icon: <Clock className="w-4 h-4 text-yellow-600" />, bg: 'bg-yellow-50' },
-          { label: 'Archived', value: stats?.archived ?? 0, icon: <Archive className="w-4 h-4 text-gray-500" />, bg: 'bg-gray-100' },
+          {
+            label: 'Total',
+            value: stats?.total ?? 0,
+            icon: <FileText className="w-4 h-4 text-red-600" />,
+            bg: 'bg-red-50',
+          },
+          {
+            label: 'Published',
+            value: stats?.published ?? 0,
+            icon: <CheckCircle2 className="w-4 h-4 text-green-600" />,
+            bg: 'bg-green-50',
+          },
+          {
+            label: 'Draft',
+            value: stats?.draft ?? 0,
+            icon: <Clock className="w-4 h-4 text-yellow-600" />,
+            bg: 'bg-yellow-50',
+          },
+          {
+            label: 'Archived',
+            value: stats?.archived ?? 0,
+            icon: <Archive className="w-4 h-4 text-gray-500" />,
+            bg: 'bg-gray-100',
+          },
         ].map((s) => (
-          <div key={s.label} className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-3">
+          <div
+            key={s.label}
+            className="bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-3"
+          >
             <div className={`p-2 rounded-lg ${s.bg} flex-shrink-0`}>{s.icon}</div>
             <div>
               <div className="text-xl font-bold text-gray-900">{s.value}</div>
@@ -899,10 +988,14 @@ function TemplatesTab() {
                     <div className="min-w-0">
                       <p className="font-medium text-gray-900 truncate">{t.name}</p>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_COLORS[t.assessmentType]}`}>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_COLORS[t.assessmentType]}`}
+                        >
                           {TYPE_LABELS[t.assessmentType]}
                         </span>
-                        <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${sc.classes}`}>
+                        <span
+                          className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${sc.classes}`}
+                        >
                           {sc.icon} {sc.label}
                         </span>
                       </div>
@@ -912,7 +1005,10 @@ function TemplatesTab() {
                   {/* Actions menu */}
                   <div className="relative flex-shrink-0">
                     <button
-                      onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === t.id ? null : t.id); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuId(openMenuId === t.id ? null : t.id);
+                      }}
                       className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
                     >
                       <MoreVertical className="w-4 h-4" />
@@ -922,7 +1018,10 @@ function TemplatesTab() {
                         <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)} />
                         <div className="absolute right-0 top-8 z-20 w-44 bg-white rounded-xl border border-gray-200 shadow-lg py-1 text-sm">
                           <button
-                            onClick={() => { setOpenMenuId(null); router.push(`/agency/assessments/${t.id}`); }}
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              router.push(`/agency/assessments/${t.id}`);
+                            }}
                             className="w-full text-left px-3 py-2 hover:bg-gray-50 text-gray-700"
                           >
                             Edit template
@@ -942,14 +1041,20 @@ function TemplatesTab() {
                             {t.status === 'archived' ? 'Restore to draft' : 'Archive'}
                           </button>
                           <button
-                            onClick={() => { setOpenMenuId(null); void duplicateTemplate.mutateAsync(t.id); }}
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              void duplicateTemplate.mutateAsync(t.id);
+                            }}
                             className="w-full text-left px-3 py-2 hover:bg-gray-50 text-gray-700 flex items-center gap-2"
                           >
                             <Copy className="w-3.5 h-3.5" /> Duplicate
                           </button>
                           <hr className="my-1 border-gray-100" />
                           <button
-                            onClick={() => { setOpenMenuId(null); void handleDelete(t); }}
+                            onClick={() => {
+                              setOpenMenuId(null);
+                              void handleDelete(t);
+                            }}
                             className="w-full text-left px-3 py-2 hover:bg-red-50 text-red-600 flex items-center gap-2"
                           >
                             <Trash2 className="w-3.5 h-3.5" /> Delete
@@ -968,7 +1073,8 @@ function TemplatesTab() {
                 {/* Footer */}
                 <div className="flex items-center justify-between pt-3 border-t border-gray-100">
                   <span className="text-xs text-gray-400">
-                    {compCount} {compCount === 1 ? 'competency' : 'competencies'} · {qCount} questions
+                    {compCount} {compCount === 1 ? 'competency' : 'competencies'} · {qCount}{' '}
+                    questions
                   </span>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-400">Updated {formatDate(t.updatedAt)}</span>
@@ -993,13 +1099,18 @@ function TemplatesTab() {
           <div className="relative bg-white rounded-xl shadow-xl border border-gray-200 w-full max-w-md">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
               <h3 className="text-base font-semibold text-gray-900">New Assessment Template</h3>
-              <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-600">
+              <button
+                onClick={() => setShowCreate(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
                 ×
               </button>
             </div>
             <div className="px-5 py-5 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Template name <span className="text-red-500">*</span></label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Template name <span className="text-red-500">*</span>
+                </label>
                 <input
                   autoFocus
                   value={newName}
@@ -1010,7 +1121,9 @@ function TemplatesTab() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Assessment type</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Assessment type
+                </label>
                 <select
                   value={newType}
                   onChange={(e) => setNewType(e.target.value as '360' | '180' | 'custom')}
@@ -1022,7 +1135,9 @@ function TemplatesTab() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description <span className="text-gray-400 font-normal">(optional)</span></label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
                 <textarea
                   value={newDesc}
                   onChange={(e) => setNewDesc(e.target.value)}
@@ -1130,7 +1245,9 @@ function BrandingTab() {
         </div>
         <div className="flex items-center gap-3">
           {saveMessage && (
-            <span className={`text-sm ${saveMessage.includes('Failed') ? 'text-red-600' : 'text-green-600'}`}>
+            <span
+              className={`text-sm ${saveMessage.includes('Failed') ? 'text-red-600' : 'text-green-600'}`}
+            >
               {saveMessage}
             </span>
           )}
@@ -1178,7 +1295,10 @@ function BrandingTab() {
                 <input
                   type="text"
                   value={companyName}
-                  onChange={(e) => { setCompanyName(e.target.value); setHasChanges(true); }}
+                  onChange={(e) => {
+                    setCompanyName(e.target.value);
+                    setHasChanges(true);
+                  }}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
                 />
               </div>
@@ -1206,8 +1326,14 @@ function BrandingTab() {
                         : 'border-gray-200 hover:border-red-300'
                     }`}
                   >
-                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: preset.primary }} />
-                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: preset.accent }} />
+                    <div
+                      className="w-4 h-4 rounded-full"
+                      style={{ backgroundColor: preset.primary }}
+                    />
+                    <div
+                      className="w-4 h-4 rounded-full"
+                      style={{ backgroundColor: preset.accent }}
+                    />
                     <span className="text-sm text-gray-700">{preset.name}</span>
                   </button>
                 ))}
@@ -1216,18 +1342,26 @@ function BrandingTab() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">Primary Color</label>
+                <label className="block text-sm font-medium text-gray-900 mb-2">
+                  Primary Color
+                </label>
                 <div className="flex items-center gap-3">
                   <input
                     type="color"
                     value={primaryColor}
-                    onChange={(e) => { setPrimaryColor(e.target.value); setHasChanges(true); }}
+                    onChange={(e) => {
+                      setPrimaryColor(e.target.value);
+                      setHasChanges(true);
+                    }}
                     className="w-12 h-12 rounded-lg border border-gray-300 cursor-pointer"
                   />
                   <input
                     type="text"
                     value={primaryColor}
-                    onChange={(e) => { setPrimaryColor(e.target.value); setHasChanges(true); }}
+                    onChange={(e) => {
+                      setPrimaryColor(e.target.value);
+                      setHasChanges(true);
+                    }}
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-mono text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
                   />
                 </div>
@@ -1238,13 +1372,19 @@ function BrandingTab() {
                   <input
                     type="color"
                     value={accentColor}
-                    onChange={(e) => { setAccentColor(e.target.value); setHasChanges(true); }}
+                    onChange={(e) => {
+                      setAccentColor(e.target.value);
+                      setHasChanges(true);
+                    }}
                     className="w-12 h-12 rounded-lg border border-gray-300 cursor-pointer"
                   />
                   <input
                     type="text"
                     value={accentColor}
-                    onChange={(e) => { setAccentColor(e.target.value); setHasChanges(true); }}
+                    onChange={(e) => {
+                      setAccentColor(e.target.value);
+                      setHasChanges(true);
+                    }}
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-lg font-mono text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
                   />
                 </div>
@@ -1265,7 +1405,10 @@ function BrandingTab() {
               <input
                 type="text"
                 value={domain}
-                onChange={(e) => { setDomain(e.target.value); setHasChanges(true); }}
+                onChange={(e) => {
+                  setDomain(e.target.value);
+                  setHasChanges(true);
+                }}
                 placeholder="app.yourcompany.com"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg text-sm placeholder:text-gray-400 focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
               />
@@ -1282,7 +1425,10 @@ function BrandingTab() {
             <h3 className="text-lg font-medium text-gray-900 mb-4">Preview</h3>
 
             {/* Mini Preview */}
-            <div className="border border-gray-200 rounded-lg overflow-hidden" style={{ backgroundColor: primaryColor }}>
+            <div
+              className="border border-gray-200 rounded-lg overflow-hidden"
+              style={{ backgroundColor: primaryColor }}
+            >
               {/* Header */}
               <div className="p-3 border-b border-white/10">
                 <div className="flex items-center gap-2">
@@ -1367,7 +1513,8 @@ const EMAIL_TYPE_DEFINITIONS: EmailTypeDefinition[] = [
     description: 'Sent to raters when they are invited to complete an assessment.',
     group: 'Assessment',
     defaultSubject: "You've been invited to complete an assessment",
-    defaultBody: "Hi [Name], [Assessor] has invited you to complete the [Assessment] assessment. Your honest feedback helps support professional growth and development. The assessment should take about 10–15 minutes to complete.",
+    defaultBody:
+      'Hi [Name], [Assessor] has invited you to complete the [Assessment] assessment. Your honest feedback helps support professional growth and development. The assessment should take about 10–15 minutes to complete.',
     transactional: true,
   },
   {
@@ -1376,7 +1523,8 @@ const EMAIL_TYPE_DEFINITIONS: EmailTypeDefinition[] = [
     description: 'Sent to the assessment subject when they are selected.',
     group: 'Assessment',
     defaultSubject: "You've been selected as a subject for an assessment",
-    defaultBody: "Hi [Name], you have been selected as the subject for the [Assessment] assessment. Click below to review the details and add your reviewers.",
+    defaultBody:
+      'Hi [Name], you have been selected as the subject for the [Assessment] assessment. Click below to review the details and add your reviewers.',
     transactional: true,
   },
   {
@@ -1385,7 +1533,8 @@ const EMAIL_TYPE_DEFINITIONS: EmailTypeDefinition[] = [
     description: 'Sent to raters who have not yet completed their response.',
     group: 'Assessment',
     defaultSubject: 'Reminder: Your assessment response is due',
-    defaultBody: "Hi [Name], this is a friendly reminder that you have a pending [Assessment] assessment. Your response is still needed. It only takes 10–15 minutes and makes a real difference.",
+    defaultBody:
+      'Hi [Name], this is a friendly reminder that you have a pending [Assessment] assessment. Your response is still needed. It only takes 10–15 minutes and makes a real difference.',
   },
   // Program
   {
@@ -1394,7 +1543,8 @@ const EMAIL_TYPE_DEFINITIONS: EmailTypeDefinition[] = [
     description: 'Sent to participants when they are enrolled in a program.',
     group: 'Program',
     defaultSubject: "You've been enrolled in [Program]",
-    defaultBody: "Hi [Name], you've been enrolled in [Program]. We're excited to have you on this journey. Click below to view your program and get started.",
+    defaultBody:
+      "Hi [Name], you've been enrolled in [Program]. We're excited to have you on this journey. Click below to view your program and get started.",
   },
   {
     id: 'kickoff',
@@ -1402,15 +1552,17 @@ const EMAIL_TYPE_DEFINITIONS: EmailTypeDefinition[] = [
     description: "Sent on the program's start date to all active participants.",
     group: 'Program',
     defaultSubject: '[Program] starts today',
-    defaultBody: "Hi [Name], [Program] is officially underway. Your first module is ready and waiting. Log in to get started — your facilitator and fellow participants are ready to go.",
+    defaultBody:
+      'Hi [Name], [Program] is officially underway. Your first module is ready and waiting. Log in to get started — your facilitator and fellow participants are ready to go.',
   },
   {
     id: 'weeklyDigest',
     name: 'Weekly Progress Digest',
-    description: 'Sent weekly summarising each participant\'s progress.',
+    description: "Sent weekly summarising each participant's progress.",
     group: 'Program',
     defaultSubject: 'Your weekly progress in [Program]',
-    defaultBody: "Hi [Name], here's your progress update for [Program]: [Progress]% overall, [Modules] modules completed, [Points] points earned. Keep up the great work.",
+    defaultBody:
+      "Hi [Name], here's your progress update for [Program]: [Progress]% overall, [Modules] modules completed, [Points] points earned. Keep up the great work.",
   },
   {
     id: 'inactivity',
@@ -1418,7 +1570,8 @@ const EMAIL_TYPE_DEFINITIONS: EmailTypeDefinition[] = [
     description: 'Sent to participants who have not logged in for a configured number of days.',
     group: 'Program',
     defaultSubject: 'We miss you — pick up where you left off',
-    defaultBody: "Hi [Name], you haven't logged into [Program] in [Days] days. Your progress is saved and your next module is ready whenever you are.",
+    defaultBody:
+      "Hi [Name], you haven't logged into [Program] in [Days] days. Your progress is saved and your next module is ready whenever you are.",
   },
   {
     id: 'milestones',
@@ -1426,7 +1579,8 @@ const EMAIL_TYPE_DEFINITIONS: EmailTypeDefinition[] = [
     description: 'Sent when a participant reaches 25%, 50%, 75%, or 100% completion.',
     group: 'Program',
     defaultSubject: "You've reached [N]% in [Program]!",
-    defaultBody: "Hi [Name], congratulations on your progress! You've reached [N]% completion in [Program]. Keep going!",
+    defaultBody:
+      "Hi [Name], congratulations on your progress! You've reached [N]% completion in [Program]. Keep going!",
   },
   {
     id: 'completion',
@@ -1434,7 +1588,8 @@ const EMAIL_TYPE_DEFINITIONS: EmailTypeDefinition[] = [
     description: 'Sent when a participant completes the entire program.',
     group: 'Program',
     defaultSubject: "Congratulations! You've completed [Program]",
-    defaultBody: "Hi [Name], congratulations on completing [Program]! This is a significant achievement. Your certificate and results are available in your account.",
+    defaultBody:
+      'Hi [Name], congratulations on completing [Program]! This is a significant achievement. Your certificate and results are available in your account.',
   },
   {
     id: 'mentorSummary',
@@ -1442,7 +1597,8 @@ const EMAIL_TYPE_DEFINITIONS: EmailTypeDefinition[] = [
     description: "Sent weekly or biweekly to mentors with their mentees' progress.",
     group: 'Program',
     defaultSubject: 'Weekly mentee progress summary',
-    defaultBody: "Hi [Name], here's a summary of your mentees' progress this week. Click below to view detailed activity and session notes.",
+    defaultBody:
+      "Hi [Name], here's a summary of your mentees' progress this week. Click below to view detailed activity and session notes.",
   },
   // Auth & System
   {
@@ -1450,8 +1606,9 @@ const EMAIL_TYPE_DEFINITIONS: EmailTypeDefinition[] = [
     name: 'User Welcome & Password Setup',
     description: 'Sent when a new user account is created.',
     group: 'Auth & System',
-    defaultSubject: 'Welcome to Transformation OS — Set your password',
-    defaultBody: "Hi [Name], your account has been created on Transformation OS. Click the button below to set your password and access your account. This link expires in 72 hours.",
+    defaultSubject: 'Welcome to Results Tracking System — Set your password',
+    defaultBody:
+      'Hi [Name], your account has been created on Results Tracking System. Click the button below to set your password and access your account. This link expires in 72 hours.',
     transactional: true,
   },
   {
@@ -1460,12 +1617,17 @@ const EMAIL_TYPE_DEFINITIONS: EmailTypeDefinition[] = [
     description: 'Sent when a user requests a password reset.',
     group: 'Auth & System',
     defaultSubject: 'Reset your password',
-    defaultBody: "Hi [Name], we received a request to reset your password. Click the button below to choose a new one. This link expires in 1 hour.",
+    defaultBody:
+      'Hi [Name], we received a request to reset your password. Click the button below to choose a new one. This link expires in 1 hour.',
     transactional: true,
   },
 ];
 
-const EMAIL_GROUPS: Array<EmailTypeDefinition['group']> = ['Assessment', 'Program', 'Auth & System'];
+const EMAIL_GROUPS: Array<EmailTypeDefinition['group']> = [
+  'Assessment',
+  'Program',
+  'Auth & System',
+];
 
 function buildPreviewHtml(subject: string, body: string): string {
   return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
@@ -1480,13 +1642,13 @@ function buildPreviewHtml(subject: string, body: string): string {
     .footer{background:#f9fafb;border-radius:0 0 12px 12px;padding:16px 28px;border-top:1px solid #e5e7eb;}
     .footer p{margin:0;color:#9ca3af;font-size:11px;line-height:1.6;}
   </style></head><body><div class="wrap">
-    <div class="header"><p>Transformation OS</p></div>
+    <div class="header"><p>Results Tracking System</p></div>
     <div class="body">
       <h1>${subject}</h1>
       <p>${body.replace(/\[(\w+)\]/g, '<em style="color:#6b7280">[<strong>$1</strong>]</em>')}</p>
       <a class="btn" href="#">Action Button</a>
     </div>
-    <div class="footer"><p>You're receiving this because you have an account on Transformation OS.<br>© ${new Date().getFullYear()} Transformation OS. All rights reserved.</p></div>
+    <div class="footer"><p>You're receiving this because you have an account on Results Tracking System.<br>© ${new Date().getFullYear()} Results Tracking System. All rights reserved.</p></div>
   </div></body></html>`;
 }
 
@@ -1544,7 +1706,9 @@ function CommunicationsTab() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        {[...Array(4)].map((_, i) => <div key={i} className="h-28 bg-gray-100 rounded-xl animate-pulse" />)}
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="h-28 bg-gray-100 rounded-xl animate-pulse" />
+        ))}
       </div>
     );
   }
@@ -1556,12 +1720,15 @@ function CommunicationsTab() {
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Email Communications</h2>
           <p className="text-sm text-gray-500">
-            Configure default email content, enable/disable types, and lock settings for all programs.
+            Configure default email content, enable/disable types, and lock settings for all
+            programs.
           </p>
         </div>
         <div className="flex items-center gap-3">
           {saveMessage && (
-            <span className={`text-sm ${saveMessage.includes('Failed') ? 'text-red-600' : 'text-green-600'}`}>
+            <span
+              className={`text-sm ${saveMessage.includes('Failed') ? 'text-red-600' : 'text-green-600'}`}
+            >
               {saveMessage}
             </span>
           )}
@@ -1571,7 +1738,11 @@ function CommunicationsTab() {
               disabled={updateConfig.isPending}
               className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50"
             >
-              {updateConfig.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {updateConfig.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
               Save Changes
             </button>
           )}
@@ -1584,7 +1755,10 @@ function CommunicationsTab() {
           {EMAIL_GROUPS.map((group) => {
             const types = EMAIL_TYPE_DEFINITIONS.filter((d) => d.group === group);
             return (
-              <div key={group} className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+              <div
+                key={group}
+                className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden"
+              >
                 <div className="px-5 py-3 bg-gray-50 border-b border-gray-200">
                   <h3 className="text-sm font-semibold text-gray-700">{group}</h3>
                 </div>
@@ -1603,7 +1777,9 @@ function CommunicationsTab() {
                         <div className="flex items-start gap-3">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-0.5">
-                              <span className="text-sm font-semibold text-gray-900">{typeDef.name}</span>
+                              <span className="text-sm font-semibold text-gray-900">
+                                {typeDef.name}
+                              </span>
                               {typeDef.transactional && (
                                 <span className="text-xs px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full border border-amber-200">
                                   Transactional
@@ -1632,9 +1808,15 @@ function CommunicationsTab() {
                             {!typeDef.transactional && (
                               <div className="flex flex-col items-center gap-0.5">
                                 <button
-                                  onClick={() => updateType(typeDef.id, { mandatory: !isMandatory })}
+                                  onClick={() =>
+                                    updateType(typeDef.id, { mandatory: !isMandatory })
+                                  }
                                   className={`p-1.5 rounded transition-colors ${isMandatory ? 'text-amber-600 bg-amber-50' : 'text-gray-300 hover:text-gray-500'}`}
-                                  title={isMandatory ? 'Mandatory — programs cannot disable' : 'Click to make mandatory'}
+                                  title={
+                                    isMandatory
+                                      ? 'Mandatory — programs cannot disable'
+                                      : 'Click to make mandatory'
+                                  }
                                 >
                                   <Lock className="w-3.5 h-3.5" />
                                 </button>
@@ -1649,9 +1831,13 @@ function CommunicationsTab() {
                                   onClick={() => updateType(typeDef.id, { enabled: !isEnabled })}
                                   className={`relative w-10 h-5 rounded-full transition-colors ${isEnabled ? 'bg-red-600' : 'bg-gray-300'}`}
                                 >
-                                  <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${isEnabled ? 'translate-x-5' : ''}`} />
+                                  <div
+                                    className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${isEnabled ? 'translate-x-5' : ''}`}
+                                  />
                                 </button>
-                                <span className="text-[10px] text-gray-400">{isEnabled ? 'Default on' : 'Default off'}</span>
+                                <span className="text-[10px] text-gray-400">
+                                  {isEnabled ? 'Default on' : 'Default off'}
+                                </span>
                               </div>
                             )}
                           </div>
@@ -1662,7 +1848,11 @@ function CommunicationsTab() {
                           onClick={() => toggleExpanded(typeDef.id)}
                           className="mt-3 flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 transition-colors"
                         >
-                          {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                          {isExpanded ? (
+                            <ChevronDown className="w-3.5 h-3.5" />
+                          ) : (
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          )}
                           Customize subject &amp; body
                         </button>
 
@@ -1670,31 +1860,42 @@ function CommunicationsTab() {
                         {isExpanded && (
                           <div className="mt-3 space-y-3 pl-4 border-l-2 border-gray-100">
                             <div>
-                              <label className="block text-xs font-medium text-gray-600 mb-1">Subject line</label>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">
+                                Subject line
+                              </label>
                               <input
                                 type="text"
                                 value={cfg.subject ?? ''}
-                                onChange={(e) => updateType(typeDef.id, { subject: e.target.value || undefined })}
+                                onChange={(e) =>
+                                  updateType(typeDef.id, { subject: e.target.value || undefined })
+                                }
                                 placeholder={typeDef.defaultSubject}
                                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400"
                               />
                             </div>
                             <div>
-                              <label className="block text-xs font-medium text-gray-600 mb-1">Body copy</label>
+                              <label className="block text-xs font-medium text-gray-600 mb-1">
+                                Body copy
+                              </label>
                               <textarea
                                 rows={4}
                                 value={cfg.body ?? ''}
-                                onChange={(e) => updateType(typeDef.id, { body: e.target.value || undefined })}
+                                onChange={(e) =>
+                                  updateType(typeDef.id, { body: e.target.value || undefined })
+                                }
                                 placeholder={typeDef.defaultBody}
                                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 resize-none"
                               />
                               <p className="text-[10px] text-gray-400 mt-1">
-                                Use <code>[Name]</code>, <code>[Program]</code>, <code>[Assessment]</code> etc. as placeholders.
+                                Use <code>[Name]</code>, <code>[Program]</code>,{' '}
+                                <code>[Assessment]</code> etc. as placeholders.
                               </p>
                             </div>
                             {(hasCustomSubject || hasCustomBody) && (
                               <button
-                                onClick={() => updateType(typeDef.id, { subject: undefined, body: undefined })}
+                                onClick={() =>
+                                  updateType(typeDef.id, { subject: undefined, body: undefined })
+                                }
                                 className="text-xs text-gray-400 hover:text-red-600 transition-colors"
                               >
                                 Reset to default
@@ -1723,7 +1924,9 @@ function CommunicationsTab() {
                   className="text-xs border border-gray-200 rounded px-2 py-1 bg-white focus:outline-none"
                 >
                   {EMAIL_TYPE_DEFINITIONS.map((d) => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -1731,17 +1934,27 @@ function CommunicationsTab() {
                 <div className="text-xs text-gray-500 mb-2 font-medium truncate">
                   Subject: <span className="text-gray-800">{previewSubject}</span>
                 </div>
-                <div className="rounded-lg overflow-hidden border border-gray-200" style={{ height: 420 }}>
+                <div
+                  className="rounded-lg overflow-hidden border border-gray-200"
+                  style={{ height: 420 }}
+                >
                   <iframe
                     srcDoc={buildPreviewHtml(previewSubject, previewBody)}
                     className="w-full h-full"
-                    style={{ transform: 'scale(0.85)', transformOrigin: 'top left', width: '118%', height: '118%' }}
+                    style={{
+                      transform: 'scale(0.85)',
+                      transformOrigin: 'top left',
+                      width: '118%',
+                      height: '118%',
+                    }}
                     title="Email preview"
                     sandbox="allow-same-origin"
                   />
                 </div>
                 {(previewCfg.subject || previewCfg.body) && (
-                  <p className="text-[10px] text-blue-600 mt-2 text-center">Showing customized content</p>
+                  <p className="text-[10px] text-blue-600 mt-2 text-center">
+                    Showing customized content
+                  </p>
                 )}
               </div>
             </div>
@@ -1762,7 +1975,9 @@ function BillingTab() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Billing & Revenue</h2>
-          <p className="text-sm text-gray-500">Track revenue, manage subscriptions, and view transaction history</p>
+          <p className="text-sm text-gray-500">
+            Track revenue, manage subscriptions, and view transaction history
+          </p>
         </div>
       </div>
 
@@ -1773,8 +1988,8 @@ function BillingTab() {
         </div>
         <h3 className="text-xl font-semibold text-gray-900 mb-2">Billing Coming Soon</h3>
         <p className="text-gray-500 max-w-md mx-auto mb-6">
-          We&apos;re building powerful billing and revenue tracking tools. You&apos;ll be able to manage subscriptions,
-          view transaction history, and track revenue by tier.
+          We&apos;re building powerful billing and revenue tracking tools. You&apos;ll be able to
+          manage subscriptions, view transaction history, and track revenue by tier.
         </p>
         <div className="flex items-center justify-center gap-8 text-sm text-gray-500">
           <div className="flex items-center gap-2">

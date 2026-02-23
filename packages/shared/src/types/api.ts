@@ -1,5 +1,5 @@
 /**
- * API request/response types for Transformation OS
+ * API request/response types for Results Tracking System
  */
 
 /**

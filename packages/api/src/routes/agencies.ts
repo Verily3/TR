@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { eq, and, isNull, sql, desc, asc, or } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 import { hash } from 'argon2';
 import crypto from 'node:crypto';
 import { db, schema } from '@tr/db';
@@ -12,9 +13,21 @@ import type { Variables } from '../types/context.js';
 import type { PaginationMeta } from '@tr/shared';
 import { sendUserWelcome, sendProgramCreated } from '../lib/email.js';
 import { invalidateAgencyEmailConfigCache } from '../lib/email-resolver.js';
+import { resolveFileUrl } from '../lib/storage.js';
 import { env } from '../lib/env.js';
 
-const { agencies, tenants, users, programs, modules, lessons, enrollments, roles, userRoles, lessonTasks } = schema;
+const {
+  agencies,
+  tenants,
+  users,
+  programs,
+  modules,
+  lessons,
+  enrollments,
+  roles,
+  userRoles,
+  lessonTasks,
+} = schema;
 
 export const agenciesRoutes = new Hono<{ Variables: Variables }>();
 
@@ -28,9 +41,7 @@ agenciesRoutes.get('/me', requireAgencyAccess(), async (c) => {
   const [agency] = await db
     .select()
     .from(agencies)
-    .where(
-      and(eq(agencies.id, user.agencyId!), isNull(agencies.deletedAt))
-    )
+    .where(and(eq(agencies.id, user.agencyId!), isNull(agencies.deletedAt)))
     .limit(1);
 
   if (!agency) {
@@ -46,18 +57,22 @@ const updateAgencySchema = z.object({
   primaryColor: z.string().max(7).optional(),
   accentColor: z.string().max(7).optional(),
   domain: z.string().max(255).nullable().optional(),
-  settings: z.object({
-    allowClientProgramCreation: z.boolean().optional(),
-    maxClients: z.number().optional(),
-    maxUsersPerClient: z.number().optional(),
-    features: z.object({
-      programs: z.boolean().optional(),
-      assessments: z.boolean().optional(),
-      mentoring: z.boolean().optional(),
-      goals: z.boolean().optional(),
-      analytics: z.boolean().optional(),
-    }).optional(),
-  }).optional(),
+  settings: z
+    .object({
+      allowClientProgramCreation: z.boolean().optional(),
+      maxClients: z.number().optional(),
+      maxUsersPerClient: z.number().optional(),
+      features: z
+        .object({
+          programs: z.boolean().optional(),
+          assessments: z.boolean().optional(),
+          mentoring: z.boolean().optional(),
+          goals: z.boolean().optional(),
+          analytics: z.boolean().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 
 /**
@@ -103,7 +118,7 @@ agenciesRoutes.get('/me/email-config', requireAgencyAccess(), async (c) => {
     .where(eq(agencies.id, user.agencyId!))
     .limit(1);
 
-  return c.json({ data: (agency?.emailConfig ?? {}) });
+  return c.json({ data: agency?.emailConfig ?? {} });
 });
 
 /**
@@ -114,9 +129,21 @@ agenciesRoutes.put(
   '/me/email-config',
   requireAgencyAccess(),
   requirePermission(PERMISSIONS.AGENCY_MANAGE),
+  zValidator(
+    'json',
+    z
+      .object({
+        fromName: z.string().max(100).optional(),
+        fromEmail: z.string().email().optional(),
+        replyTo: z.string().email().optional(),
+        footerText: z.string().max(500).optional(),
+        logoUrl: z.string().max(2000).optional(),
+      })
+      .passthrough()
+  ),
   async (c) => {
     const user = c.get('user');
-    const body = await c.req.json();
+    const body = c.req.valid('json');
 
     // Load existing config and deep-merge
     const [current] = await db
@@ -126,7 +153,7 @@ agenciesRoutes.put(
       .limit(1);
 
     const existingConfig = (current?.emailConfig ?? {}) as Record<string, unknown>;
-    const merged = { ...existingConfig, ...body };
+    const merged = { ...existingConfig, ...body } as typeof agencies.$inferInsert.emailConfig;
 
     const [updated] = await db
       .update(agencies)
@@ -166,13 +193,7 @@ agenciesRoutes.get('/me/stats', requireAgencyAccess(), async (c) => {
     .from(users)
     .leftJoin(tenants, eq(users.tenantId, tenants.id))
     .where(
-      and(
-        isNull(users.deletedAt),
-        or(
-          eq(users.agencyId, agencyId),
-          eq(tenants.agencyId, agencyId)
-        )
-      )
+      and(isNull(users.deletedAt), or(eq(users.agencyId, agencyId), eq(tenants.agencyId, agencyId)))
     );
 
   return c.json({
@@ -236,9 +257,7 @@ agenciesRoutes.get(
         )`,
       })
       .from(users)
-      .where(
-        and(eq(users.agencyId, user.agencyId!), isNull(users.deletedAt))
-      )
+      .where(and(eq(users.agencyId, user.agencyId!), isNull(users.deletedAt)))
       .orderBy(desc(users.createdAt));
 
     return c.json({ data: results });
@@ -266,10 +285,7 @@ agenciesRoutes.get(
     const { search, limit, tenantId, includeUnaffiliated } = c.req.valid('query');
 
     // Build base conditions
-    const conditions: (ReturnType<typeof and> | ReturnType<typeof eq> | ReturnType<typeof isNull> | ReturnType<typeof sql>)[] = [
-      isNull(users.deletedAt),
-      eq(users.status, 'active'),
-    ];
+    const conditions: SQL<unknown>[] = [isNull(users.deletedAt), eq(users.status, 'active')];
 
     // Optional search filter
     if (search) {
@@ -313,7 +329,7 @@ agenciesRoutes.get(
       .innerJoin(tenants, eq(users.tenantId, tenants.id))
       .where(
         and(
-          ...(conditions as any[]),
+          ...conditions,
           or(
             eq(tenants.agencyId, user.agencyId!),
             and(isNull(users.tenantId), eq(users.agencyId, user.agencyId!))
@@ -328,10 +344,14 @@ agenciesRoutes.get(
 );
 
 const createAgencyUserSchema = z.object({
-  email: z.string().email().max(255),
+  email: z
+    .string()
+    .email()
+    .max(255)
+    .transform((v) => v.toLowerCase().trim()),
   firstName: z.string().min(1).max(100),
   lastName: z.string().min(1).max(100),
-  password: z.string().min(8).max(100).optional(),
+  password: z.string().min(12).max(100).optional(),
   title: z.string().max(200).optional(),
   role: z.enum(['agency_admin', 'agency_owner']),
 });
@@ -375,12 +395,7 @@ agenciesRoutes.post(
     const [role] = await db
       .select()
       .from(roles)
-      .where(
-        and(
-          eq(roles.slug, body.role),
-          eq(roles.agencyId, currentUser.agencyId!)
-        )
-      )
+      .where(and(eq(roles.slug, body.role), eq(roles.agencyId, currentUser.agencyId!)))
       .limit(1);
 
     if (!role) {
@@ -429,17 +444,20 @@ agenciesRoutes.post(
       });
     }
 
-    return c.json({
-      data: {
-        ...result,
-        passwordHash: undefined,
-        passwordResetToken: undefined,
-        passwordResetExpiresAt: undefined,
-        roleSlug: body.role,
-        roleName: role.name,
-        roleLevel: role.level,
+    return c.json(
+      {
+        data: {
+          ...result,
+          passwordHash: undefined,
+          passwordResetToken: undefined,
+          passwordResetExpiresAt: undefined,
+          roleSlug: body.role,
+          roleName: role.name,
+          roleLevel: role.level,
+        },
       },
-    }, 201);
+      201
+    );
   }
 );
 
@@ -464,7 +482,21 @@ const createAgencyProgramSchema = z.object({
   coverImage: z.string().optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
-  timezone: z.string().max(50).optional(),
+  timezone: z
+    .string()
+    .max(50)
+    .refine(
+      (tz) => {
+        try {
+          Intl.DateTimeFormat(undefined, { timeZone: tz });
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      { message: 'Invalid IANA timezone' }
+    )
+    .optional(),
   // Optional: restrict to specific tenant
   tenantId: z.string().uuid().optional(),
   // Optional: allow multiple tenants to participate
@@ -504,10 +536,7 @@ agenciesRoutes.get(
     const user = c.get('user');
     const { page, limit, status, type, isTemplate } = c.req.valid('query');
 
-    const conditions = [
-      eq(programs.agencyId, user.agencyId!),
-      isNull(programs.deletedAt),
-    ];
+    const conditions = [eq(programs.agencyId, user.agencyId!), isNull(programs.deletedAt)];
 
     if (status) {
       conditions.push(eq(programs.status, status));
@@ -606,7 +635,15 @@ agenciesRoutes.get(
       hasPrev: page > 1,
     };
 
-    return c.json({ data: results, meta: { pagination } });
+    // Resolve cover image URLs
+    const resolvedResults = await Promise.all(
+      results.map(async (p) => ({
+        ...p,
+        coverImage: await resolveFileUrl(p.coverImage),
+      }))
+    );
+
+    return c.json({ data: resolvedResults, meta: { pagination } });
   }
 );
 
@@ -635,12 +672,7 @@ agenciesRoutes.post(
       const [tenant] = await db
         .select()
         .from(tenants)
-        .where(
-          and(
-            eq(tenants.id, body.tenantId),
-            eq(tenants.agencyId, user.agencyId!)
-          )
-        )
+        .where(and(eq(tenants.id, body.tenantId), eq(tenants.agencyId, user.agencyId!)))
         .limit(1);
 
       if (!tenant) {
@@ -659,9 +691,7 @@ agenciesRoutes.post(
       const invalidIds = body.allowedTenantIds.filter((id) => !validIds.has(id));
 
       if (invalidIds.length > 0) {
-        throw new BadRequestError(
-          `Invalid tenant IDs: ${invalidIds.join(', ')}`
-        );
+        throw new BadRequestError(`Invalid tenant IDs: ${invalidIds.join(', ')}`);
       }
     }
 
@@ -741,13 +771,14 @@ agenciesRoutes.get(
 
     // Get tasks for all lessons
     const lessonIds = moduleLessons.map((l) => l.id);
-    const allTasks = lessonIds.length > 0
-      ? await db
-          .select()
-          .from(lessonTasks)
-          .where(sql`${lessonTasks.lessonId} IN ${lessonIds}`)
-          .orderBy(asc(lessonTasks.order))
-      : [];
+    const allTasks =
+      lessonIds.length > 0
+        ? await db
+            .select()
+            .from(lessonTasks)
+            .where(sql`${lessonTasks.lessonId} IN ${lessonIds}`)
+            .orderBy(asc(lessonTasks.order))
+        : [];
 
     // Get enrollment stats
     const [stats] = await db
@@ -836,9 +867,7 @@ agenciesRoutes.put(
       const invalidIds = body.allowedTenantIds.filter((id) => !validIds.has(id));
 
       if (invalidIds.length > 0) {
-        throw new BadRequestError(
-          `Invalid tenant IDs: ${invalidIds.join(', ')}`
-        );
+        throw new BadRequestError(`Invalid tenant IDs: ${invalidIds.join(', ')}`);
       }
     }
 
@@ -909,8 +938,8 @@ agenciesRoutes.post(
   async (c) => {
     const user = c.get('user');
     const { programId } = c.req.param();
-    const body = await c.req.json().catch(() => ({})) as { name?: string };
-    const overrideName = body?.name;
+    const body = (await c.req.json().catch(() => ({}))) as { name?: string };
+    const overrideName = z.string().min(1).max(255).optional().parse(body?.name);
 
     const [original] = await db
       .select()
@@ -988,21 +1017,24 @@ agenciesRoutes.post(
           .orderBy(asc(lessons.order));
 
         for (const lesson of moduleLessons) {
-          const [newLesson] = await tx.insert(lessons).values({
-            moduleId: newModule.id,
-            title: lesson.title,
-            contentType: lesson.contentType,
-            content: lesson.content,
-            order: lesson.order,
-            durationMinutes: lesson.durationMinutes,
-            points: lesson.points,
-            dripType: lesson.dripType,
-            dripValue: lesson.dripValue,
-            dripDate: lesson.dripDate,
-            visibleTo: lesson.visibleTo,
-            approvalRequired: lesson.approvalRequired,
-            status: 'draft',
-          }).returning();
+          const [newLesson] = await tx
+            .insert(lessons)
+            .values({
+              moduleId: newModule.id,
+              title: lesson.title,
+              contentType: lesson.contentType,
+              content: lesson.content,
+              order: lesson.order,
+              durationMinutes: lesson.durationMinutes,
+              points: lesson.points,
+              dripType: lesson.dripType,
+              dripValue: lesson.dripValue,
+              dripDate: lesson.dripDate,
+              visibleTo: lesson.visibleTo,
+              approvalRequired: lesson.approvalRequired,
+              status: 'draft',
+            })
+            .returning();
 
           const lessonTaskList = await tx
             .select()
@@ -1164,21 +1196,24 @@ agenciesRoutes.post(
           .orderBy(asc(lessons.order));
 
         for (const lesson of moduleLessons) {
-          const [newLesson] = await tx.insert(lessons).values({
-            moduleId: newModule.id,
-            title: lesson.title,
-            contentType: lesson.contentType,
-            content: lesson.content,
-            order: lesson.order,
-            durationMinutes: lesson.durationMinutes,
-            points: lesson.points,
-            dripType: lesson.dripType,
-            dripValue: lesson.dripValue,
-            dripDate: lesson.dripDate,
-            visibleTo: lesson.visibleTo,
-            approvalRequired: lesson.approvalRequired,
-            status: 'draft',
-          }).returning();
+          const [newLesson] = await tx
+            .insert(lessons)
+            .values({
+              moduleId: newModule.id,
+              title: lesson.title,
+              contentType: lesson.contentType,
+              content: lesson.content,
+              order: lesson.order,
+              durationMinutes: lesson.durationMinutes,
+              points: lesson.points,
+              dripType: lesson.dripType,
+              dripValue: lesson.dripValue,
+              dripDate: lesson.dripDate,
+              visibleTo: lesson.visibleTo,
+              approvalRequired: lesson.approvalRequired,
+              status: 'draft',
+            })
+            .returning();
 
           const lessonTaskList = await tx
             .select()
@@ -1218,10 +1253,13 @@ agenciesRoutes.post(
   '/me/programs/:programId/assign',
   requireAgencyAccess(),
   requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
-  zValidator('json', z.object({
-    tenantId: z.string().uuid(),
-    name: z.string().min(1).max(255).optional(),
-  })),
+  zValidator(
+    'json',
+    z.object({
+      tenantId: z.string().uuid(),
+      name: z.string().min(1).max(255).optional(),
+    })
+  ),
   async (c) => {
     const user = c.get('user');
     const { programId } = c.req.param();
@@ -1320,21 +1358,24 @@ agenciesRoutes.post(
           .orderBy(asc(lessons.order));
 
         for (const lesson of moduleLessons) {
-          const [newLesson] = await tx.insert(lessons).values({
-            moduleId: newModule.id,
-            title: lesson.title,
-            contentType: lesson.contentType,
-            content: lesson.content,
-            order: lesson.order,
-            durationMinutes: lesson.durationMinutes,
-            points: lesson.points,
-            dripType: lesson.dripType,
-            dripValue: lesson.dripValue,
-            dripDate: lesson.dripDate,
-            visibleTo: lesson.visibleTo,
-            approvalRequired: lesson.approvalRequired,
-            status: 'draft',
-          }).returning();
+          const [newLesson] = await tx
+            .insert(lessons)
+            .values({
+              moduleId: newModule.id,
+              title: lesson.title,
+              contentType: lesson.contentType,
+              content: lesson.content,
+              order: lesson.order,
+              durationMinutes: lesson.durationMinutes,
+              points: lesson.points,
+              dripType: lesson.dripType,
+              dripValue: lesson.dripValue,
+              dripDate: lesson.dripDate,
+              visibleTo: lesson.visibleTo,
+              approvalRequired: lesson.approvalRequired,
+              status: 'draft',
+            })
+            .returning();
 
           const lessonTaskList = await tx
             .select()
@@ -1374,7 +1415,20 @@ const agencyEventConfigSchema = z.object({
   date: z.string().optional(),
   startTime: z.string().optional(),
   endTime: z.string().optional(),
-  timezone: z.string().optional(),
+  timezone: z
+    .string()
+    .refine(
+      (tz) => {
+        try {
+          Intl.DateTimeFormat(undefined, { timeZone: tz });
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      { message: 'Invalid IANA timezone' }
+    )
+    .optional(),
   location: z.string().optional(),
   zoomLink: z.string().optional(),
   meetingId: z.string().optional(),
@@ -1440,7 +1494,9 @@ const agencyTaskConfigSchema = z.object({
   requireActionSteps: z.boolean().optional(),
   metricsGuidance: z.string().optional(),
   actionStepsGuidance: z.string().optional(),
-  submissionTypes: z.array(z.enum(['text', 'file_upload', 'url', 'video', 'presentation', 'spreadsheet'])).optional(),
+  submissionTypes: z
+    .array(z.enum(['text', 'file_upload', 'url', 'video', 'presentation', 'spreadsheet']))
+    .optional(),
   maxFileSize: z.number().optional(),
   allowedFileTypes: z.array(z.string()).optional(),
   instructions: z.string().optional(),
@@ -1451,7 +1507,9 @@ const agencyCreateTaskSchema = z.object({
   title: z.string().min(1).max(255),
   description: z.string().optional(),
   order: z.number().int().optional(),
-  responseType: z.enum(['text', 'file_upload', 'goal', 'completion_click', 'discussion']).default('completion_click'),
+  responseType: z
+    .enum(['text', 'file_upload', 'goal', 'completion_click', 'discussion'])
+    .default('completion_click'),
   approvalRequired: z.enum(['none', 'mentor', 'facilitator', 'both']).default('none'),
   dueDate: z.string().datetime().optional(),
   dueDaysOffset: z.number().int().optional(),

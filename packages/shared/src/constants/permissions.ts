@@ -1,5 +1,5 @@
 /**
- * Permission constants for Transformation OS
+ * Permission constants for Results Tracking System
  * Format: resource:action or resource:action:scope
  */
 export const PERMISSIONS = {

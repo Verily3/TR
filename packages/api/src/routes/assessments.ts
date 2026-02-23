@@ -1,17 +1,14 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import {
-  eq,
-  and,
-  desc,
-  count,
-  sql,
-  inArray,
-} from 'drizzle-orm';
+import { eq, and, desc, count, sql, inArray } from 'drizzle-orm';
 import { db, schema } from '@tr/db';
 import { NotFoundError, BadRequestError } from '../lib/errors.js';
-import { sendAssessmentInvitation, sendAssessmentReminder, sendSubjectInvitation } from '../lib/email.js';
+import {
+  sendAssessmentInvitation,
+  sendAssessmentReminder,
+  sendSubjectInvitation,
+} from '../lib/email.js';
 import { createNotification } from '../lib/notifications.js';
 import { env } from '../lib/env.js';
 import { computeAssessmentResults } from '../lib/assessment-engine.js';
@@ -19,38 +16,39 @@ import { generateAssessmentReport } from '../lib/pdf/report-generator.js';
 import type { ComputedAssessmentResults } from '@tr/db/schema';
 import type { Variables } from '../types/context.js';
 
-const {
-  assessments,
-  assessmentTemplates,
-  assessmentInvitations,
-  individualGoals,
-  users,
-} = schema;
+const { assessments, assessmentTemplates, assessmentInvitations, individualGoals, users } = schema;
 
 export const assessmentsRoutes = new Hono<{ Variables: Variables }>();
 export const publicAssessmentSetupRoutes = new Hono();
 
 // Zod schemas
-const createAssessmentSchema = z.object({
-  templateId: z.string().uuid(),
-  // Either subjectId (existing user) OR external subject fields
-  subjectId: z.string().uuid().optional(),
-  subjectEmail: z.string().email().optional(),
-  subjectFirstName: z.string().min(1).max(100).optional(),
-  subjectLastName: z.string().min(1).max(100).optional(),
-  name: z.string().min(1).max(255),
-  description: z.string().optional(),
-  openDate: z.string().optional(),
-  closeDate: z.string().optional(),
-  anonymizeResults: z.boolean().default(true),
-  showResultsToSubject: z.boolean().default(true),
-  subjectCanAddRaters: z.boolean().default(true),
-  programId: z.string().uuid().optional(),
-  enrollmentId: z.string().uuid().optional(),
-}).refine(
-  (data) => data.subjectId || (data.subjectEmail && data.subjectFirstName && data.subjectLastName),
-  { message: 'Either subjectId or subject email + first name + last name is required' }
-);
+const createAssessmentSchema = z
+  .object({
+    templateId: z.string().uuid(),
+    // Either subjectId (existing user) OR external subject fields
+    subjectId: z.string().uuid().optional(),
+    subjectEmail: z
+      .string()
+      .email()
+      .transform((v) => v.toLowerCase().trim())
+      .optional(),
+    subjectFirstName: z.string().min(1).max(100).optional(),
+    subjectLastName: z.string().min(1).max(100).optional(),
+    name: z.string().min(1).max(255),
+    description: z.string().optional(),
+    openDate: z.string().optional(),
+    closeDate: z.string().optional(),
+    anonymizeResults: z.boolean().default(true),
+    showResultsToSubject: z.boolean().default(true),
+    subjectCanAddRaters: z.boolean().default(true),
+    programId: z.string().uuid().optional(),
+    enrollmentId: z.string().uuid().optional(),
+  })
+  .refine(
+    (data) =>
+      data.subjectId || (data.subjectEmail && data.subjectFirstName && data.subjectLastName),
+    { message: 'Either subjectId or subject email + first name + last name is required' }
+  );
 
 const updateAssessmentSchema = z.object({
   name: z.string().min(1).max(255).optional(),
@@ -64,20 +62,28 @@ const updateAssessmentSchema = z.object({
 });
 
 const addInvitationsSchema = z.object({
-  invitations: z.array(
-    z.object({
-      // Either raterId (existing user) OR external rater fields
-      raterId: z.string().uuid().optional(),
-      raterEmail: z.string().email().optional(),
-      raterFirstName: z.string().min(1).max(100).optional(),
-      raterLastName: z.string().min(1).max(100).optional(),
-      raterType: z.enum(['self', 'manager', 'peer', 'direct_report']),
-      addedBy: z.enum(['admin', 'subject']).default('admin'),
-    }).refine(
-      (data) => data.raterId || (data.raterEmail && data.raterFirstName && data.raterLastName),
-      { message: 'Either raterId or rater email + name is required' }
+  invitations: z
+    .array(
+      z
+        .object({
+          // Either raterId (existing user) OR external rater fields
+          raterId: z.string().uuid().optional(),
+          raterEmail: z
+            .string()
+            .email()
+            .transform((v) => v.toLowerCase().trim())
+            .optional(),
+          raterFirstName: z.string().min(1).max(100).optional(),
+          raterLastName: z.string().min(1).max(100).optional(),
+          raterType: z.enum(['self', 'manager', 'peer', 'direct_report']),
+          addedBy: z.enum(['admin', 'subject']).default('admin'),
+        })
+        .refine(
+          (data) => data.raterId || (data.raterEmail && data.raterFirstName && data.raterLastName),
+          { message: 'Either raterId or rater email + name is required' }
+        )
     )
-  ).min(1),
+    .min(1),
 });
 
 /**
@@ -114,10 +120,7 @@ assessmentsRoutes.get('/', async (c) => {
 
   // Fetch invitation counts per assessment
   const assessmentIds = rows.map((a) => a.id);
-  let invitationCounts: Record<
-    string,
-    { total: number; completed: number }
-  > = {};
+  let invitationCounts: Record<string, { total: number; completed: number }> = {};
 
   if (assessmentIds.length > 0) {
     const invCounts = await db
@@ -174,18 +177,19 @@ assessmentsRoutes.get('/', async (c) => {
   const data = rows.map((a) => ({
     ...a,
     subject: a.subjectId
-      ? (subjectMap[a.subjectId] || null)
+      ? subjectMap[a.subjectId] || null
       : a.subjectEmail
-        ? { firstName: a.subjectFirstName ?? '', lastName: a.subjectLastName ?? '', email: a.subjectEmail }
+        ? {
+            firstName: a.subjectFirstName ?? '',
+            lastName: a.subjectLastName ?? '',
+            email: a.subjectEmail,
+          }
         : null,
     template: templateMap[a.templateId] || null,
     invitationStats: invitationCounts[a.id] || { total: 0, completed: 0 },
     responseRate:
       invitationCounts[a.id] && invitationCounts[a.id].total > 0
-        ? Math.round(
-            (invitationCounts[a.id].completed / invitationCounts[a.id].total) *
-              100
-          )
+        ? Math.round((invitationCounts[a.id].completed / invitationCounts[a.id].total) * 100)
         : 0,
   }));
 
@@ -232,18 +236,11 @@ assessmentsRoutes.get('/stats', async (c) => {
   return c.json({
     data: {
       totalAssessments: allAssessments.length,
-      activeAssessments: allAssessments.filter((a) => a.status === 'open')
-        .length,
-      completedAssessments: allAssessments.filter(
-        (a) => a.status === 'completed'
-      ).length,
-      draftAssessments: allAssessments.filter((a) => a.status === 'draft')
-        .length,
+      activeAssessments: allAssessments.filter((a) => a.status === 'open').length,
+      completedAssessments: allAssessments.filter((a) => a.status === 'completed').length,
+      draftAssessments: allAssessments.filter((a) => a.status === 'draft').length,
       pendingResponses: totalInvited - totalCompleted,
-      averageResponseRate:
-        totalInvited > 0
-          ? Math.round((totalCompleted / totalInvited) * 100)
-          : 0,
+      averageResponseRate: totalInvited > 0 ? Math.round((totalCompleted / totalInvited) * 100) : 0,
     },
   });
 });
@@ -259,9 +256,7 @@ assessmentsRoutes.get('/:assessmentId', async (c) => {
   const [assessment] = await db
     .select()
     .from(assessments)
-    .where(
-      and(eq(assessments.id, assessmentId), eq(assessments.tenantId, tenantId))
-    )
+    .where(and(eq(assessments.id, assessmentId), eq(assessments.tenantId, tenantId)))
     .limit(1);
 
   if (!assessment) {
@@ -276,7 +271,14 @@ assessmentsRoutes.get('/:assessmentId', async (c) => {
     .limit(1);
 
   // Fetch subject (may be null for external subjects)
-  let subject: { id: string; firstName: string; lastName: string; email: string; title: string | null; avatar: string | null } | null = null;
+  let subject: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    title: string | null;
+    avatar: string | null;
+  } | null = null;
   if (assessment.subjectId) {
     const [row] = await db
       .select({
@@ -349,9 +351,7 @@ assessmentsRoutes.get('/:assessmentId', async (c) => {
   }));
 
   const totalInvited = invitations.length;
-  const totalCompleted = invitations.filter(
-    (inv) => inv.status === 'completed'
-  ).length;
+  const totalCompleted = invitations.filter((inv) => inv.status === 'completed').length;
 
   return c.json({
     data: {
@@ -360,10 +360,7 @@ assessmentsRoutes.get('/:assessmentId', async (c) => {
       subject,
       invitations: invitationsFormatted,
       invitationStats: { total: totalInvited, completed: totalCompleted },
-      responseRate:
-        totalInvited > 0
-          ? Math.round((totalCompleted / totalInvited) * 100)
-          : 0,
+      responseRate: totalInvited > 0 ? Math.round((totalCompleted / totalInvited) * 100) : 0,
     },
   });
 });
@@ -372,132 +369,124 @@ assessmentsRoutes.get('/:assessmentId', async (c) => {
  * POST /api/tenants/:tenantId/assessments
  * Create assessment from template
  */
-assessmentsRoutes.post(
-  '/',
-  zValidator('json', createAssessmentSchema),
-  async (c) => {
-    const tenantId = c.req.param('tenantId')!;
-    const user = c.get('user');
-    const body = c.req.valid('json');
+assessmentsRoutes.post('/', zValidator('json', createAssessmentSchema), async (c) => {
+  const tenantId = c.req.param('tenantId')!;
+  const user = c.get('user');
+  const body = c.req.valid('json');
 
-    // Verify template exists
-    const [template] = await db
-      .select()
-      .from(assessmentTemplates)
-      .where(eq(assessmentTemplates.id, body.templateId))
-      .limit(1);
+  // Verify template exists
+  const [template] = await db
+    .select()
+    .from(assessmentTemplates)
+    .where(eq(assessmentTemplates.id, body.templateId))
+    .limit(1);
 
-    if (!template) {
-      throw new NotFoundError('Assessment template');
-    }
+  if (!template) {
+    throw new NotFoundError('Assessment template');
+  }
 
-    if (template.status !== 'published') {
-      throw new BadRequestError('Template must be published to create assessments');
-    }
+  if (template.status !== 'published') {
+    throw new BadRequestError('Template must be published to create assessments');
+  }
 
-    // Generate setup token for subjects who can add their own raters
-    const subjectSetupToken = crypto.randomUUID().replace(/-/g, '').slice(0, 48);
+  // Generate setup token for subjects who can add their own raters
+  const subjectSetupToken = crypto.randomUUID().replace(/-/g, '').slice(0, 48);
 
-    const [assessment] = await db
-      .insert(assessments)
-      .values({
-        templateId: body.templateId,
-        tenantId,
-        subjectId: body.subjectId ?? null,
-        subjectEmail: body.subjectEmail ?? null,
-        subjectFirstName: body.subjectFirstName ?? null,
-        subjectLastName: body.subjectLastName ?? null,
-        subjectSetupToken,
-        subjectCanAddRaters: body.subjectCanAddRaters ?? true,
-        createdBy: user.id,
-        name: body.name,
-        description: body.description,
-        openDate: body.openDate ?? null,
-        closeDate: body.closeDate ?? null,
-        anonymizeResults: body.anonymizeResults,
-        showResultsToSubject: body.showResultsToSubject,
-        programId: body.programId ?? null,
-        enrollmentId: body.enrollmentId ?? null,
-        status: 'draft',
-      })
-      .returning();
+  const [assessment] = await db
+    .insert(assessments)
+    .values({
+      templateId: body.templateId,
+      tenantId,
+      subjectId: body.subjectId ?? null,
+      subjectEmail: body.subjectEmail ?? null,
+      subjectFirstName: body.subjectFirstName ?? null,
+      subjectLastName: body.subjectLastName ?? null,
+      subjectSetupToken,
+      subjectCanAddRaters: body.subjectCanAddRaters ?? true,
+      createdBy: user.id,
+      name: body.name,
+      description: body.description,
+      openDate: body.openDate ?? null,
+      closeDate: body.closeDate ?? null,
+      anonymizeResults: body.anonymizeResults,
+      showResultsToSubject: body.showResultsToSubject,
+      programId: body.programId ?? null,
+      enrollmentId: body.enrollmentId ?? null,
+      status: 'draft',
+    })
+    .returning();
 
-    // Send subject invitation email if external subject or if subject should add raters
-    if (body.subjectCanAddRaters !== false) {
-      const setupUrl = `${env.APP_URL}/assessment-setup/${subjectSetupToken}`;
-      if (body.subjectEmail && body.subjectFirstName) {
-        // External subject — send invitation
+  // Send subject invitation email if external subject or if subject should add raters
+  if (body.subjectCanAddRaters !== false) {
+    const setupUrl = `${env.APP_URL}/assessment-setup/${subjectSetupToken}`;
+    if (body.subjectEmail && body.subjectFirstName) {
+      // External subject — send invitation
+      await sendSubjectInvitation({
+        to: body.subjectEmail,
+        name: `${body.subjectFirstName} ${body.subjectLastName ?? ''}`.trim(),
+        assessmentName: body.name,
+        setupUrl,
+      }).catch((err) => console.error('[email] Failed to send subject invitation:', err));
+    } else if (body.subjectId) {
+      // Registered subject — look up and send
+      const [subjectUser] = await db
+        .select({ email: users.email, firstName: users.firstName, lastName: users.lastName })
+        .from(users)
+        .where(eq(users.id, body.subjectId))
+        .limit(1);
+      if (subjectUser) {
         await sendSubjectInvitation({
-          to: body.subjectEmail,
-          name: `${body.subjectFirstName} ${body.subjectLastName ?? ''}`.trim(),
+          to: subjectUser.email,
+          name: `${subjectUser.firstName} ${subjectUser.lastName}`,
           assessmentName: body.name,
           setupUrl,
         }).catch((err) => console.error('[email] Failed to send subject invitation:', err));
-      } else if (body.subjectId) {
-        // Registered subject — look up and send
-        const [subjectUser] = await db.select({ email: users.email, firstName: users.firstName, lastName: users.lastName })
-          .from(users).where(eq(users.id, body.subjectId)).limit(1);
-        if (subjectUser) {
-          await sendSubjectInvitation({
-            to: subjectUser.email,
-            name: `${subjectUser.firstName} ${subjectUser.lastName}`,
-            assessmentName: body.name,
-            setupUrl,
-          }).catch((err) => console.error('[email] Failed to send subject invitation:', err));
-        }
       }
     }
-
-    return c.json({ data: assessment }, 201);
   }
-);
+
+  return c.json({ data: assessment }, 201);
+});
 
 /**
  * PUT /api/tenants/:tenantId/assessments/:assessmentId
  * Update assessment
  */
-assessmentsRoutes.put(
-  '/:assessmentId',
-  zValidator('json', updateAssessmentSchema),
-  async (c) => {
-    const tenantId = c.req.param('tenantId')!;
-    const assessmentId = c.req.param('assessmentId')!;
-    const body = c.req.valid('json');
+assessmentsRoutes.put('/:assessmentId', zValidator('json', updateAssessmentSchema), async (c) => {
+  const tenantId = c.req.param('tenantId')!;
+  const assessmentId = c.req.param('assessmentId')!;
+  const body = c.req.valid('json');
 
-    const [existing] = await db
-      .select()
-      .from(assessments)
-      .where(
-        and(
-          eq(assessments.id, assessmentId),
-          eq(assessments.tenantId, tenantId)
-        )
-      )
-      .limit(1);
+  const [existing] = await db
+    .select()
+    .from(assessments)
+    .where(and(eq(assessments.id, assessmentId), eq(assessments.tenantId, tenantId)))
+    .limit(1);
 
-    if (!existing) {
-      throw new NotFoundError('Assessment');
-    }
-
-    const updateData: Record<string, unknown> = { updatedAt: new Date() };
-    if (body.name !== undefined) updateData.name = body.name;
-    if (body.description !== undefined) updateData.description = body.description;
-    if (body.status !== undefined) updateData.status = body.status;
-    if (body.openDate !== undefined) updateData.openDate = body.openDate;
-    if (body.closeDate !== undefined) updateData.closeDate = body.closeDate;
-    if (body.anonymizeResults !== undefined) updateData.anonymizeResults = body.anonymizeResults;
-    if (body.showResultsToSubject !== undefined) updateData.showResultsToSubject = body.showResultsToSubject;
-    if (body.subjectCanAddRaters !== undefined) updateData.subjectCanAddRaters = body.subjectCanAddRaters;
-
-    const [updated] = await db
-      .update(assessments)
-      .set(updateData)
-      .where(eq(assessments.id, assessmentId))
-      .returning();
-
-    return c.json({ data: updated });
+  if (!existing) {
+    throw new NotFoundError('Assessment');
   }
-);
+
+  const updateData: Record<string, unknown> = { updatedAt: new Date() };
+  if (body.name !== undefined) updateData.name = body.name;
+  if (body.description !== undefined) updateData.description = body.description;
+  if (body.status !== undefined) updateData.status = body.status;
+  if (body.openDate !== undefined) updateData.openDate = body.openDate;
+  if (body.closeDate !== undefined) updateData.closeDate = body.closeDate;
+  if (body.anonymizeResults !== undefined) updateData.anonymizeResults = body.anonymizeResults;
+  if (body.showResultsToSubject !== undefined)
+    updateData.showResultsToSubject = body.showResultsToSubject;
+  if (body.subjectCanAddRaters !== undefined)
+    updateData.subjectCanAddRaters = body.subjectCanAddRaters;
+
+  const [updated] = await db
+    .update(assessments)
+    .set(updateData)
+    .where(eq(assessments.id, assessmentId))
+    .returning();
+
+  return c.json({ data: updated });
+});
 
 /**
  * DELETE /api/tenants/:tenantId/assessments/:assessmentId
@@ -510,12 +499,7 @@ assessmentsRoutes.delete('/:assessmentId', async (c) => {
   const [existing] = await db
     .select()
     .from(assessments)
-    .where(
-      and(
-        eq(assessments.id, assessmentId),
-        eq(assessments.tenantId, tenantId)
-      )
-    )
+    .where(and(eq(assessments.id, assessmentId), eq(assessments.tenantId, tenantId)))
     .limit(1);
 
   if (!existing) {
@@ -523,9 +507,7 @@ assessmentsRoutes.delete('/:assessmentId', async (c) => {
   }
 
   if (existing.status === 'open') {
-    throw new BadRequestError(
-      'Cannot delete an open assessment. Close it first.'
-    );
+    throw new BadRequestError('Cannot delete an open assessment. Close it first.');
   }
 
   await db.delete(assessments).where(eq(assessments.id, assessmentId));
@@ -549,9 +531,7 @@ assessmentsRoutes.get('/:assessmentId/invitations', async (c) => {
   const [assessment] = await db
     .select({ id: assessments.id })
     .from(assessments)
-    .where(
-      and(eq(assessments.id, assessmentId), eq(assessments.tenantId, tenantId))
-    )
+    .where(and(eq(assessments.id, assessmentId), eq(assessments.tenantId, tenantId)))
     .limit(1);
 
   if (!assessment) {
@@ -625,12 +605,7 @@ assessmentsRoutes.post(
     const [assessment] = await db
       .select()
       .from(assessments)
-      .where(
-        and(
-          eq(assessments.id, assessmentId),
-          eq(assessments.tenantId, tenantId)
-        )
-      )
+      .where(and(eq(assessments.id, assessmentId), eq(assessments.tenantId, tenantId)))
       .limit(1);
 
     if (!assessment) {
@@ -656,18 +631,22 @@ assessmentsRoutes.post(
       accessToken: crypto.randomUUID().replace(/-/g, '').slice(0, 32),
     }));
 
-    const inserted = await db
-      .insert(assessmentInvitations)
-      .values(values)
-      .returning();
+    const inserted = await db.insert(assessmentInvitations).values(values).returning();
 
     // Fetch registered rater details for email
     const registeredRaterIds = inserted.map((inv) => inv.raterId).filter(Boolean) as string[];
-    const registeredRaters = registeredRaterIds.length > 0
-      ? await db.select({ id: users.id, email: users.email, firstName: users.firstName, lastName: users.lastName })
-          .from(users)
-          .where(inArray(users.id, registeredRaterIds))
-      : [];
+    const registeredRaters =
+      registeredRaterIds.length > 0
+        ? await db
+            .select({
+              id: users.id,
+              email: users.email,
+              firstName: users.firstName,
+              lastName: users.lastName,
+            })
+            .from(users)
+            .where(inArray(users.id, registeredRaterIds))
+        : [];
     const raterMap = new Map(registeredRaters.map((r) => [r.id, r]));
 
     // Send invitation emails + in-app notifications
@@ -715,9 +694,15 @@ assessmentsRoutes.post(
 
     // Mark all inserted as 'sent'
     if (inserted.length > 0) {
-      await db.update(assessmentInvitations)
+      await db
+        .update(assessmentInvitations)
         .set({ status: 'sent', sentAt: new Date() })
-        .where(inArray(assessmentInvitations.id, inserted.map((i) => i.id)));
+        .where(
+          inArray(
+            assessmentInvitations.id,
+            inserted.map((i) => i.id)
+          )
+        );
     }
 
     return c.json({ data: inserted }, 201);
@@ -734,15 +719,7 @@ assessmentsRoutes.put(
     'json',
     z.object({
       status: z
-        .enum([
-          'pending',
-          'sent',
-          'viewed',
-          'started',
-          'completed',
-          'declined',
-          'expired',
-        ])
+        .enum(['pending', 'sent', 'viewed', 'started', 'completed', 'declined', 'expired'])
         .optional(),
     })
   ),
@@ -774,23 +751,20 @@ assessmentsRoutes.put(
  * DELETE /api/tenants/:tenantId/assessments/:assessmentId/invitations/:invitationId
  * Remove rater
  */
-assessmentsRoutes.delete(
-  '/:assessmentId/invitations/:invitationId',
-  async (c) => {
-    const invitationId = c.req.param('invitationId')!;
+assessmentsRoutes.delete('/:assessmentId/invitations/:invitationId', async (c) => {
+  const invitationId = c.req.param('invitationId')!;
 
-    const [deleted] = await db
-      .delete(assessmentInvitations)
-      .where(eq(assessmentInvitations.id, invitationId))
-      .returning();
+  const [deleted] = await db
+    .delete(assessmentInvitations)
+    .where(eq(assessmentInvitations.id, invitationId))
+    .returning();
 
-    if (!deleted) {
-      throw new NotFoundError('Invitation');
-    }
-
-    return c.json({ success: true });
+  if (!deleted) {
+    throw new NotFoundError('Invitation');
   }
-);
+
+  return c.json({ success: true });
+});
 
 /**
  * POST /api/tenants/:tenantId/assessments/:assessmentId/invitations/remind
@@ -815,14 +789,20 @@ assessmentsRoutes.post('/:assessmentId/invitations/remind', async (c) => {
   }
 
   // Bulk update: increment reminder count, set timestamps
-  await db.update(assessmentInvitations)
+  await db
+    .update(assessmentInvitations)
     .set({
       lastReminderAt: new Date(),
       status: 'sent',
       sentAt: new Date(),
       reminderCount: sql`(COALESCE(${assessmentInvitations.reminderCount}::int, 0) + 1)::text`,
     })
-    .where(inArray(assessmentInvitations.id, pending.map((i) => i.id)));
+    .where(
+      inArray(
+        assessmentInvitations.id,
+        pending.map((i) => i.id)
+      )
+    );
 
   // Fetch assessment name for email subject
   const [assessment] = await db
@@ -833,10 +813,13 @@ assessmentsRoutes.post('/:assessmentId/invitations/remind', async (c) => {
 
   // Send reminder emails (supports both registered and external raters)
   const registeredRaterIds = pending.map((inv) => inv.raterId).filter(Boolean) as string[];
-  const raters = registeredRaterIds.length > 0
-    ? await db.select({ id: users.id, email: users.email, firstName: users.firstName })
-        .from(users).where(inArray(users.id, registeredRaterIds))
-    : [];
+  const raters =
+    registeredRaterIds.length > 0
+      ? await db
+          .select({ id: users.id, email: users.email, firstName: users.firstName })
+          .from(users)
+          .where(inArray(users.id, registeredRaterIds))
+      : [];
 
   const raterMap = new Map(raters.map((r) => [r.id, r]));
 
@@ -847,7 +830,10 @@ assessmentsRoutes.post('/:assessmentId/invitations/remind', async (c) => {
 
       if (inv.raterId) {
         const rater = raterMap.get(inv.raterId);
-        if (rater) { email = rater.email; name = rater.firstName; }
+        if (rater) {
+          email = rater.email;
+          name = rater.firstName;
+        }
       } else if (inv.raterEmail) {
         email = inv.raterEmail;
         name = inv.raterFirstName ?? 'there';
@@ -884,16 +870,20 @@ assessmentsRoutes.get('/:assessmentId/results', async (c) => {
   const [assessment] = await db
     .select()
     .from(assessments)
-    .where(
-      and(eq(assessments.id, assessmentId), eq(assessments.tenantId, tenantId))
-    )
+    .where(and(eq(assessments.id, assessmentId), eq(assessments.tenantId, tenantId)))
     .limit(1);
 
   if (!assessment) throw new NotFoundError('Assessment');
 
   if (!assessment.computedResults) {
     return c.json(
-      { error: { code: 'NO_RESULTS', message: 'Results have not been computed yet. Close the assessment or trigger computation.' } },
+      {
+        error: {
+          code: 'NO_RESULTS',
+          message:
+            'Results have not been computed yet. Close the assessment or trigger computation.',
+        },
+      },
       404
     );
   }
@@ -912,9 +902,7 @@ assessmentsRoutes.post('/:assessmentId/results/compute', async (c) => {
   const [assessment] = await db
     .select()
     .from(assessments)
-    .where(
-      and(eq(assessments.id, assessmentId), eq(assessments.tenantId, tenantId))
-    )
+    .where(and(eq(assessments.id, assessmentId), eq(assessments.tenantId, tenantId)))
     .limit(1);
 
   if (!assessment) throw new NotFoundError('Assessment');
@@ -938,9 +926,7 @@ assessmentsRoutes.post('/:assessmentId/close', async (c) => {
   const [assessment] = await db
     .select()
     .from(assessments)
-    .where(
-      and(eq(assessments.id, assessmentId), eq(assessments.tenantId, tenantId))
-    )
+    .where(and(eq(assessments.id, assessmentId), eq(assessments.tenantId, tenantId)))
     .limit(1);
 
   if (!assessment) throw new NotFoundError('Assessment');
@@ -993,17 +979,22 @@ assessmentsRoutes.get('/:assessmentId/report/pdf', async (c) => {
 
   // Verify assessment belongs to tenant
   const [assessment] = await db
-    .select({ id: assessments.id, status: assessments.status, computedResults: assessments.computedResults, name: assessments.name })
+    .select({
+      id: assessments.id,
+      status: assessments.status,
+      computedResults: assessments.computedResults,
+      name: assessments.name,
+    })
     .from(assessments)
-    .where(
-      and(eq(assessments.id, assessmentId), eq(assessments.tenantId, tenantId))
-    )
+    .where(and(eq(assessments.id, assessmentId), eq(assessments.tenantId, tenantId)))
     .limit(1);
 
   if (!assessment) throw new NotFoundError('Assessment');
 
   if (!assessment.computedResults) {
-    throw new BadRequestError('Results must be computed before generating a report. Close the assessment first.');
+    throw new BadRequestError(
+      'Results must be computed before generating a report. Close the assessment first.'
+    );
   }
 
   const pdfBuffer = await generateAssessmentReport(assessmentId);
@@ -1035,9 +1026,7 @@ assessmentsRoutes.get('/:assessmentId/goals', async (c) => {
   const [assessment] = await db
     .select({ id: assessments.id })
     .from(assessments)
-    .where(
-      and(eq(assessments.id, assessmentId), eq(assessments.tenantId, tenantId))
-    )
+    .where(and(eq(assessments.id, assessmentId), eq(assessments.tenantId, tenantId)))
     .limit(1);
 
   if (!assessment) throw new NotFoundError('Assessment');
@@ -1061,9 +1050,7 @@ assessmentsRoutes.post('/:assessmentId/goals', async (c) => {
   const [assessment] = await db
     .select()
     .from(assessments)
-    .where(
-      and(eq(assessments.id, assessmentId), eq(assessments.tenantId, tenantId))
-    )
+    .where(and(eq(assessments.id, assessmentId), eq(assessments.tenantId, tenantId)))
     .limit(1);
 
   if (!assessment) throw new NotFoundError('Assessment');
@@ -1073,7 +1060,9 @@ assessmentsRoutes.post('/:assessmentId/goals', async (c) => {
   }
 
   if (!assessment.subjectId) {
-    throw new BadRequestError('Goals can only be created for assessments with a registered subject');
+    throw new BadRequestError(
+      'Goals can only be created for assessments with a registered subject'
+    );
   }
 
   const results = assessment.computedResults as ComputedAssessmentResults;
@@ -1102,12 +1091,8 @@ assessmentsRoutes.post('/:assessmentId/goals', async (c) => {
 
   // From development areas
   for (const area of results.developmentAreas) {
-    const cs = results.competencyScores.find(
-      (c) => c.competencyName === area
-    );
-    const gap = results.gapAnalysis.find(
-      (g) => g.competencyName === area
-    );
+    const cs = results.competencyScores.find((c) => c.competencyName === area);
+    const gap = results.gapAnalysis.find((g) => g.competencyName === area);
 
     const description = gap
       ? `Development goal based on assessment results. ${gap.interpretation} Current score: ${cs?.overallAverage?.toFixed(1) ?? 'N/A'} / ${5}.`
@@ -1151,10 +1136,7 @@ assessmentsRoutes.post('/:assessmentId/goals', async (c) => {
     });
   }
 
-  const created = await db
-    .insert(individualGoals)
-    .values(goalsToCreate)
-    .returning();
+  const created = await db.insert(individualGoals).values(goalsToCreate).returning();
 
   return c.json({ data: created }, 201);
 });
@@ -1268,7 +1250,10 @@ publicAssessmentSetupRoutes.post('/:token/raters', async (c) => {
   }
 
   if (!assessment.subjectCanAddRaters) {
-    return c.json({ error: { message: 'This assessment does not allow subject-added raters' } }, 403);
+    return c.json(
+      { error: { message: 'This assessment does not allow subject-added raters' } },
+      403
+    );
   }
 
   // Allow re-submission only if not yet completed
@@ -1302,12 +1287,19 @@ publicAssessmentSetupRoutes.post('/:token/raters', async (c) => {
   );
 
   // Mark as sent
-  await db.update(assessmentInvitations)
+  await db
+    .update(assessmentInvitations)
     .set({ status: 'sent', sentAt: new Date() })
-    .where(inArray(assessmentInvitations.id, inserted.map((i) => i.id)));
+    .where(
+      inArray(
+        assessmentInvitations.id,
+        inserted.map((i) => i.id)
+      )
+    );
 
   // Mark setup as completed
-  await db.update(assessments)
+  await db
+    .update(assessments)
     .set({ subjectSetupCompletedAt: new Date() })
     .where(eq(assessments.subjectSetupToken, token));
 

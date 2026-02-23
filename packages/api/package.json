@@ -7,9 +7,13 @@
     "build": "tsc && node ../../scripts/fix-esm-imports.mjs dist",
     "dev": "tsx watch --env-file=.env src/index.ts",
     "start": "node dist/index.js",
-    "clean": "rm -rf dist"
+    "lint": "eslint src/",
+    "clean": "rm -rf dist",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.995.0",
+    "@aws-sdk/s3-request-presigner": "^3.995.0",
     "@hono/node-server": "^1.13.0",
     "@hono/zod-validator": "^0.4.0",
     "@react-email/components": "^1.0.7",

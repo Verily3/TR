@@ -1,5 +1,6 @@
 import type { ErrorHandler } from 'hono';
 import { HTTPException } from 'hono/http-exception';
+import { ZodError } from 'zod';
 import { AppError } from '../lib/errors.js';
 
 /**
@@ -7,6 +8,20 @@ import { AppError } from '../lib/errors.js';
  */
 export const errorHandler: ErrorHandler = (error, c) => {
   console.error('Error:', error);
+
+  // Handle Zod validation errors (from inline .parse() calls)
+  if (error instanceof ZodError) {
+    return c.json(
+      {
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Invalid request data',
+          details: error.flatten().fieldErrors,
+        },
+      },
+      400
+    );
+  }
 
   // Handle our custom AppError
   if (error instanceof AppError) {

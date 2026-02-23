@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import {
   LayoutDashboard,
   CircleDot,
@@ -15,7 +15,11 @@ import {
   Library,
   CheckCircle2,
   AlertCircle,
+  X,
+  Loader2,
+  ImageIcon,
 } from 'lucide-react';
+import { api } from '@/lib/api';
 import type {
   ProgramWithModules,
   ProgramConfig,
@@ -31,7 +35,11 @@ import {
 
 type InfoSection = 'basic' | 'objectives' | 'schedule' | 'communication' | 'settings';
 
-const SECTION_TABS: { id: InfoSection; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+const SECTION_TABS: {
+  id: InfoSection;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [
   { id: 'basic', label: 'Basic\nInformation', icon: LayoutDashboard },
   { id: 'objectives', label: 'Learning\nObjectives', icon: CircleDot },
   { id: 'schedule', label: 'Schedule &\nDates', icon: Calendar },
@@ -112,7 +120,10 @@ const SELECT_CLASS =
 
 export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
   const [activeSection, setActiveSection] = useState<InfoSection>('basic');
-  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [saveMessage, setSaveMessage] = useState<{
+    type: 'success' | 'error';
+    text: string;
+  } | null>(null);
 
   // Top-level program fields
   const [formName, setFormName] = useState(program.name || '');
@@ -122,21 +133,30 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
   const [formStartDate, setFormStartDate] = useState(program.startDate?.split('T')[0] || '');
   const [formEndDate, setFormEndDate] = useState(program.endDate?.split('T')[0] || '');
   const [formTimezone, setFormTimezone] = useState(program.timezone || 'America/New_York');
-  const [formCoverImage] = useState(program.coverImage || '');
+  const [formCoverImage, setFormCoverImage] = useState(program.coverImage || '');
+  const [coverUploading, setCoverUploading] = useState(false);
+  const [coverError, setCoverError] = useState<string | null>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   // Config fields (JSONB)
   const [formConfig, setFormConfig] = useState<ProgramConfig>(() => {
     const cfg = program.config || {};
     return {
       ...cfg,
-      objectives: cfg.objectives?.length ? cfg.objectives : [
-        { id: '1', text: '' },
-        { id: '2', text: '' },
-        { id: '3', text: '' },
-      ],
+      objectives: cfg.objectives?.length
+        ? cfg.objectives
+        : [
+            { id: '1', text: '' },
+            { id: '2', text: '' },
+            { id: '3', text: '' },
+          ],
       emailSettings: cfg.emailSettings ?? {},
-      beforeDueReminders: cfg.beforeDueReminders?.length ? cfg.beforeDueReminders : defaultBeforeDueReminders,
-      afterDueReminders: cfg.afterDueReminders?.length ? cfg.afterDueReminders : defaultAfterDueReminders,
+      beforeDueReminders: cfg.beforeDueReminders?.length
+        ? cfg.beforeDueReminders
+        : defaultBeforeDueReminders,
+      afterDueReminders: cfg.afterDueReminders?.length
+        ? cfg.afterDueReminders
+        : defaultAfterDueReminders,
     };
   });
 
@@ -195,9 +215,7 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
               key={section.id}
               onClick={() => setActiveSection(section.id)}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-colors text-sm font-medium ${
-                isActive
-                  ? 'bg-red-600 text-white'
-                  : 'text-gray-500 hover:text-gray-700'
+                isActive ? 'bg-red-600 text-white' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               <Icon className="w-4 h-4 shrink-0" />
@@ -247,12 +265,109 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
             {/* Cover Image */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Cover Image</label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer">
-                <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm font-medium text-gray-700">Click to upload program cover</p>
-                <p className="text-xs text-gray-500 mt-1">PNG, JPG up to 5MB (Recommended: 1200x600px)</p>
-              </div>
-              <HelperText>This image appears on the program overview and in program listings</HelperText>
+              <input
+                ref={coverInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setCoverError(null);
+
+                  if (!file.type.startsWith('image/')) {
+                    setCoverError('Please select an image file (JPG, PNG, or WebP).');
+                    return;
+                  }
+                  if (file.size > 5 * 1024 * 1024) {
+                    setCoverError(
+                      `File is too large (${(file.size / (1024 * 1024)).toFixed(1)} MB). Maximum is 5 MB.`
+                    );
+                    return;
+                  }
+
+                  setCoverUploading(true);
+                  try {
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    const result = await api.uploadFile<{ key: string; url: string }>(
+                      `/api/upload/cover/${program.id}`,
+                      formData
+                    );
+                    setFormCoverImage(result.data.url);
+                  } catch (err) {
+                    setCoverError(err instanceof Error ? err.message : 'Upload failed');
+                  } finally {
+                    setCoverUploading(false);
+                    if (coverInputRef.current) coverInputRef.current.value = '';
+                  }
+                }}
+              />
+
+              {formCoverImage ? (
+                <div className="relative rounded-lg overflow-hidden border border-gray-200">
+                  <img
+                    src={formCoverImage}
+                    alt="Program cover"
+                    className="w-full h-48 object-cover"
+                  />
+                  <div className="absolute top-2 right-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => coverInputRef.current?.click()}
+                      className="p-1.5 bg-white/90 rounded-lg hover:bg-white text-gray-700 shadow-sm"
+                      title="Change cover image"
+                    >
+                      <ImageIcon className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setCoverUploading(true);
+                        try {
+                          await api.delete(`/api/upload/cover/${program.id}`);
+                          setFormCoverImage('');
+                        } catch {
+                          setCoverError('Failed to remove cover image.');
+                        } finally {
+                          setCoverUploading(false);
+                        }
+                      }}
+                      className="p-1.5 bg-white/90 rounded-lg hover:bg-white text-red-600 shadow-sm"
+                      title="Remove cover image"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {coverUploading && (
+                    <div className="absolute inset-0 bg-white/60 flex items-center justify-center">
+                      <Loader2 className="w-6 h-6 animate-spin text-gray-600" />
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => coverInputRef.current?.click()}
+                  disabled={coverUploading}
+                  className="w-full border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {coverUploading ? (
+                    <Loader2 className="w-8 h-8 text-gray-400 mx-auto mb-2 animate-spin" />
+                  ) : (
+                    <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                  )}
+                  <p className="text-sm font-medium text-gray-700">Click to upload program cover</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    PNG, JPG, WebP up to 5MB (Recommended: 1200x600px)
+                  </p>
+                </button>
+              )}
+
+              {coverError && <p className="text-sm text-red-600 mt-1.5">{coverError}</p>}
+              <HelperText>
+                This image appears on the program overview and in program listings
+              </HelperText>
             </div>
 
             {/* Description */}
@@ -265,12 +380,16 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
                 className={`${INPUT_CLASS} resize-none`}
                 placeholder="A comprehensive leadership development program designed to..."
               />
-              <HelperText>This will appear on the program overview and in program listings</HelperText>
+              <HelperText>
+                This will appear on the program overview and in program listings
+              </HelperText>
             </div>
 
             {/* Learning Track */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Learning Track</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Learning Track
+              </label>
               <select
                 value={formConfig.learningTrack || ''}
                 onChange={(e) => updateConfig({ learningTrack: e.target.value })}
@@ -293,7 +412,8 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
               <div>
                 <p className="text-sm font-semibold text-gray-900">AI Smart Builder</p>
                 <p className="text-sm text-gray-600 mt-0.5">
-                  Let AI analyze your program details and suggest an optimal structure, module sequence, and content outline.
+                  Let AI analyze your program details and suggest an optimal structure, module
+                  sequence, and content outline.
                 </p>
                 <button className="text-sm text-red-600 font-medium mt-1 hover:text-red-700">
                   Generate Program Structure →
@@ -311,7 +431,9 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
         <div className="space-y-6">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Learning Objectives</h3>
-            <p className="text-sm text-gray-500 mt-1">Define what learners will be able to do after completing this program</p>
+            <p className="text-sm text-gray-500 mt-1">
+              Define what learners will be able to do after completing this program
+            </p>
           </div>
 
           <div className="space-y-5">
@@ -354,7 +476,9 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
               <div>
                 <p className="text-sm font-semibold text-blue-900">Best Practice</p>
                 <p className="text-sm text-blue-700 mt-0.5">
-                  Start each objective with an action verb (e.g., &quot;Master,&quot; &quot;Develop,&quot; &quot;Build,&quot; &quot;Navigate&quot;). Focus on measurable outcomes and specific competencies.
+                  Start each objective with an action verb (e.g., &quot;Master,&quot;
+                  &quot;Develop,&quot; &quot;Build,&quot; &quot;Navigate&quot;). Focus on measurable
+                  outcomes and specific competencies.
                 </p>
               </div>
             </div>
@@ -367,7 +491,8 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
               <div>
                 <p className="text-sm font-semibold text-gray-900">AI Objective Optimizer</p>
                 <p className="text-sm text-gray-600 mt-0.5">
-                  AI can refine your objectives to make them more specific, measurable, and aligned with best practices.
+                  AI can refine your objectives to make them more specific, measurable, and aligned
+                  with best practices.
                 </p>
                 <button className="text-sm text-red-600 font-medium mt-1 hover:text-red-700">
                   Optimize Objectives →
@@ -400,7 +525,9 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
-                <p className={`text-sm font-semibold ${formType === 'cohort' ? 'text-gray-900' : 'text-gray-900'}`}>
+                <p
+                  className={`text-sm font-semibold ${formType === 'cohort' ? 'text-gray-900' : 'text-gray-900'}`}
+                >
                   Cohort-Based
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
@@ -415,7 +542,9 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
-                <p className={`text-sm font-semibold ${formType === 'self_paced' ? 'text-gray-900' : 'text-gray-900'}`}>
+                <p
+                  className={`text-sm font-semibold ${formType === 'self_paced' ? 'text-gray-900' : 'text-gray-900'}`}
+                >
                   Self-Paced
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
@@ -464,11 +593,15 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
             <div className="border border-gray-200 rounded-lg p-4 flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-gray-900">Allow Individual Pacing</p>
-                <p className="text-sm text-gray-500 mt-0.5">Let learners start at different times within the cohort period</p>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Let learners start at different times within the cohort period
+                </p>
               </div>
               <Toggle
                 enabled={!!formConfig.allowIndividualPacing}
-                onToggle={() => updateConfig({ allowIndividualPacing: !formConfig.allowIndividualPacing })}
+                onToggle={() =>
+                  updateConfig({ allowIndividualPacing: !formConfig.allowIndividualPacing })
+                }
               />
             </div>
           )}
@@ -487,7 +620,9 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
                 </option>
               ))}
             </select>
-            <HelperText>Used for scheduling emails and displaying deadlines to participants</HelperText>
+            <HelperText>
+              Used for scheduling emails and displaying deadlines to participants
+            </HelperText>
           </div>
 
           {/* AI Duration Calculator */}
@@ -497,7 +632,8 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
               <div>
                 <p className="text-sm font-semibold text-gray-900">AI Duration Calculator</p>
                 <p className="text-sm text-gray-600 mt-0.5">
-                  Based on your objectives and typical completion patterns, AI suggests optimal program length.
+                  Based on your objectives and typical completion patterns, AI suggests optimal
+                  program length.
                 </p>
                 <button className="text-sm text-red-600 font-medium mt-1 hover:text-red-700">
                   Calculate Optimal Duration →
@@ -515,7 +651,9 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
         <div className="space-y-6">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Communication Settings</h3>
-            <p className="text-sm text-gray-500 mt-1">Configure automated emails and notifications</p>
+            <p className="text-sm text-gray-500 mt-1">
+              Configure automated emails and notifications
+            </p>
           </div>
 
           {/* Welcome Email */}
@@ -523,24 +661,37 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-semibold text-gray-900">Welcome Email</p>
-                <p className="text-sm text-gray-500 mt-0.5">Sent before program starts to prepare learners</p>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Sent before program starts to prepare learners
+                </p>
               </div>
               <Toggle
                 enabled={formConfig.emailSettings?.welcome !== false}
                 onToggle={() => {
-                  updateConfig({ emailSettings: { ...formConfig.emailSettings, welcome: formConfig.emailSettings?.welcome === false } });
+                  updateConfig({
+                    emailSettings: {
+                      ...formConfig.emailSettings,
+                      welcome: formConfig.emailSettings?.welcome === false,
+                    },
+                  });
                 }}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Days before start</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Days before start
+              </label>
               <input type="number" defaultValue={7} className={INPUT_CLASS} />
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-medium text-gray-600">Custom message (optional)</label>
+                <label className="text-xs font-medium text-gray-600">
+                  Custom message (optional)
+                </label>
                 <div className="flex gap-3">
-                  <button className="text-xs text-red-600 font-medium hover:text-red-700 flex items-center gap-1"><Library className="w-3 h-3" /> Content Library</button>
+                  <button className="text-xs text-red-600 font-medium hover:text-red-700 flex items-center gap-1">
+                    <Library className="w-3 h-3" /> Content Library
+                  </button>
                   <button className="text-xs text-red-600 font-medium hover:text-red-700 flex items-center gap-1">
                     <Sparkles className="w-3 h-3" /> AI Draft
                   </button>
@@ -564,15 +715,24 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
               <Toggle
                 enabled={formConfig.emailSettings?.kickoff !== false}
                 onToggle={() => {
-                  updateConfig({ emailSettings: { ...formConfig.emailSettings, kickoff: formConfig.emailSettings?.kickoff === false } });
+                  updateConfig({
+                    emailSettings: {
+                      ...formConfig.emailSettings,
+                      kickoff: formConfig.emailSettings?.kickoff === false,
+                    },
+                  });
                 }}
               />
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-medium text-gray-600">Custom message (optional)</label>
+                <label className="text-xs font-medium text-gray-600">
+                  Custom message (optional)
+                </label>
                 <div className="flex gap-3">
-                  <button className="text-xs text-red-600 font-medium hover:text-red-700 flex items-center gap-1"><Library className="w-3 h-3" /> Content Library</button>
+                  <button className="text-xs text-red-600 font-medium hover:text-red-700 flex items-center gap-1">
+                    <Library className="w-3 h-3" /> Content Library
+                  </button>
                   <button className="text-xs text-red-600 font-medium hover:text-red-700 flex items-center gap-1">
                     <Sparkles className="w-3 h-3" /> AI Draft
                   </button>
@@ -591,7 +751,9 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-semibold text-gray-900">Lesson Due Date Reminders</p>
-                <p className="text-sm text-gray-500 mt-0.5">Automated reminders before and after lesson due dates</p>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Automated reminders before and after lesson due dates
+                </p>
               </div>
               <Toggle enabled={true} onToggle={() => {}} />
             </div>
@@ -601,7 +763,10 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
               <h4 className="text-xs font-semibold text-gray-700 mb-2">Before Due Date</h4>
               <div className="space-y-1">
                 {(formConfig.beforeDueReminders || []).map((reminder, index) => (
-                  <div key={reminder.id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50">
+                  <div
+                    key={reminder.id}
+                    className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50"
+                  >
                     <span className="text-sm text-gray-700">{reminder.label}</span>
                     <Toggle
                       enabled={reminder.enabled}
@@ -621,7 +786,10 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
               <h4 className="text-xs font-semibold text-gray-700 mb-2">After Due Date (Overdue)</h4>
               <div className="space-y-1">
                 {(formConfig.afterDueReminders || []).map((reminder, index) => (
-                  <div key={reminder.id} className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50">
+                  <div
+                    key={reminder.id}
+                    className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50"
+                  >
                     <span className="text-sm text-gray-700">{reminder.label}</span>
                     <Toggle
                       enabled={reminder.enabled}
@@ -638,9 +806,13 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-medium text-gray-600">Custom reminder message (optional)</label>
+                <label className="text-xs font-medium text-gray-600">
+                  Custom reminder message (optional)
+                </label>
                 <div className="flex gap-3">
-                  <button className="text-xs text-red-600 font-medium hover:text-red-700 flex items-center gap-1"><Library className="w-3 h-3" /> Content Library</button>
+                  <button className="text-xs text-red-600 font-medium hover:text-red-700 flex items-center gap-1">
+                    <Library className="w-3 h-3" /> Content Library
+                  </button>
                   <button className="text-xs text-red-600 font-medium hover:text-red-700 flex items-center gap-1">
                     <Sparkles className="w-3 h-3" /> AI Draft
                   </button>
@@ -659,21 +831,32 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-semibold text-gray-900">Weekly Progress Digest</p>
-                <p className="text-sm text-gray-500 mt-0.5">Weekly summary of progress and upcoming content</p>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Weekly summary of progress and upcoming content
+                </p>
               </div>
               <Toggle
                 enabled={formConfig.emailSettings?.weeklyDigest !== false}
                 onToggle={() => {
-                  updateConfig({ emailSettings: { ...formConfig.emailSettings, weeklyDigest: formConfig.emailSettings?.weeklyDigest === false } });
+                  updateConfig({
+                    emailSettings: {
+                      ...formConfig.emailSettings,
+                      weeklyDigest: formConfig.emailSettings?.weeklyDigest === false,
+                    },
+                  });
                 }}
               />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Day of week</label>
               <select defaultValue="Monday" className={SELECT_CLASS}>
-                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
+                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map(
+                  (d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  )
+                )}
               </select>
             </div>
           </div>
@@ -683,17 +866,26 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-semibold text-gray-900">Inactivity Reminder</p>
-                <p className="text-sm text-gray-500 mt-0.5">Re-engage learners who haven&apos;t logged in recently</p>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Re-engage learners who haven&apos;t logged in recently
+                </p>
               </div>
               <Toggle
                 enabled={formConfig.emailSettings?.inactivityReminders !== false}
                 onToggle={() => {
-                  updateConfig({ emailSettings: { ...formConfig.emailSettings, inactivityReminders: formConfig.emailSettings?.inactivityReminders === false } });
+                  updateConfig({
+                    emailSettings: {
+                      ...formConfig.emailSettings,
+                      inactivityReminders: formConfig.emailSettings?.inactivityReminders === false,
+                    },
+                  });
                 }}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Days inactive threshold</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Days inactive threshold
+              </label>
               <input type="number" defaultValue={7} className={INPUT_CLASS} />
             </div>
           </div>
@@ -703,18 +895,28 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-semibold text-gray-900">Milestone Celebration Emails</p>
-                <p className="text-sm text-gray-500 mt-0.5">Celebrate progress at key completion milestones</p>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Celebrate progress at key completion milestones
+                </p>
               </div>
               <Toggle
                 enabled={formConfig.emailSettings?.milestones !== false}
                 onToggle={() => {
-                  updateConfig({ emailSettings: { ...formConfig.emailSettings, milestones: formConfig.emailSettings?.milestones === false } });
+                  updateConfig({
+                    emailSettings: {
+                      ...formConfig.emailSettings,
+                      milestones: formConfig.emailSettings?.milestones === false,
+                    },
+                  });
                 }}
               />
             </div>
             <div className="flex gap-2">
               {['25%', '50%', '75%', '100%'].map((milestone) => (
-                <span key={milestone} className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full">
+                <span
+                  key={milestone}
+                  className="px-3 py-1 bg-blue-50 text-blue-700 text-xs font-medium rounded-full"
+                >
                   {milestone}
                 </span>
               ))}
@@ -726,12 +928,19 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-semibold text-gray-900">Completion Email</p>
-                <p className="text-sm text-gray-500 mt-0.5">Congratulate learners on program completion</p>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Congratulate learners on program completion
+                </p>
               </div>
               <Toggle
                 enabled={formConfig.emailSettings?.completion !== false}
                 onToggle={() => {
-                  updateConfig({ emailSettings: { ...formConfig.emailSettings, completion: formConfig.emailSettings?.completion === false } });
+                  updateConfig({
+                    emailSettings: {
+                      ...formConfig.emailSettings,
+                      completion: formConfig.emailSettings?.completion === false,
+                    },
+                  });
                 }}
               />
             </div>
@@ -742,20 +951,31 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm font-semibold text-gray-900">Mentor/Manager Summary</p>
-                <p className="text-sm text-gray-500 mt-0.5">Send progress reports to mentors and managers</p>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Send progress reports to mentors and managers
+                </p>
               </div>
               <Toggle
                 enabled={formConfig.emailSettings?.mentorSummary !== false}
                 onToggle={() => {
-                  updateConfig({ emailSettings: { ...formConfig.emailSettings, mentorSummary: formConfig.emailSettings?.mentorSummary === false } });
+                  updateConfig({
+                    emailSettings: {
+                      ...formConfig.emailSettings,
+                      mentorSummary: formConfig.emailSettings?.mentorSummary === false,
+                    },
+                  });
                 }}
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Report frequency</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Report frequency
+              </label>
               <select defaultValue="Weekly" className={SELECT_CLASS}>
                 {['Weekly', 'Bi-Weekly', 'Monthly'].map((f) => (
-                  <option key={f} value={f}>{f}</option>
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
                 ))}
               </select>
             </div>
@@ -770,7 +990,9 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
         <div className="space-y-6">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">Settings & Configuration</h3>
-            <p className="text-sm text-gray-500 mt-1">Configure enrollment, access controls, and program behavior</p>
+            <p className="text-sm text-gray-500 mt-1">
+              Configure enrollment, access controls, and program behavior
+            </p>
           </div>
 
           {/* Enrollment & Access */}
@@ -787,13 +1009,17 @@ export function InfoTab({ program, onSave, isSaving }: InfoTabProps) {
                 label="Require Manager Approval"
                 description="Users must get manager approval before enrolling"
                 enabled={!!formConfig.requireManagerApproval}
-                onToggle={() => updateConfig({ requireManagerApproval: !formConfig.requireManagerApproval })}
+                onToggle={() =>
+                  updateConfig({ requireManagerApproval: !formConfig.requireManagerApproval })
+                }
               />
               <SettingRow
                 label="Allow Self-Enrollment"
                 description="Users can enroll themselves without admin approval"
                 enabled={!!formConfig.allowSelfEnrollment}
-                onToggle={() => updateConfig({ allowSelfEnrollment: !formConfig.allowSelfEnrollment })}
+                onToggle={() =>
+                  updateConfig({ allowSelfEnrollment: !formConfig.allowSelfEnrollment })
+                }
               />
               <SettingRow
                 label="Link to Goals"

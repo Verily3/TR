@@ -26,9 +26,8 @@ export const ReadingContent = memo(function ReadingContent({
 
   const mainContent = content.mainContent || '';
   const isHtml = isHtmlContent(mainContent);
-  const mainParagraphs = !isHtml && mainContent
-    ? mainContent.split('\n').filter((p) => p.trim().length > 0)
-    : [];
+  const mainParagraphs =
+    !isHtml && mainContent ? mainContent.split('\n').filter((p) => p.trim().length > 0) : [];
 
   const keyConcepts = content.keyConcepts ?? [];
   const reflectionPrompts = content.reflectionPrompts ?? [];
@@ -39,7 +38,10 @@ export const ReadingContent = memo(function ReadingContent({
         Module {moduleNumber}: {moduleTitle}
       </h3>
       {isHtmlContent(introduction) ? (
-        <div className="text-muted-foreground mb-6 text-sm sm:text-base prose prose-sm max-w-none prose-p:text-muted-foreground" dangerouslySetInnerHTML={{ __html: introduction }} />
+        <div
+          className="text-muted-foreground mb-6 text-sm sm:text-base prose prose-sm max-w-none prose-p:text-muted-foreground"
+          dangerouslySetInnerHTML={{ __html: introduction }}
+        />
       ) : (
         <p className="text-muted-foreground mb-6 text-sm sm:text-base">{introduction}</p>
       )}
@@ -61,7 +63,9 @@ export const ReadingContent = memo(function ReadingContent({
 
       {keyConcepts.length > 0 && (
         <>
-          <h4 className="text-base sm:text-lg font-semibold text-sidebar-foreground mt-6 mb-3">Key Concepts</h4>
+          <h4 className="text-base sm:text-lg font-semibold text-sidebar-foreground mt-6 mb-3">
+            Key Concepts
+          </h4>
           <ul className="space-y-4 text-muted-foreground list-none p-0">
             {keyConcepts.map((concept, index) => (
               <li
@@ -71,7 +75,14 @@ export const ReadingContent = memo(function ReadingContent({
                 <h5 className="text-sidebar-foreground font-medium mb-2">
                   {index + 1}. {concept.title}
                 </h5>
-                <p className="text-sm m-0">{concept.description}</p>
+                {isHtmlContent(concept.description) ? (
+                  <div
+                    className="text-sm m-0 prose prose-sm max-w-none prose-p:text-muted-foreground prose-p:m-0 prose-li:text-muted-foreground"
+                    dangerouslySetInnerHTML={{ __html: concept.description }}
+                  />
+                ) : (
+                  <p className="text-sm m-0">{concept.description}</p>
+                )}
               </li>
             ))}
           </ul>
@@ -81,14 +92,22 @@ export const ReadingContent = memo(function ReadingContent({
       {content.keyTakeaway && (
         <aside className="mt-8 p-5 sm:p-6 bg-gradient-to-br from-accent/5 to-accent/10 border border-accent rounded-xl">
           <div className="flex items-start gap-3 sm:gap-4">
-            <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center flex-shrink-0" aria-hidden="true">
+            <div
+              className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center flex-shrink-0"
+              aria-hidden="true"
+            >
               <Lightbulb className="w-5 h-5 text-accent" />
             </div>
             <div>
               <h4 className="text-sidebar-foreground font-semibold mb-2">Key Takeaway</h4>
-              <p className="text-muted-foreground text-sm m-0">
-                {content.keyTakeaway}
-              </p>
+              {isHtmlContent(content.keyTakeaway) ? (
+                <div
+                  className="text-muted-foreground text-sm prose prose-sm max-w-none prose-p:text-muted-foreground prose-p:m-0 prose-li:text-muted-foreground"
+                  dangerouslySetInnerHTML={{ __html: content.keyTakeaway }}
+                />
+              ) : (
+                <p className="text-muted-foreground text-sm m-0">{content.keyTakeaway}</p>
+              )}
             </div>
           </div>
         </aside>
@@ -96,7 +115,9 @@ export const ReadingContent = memo(function ReadingContent({
 
       {reflectionPrompts.length > 0 && (
         <div className="mt-8">
-          <h4 className="text-base sm:text-lg font-semibold text-sidebar-foreground mb-3">Reflection Prompts</h4>
+          <h4 className="text-base sm:text-lg font-semibold text-sidebar-foreground mb-3">
+            Reflection Prompts
+          </h4>
           <ul className="space-y-3 text-muted-foreground list-none p-0">
             {reflectionPrompts.map((prompt, index) => (
               <li

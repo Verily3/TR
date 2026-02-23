@@ -29,7 +29,8 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx --env-file=.env src/seed.ts && tsx --env-file=.env src/seed-leadershift.ts",
     "db:seed-leadershift": "tsx --env-file=.env src/seed-leadershift.ts",
-    "db:seed-all": "tsx --env-file=.env src/seed.ts && tsx --env-file=.env src/seed-leadershift.ts"
+    "db:seed-all": "tsx --env-file=.env src/seed.ts && tsx --env-file=.env src/seed-leadershift.ts",
+    "db:migrate-avatars": "tsx --env-file=.env src/scripts/migrate-avatars.ts"
   },
   "dependencies": {
     "@tr/shared": "workspace:*",

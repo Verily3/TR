@@ -4,7 +4,12 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
-import { useProgram, useMyEnrollment, useLearnerProgress, useEnrollmentGoals } from '@/hooks/api/usePrograms';
+import {
+  useProgram,
+  useMyEnrollment,
+  useLearnerProgress,
+  useEnrollmentGoals,
+} from '@/hooks/api/usePrograms';
 import { useTenants } from '@/hooks/api/useTenants';
 import type { ModuleProgressData, LessonProgressStatus } from '@/types/programs';
 import {
@@ -15,7 +20,11 @@ import {
   Calendar,
   Target,
   ArrowRight,
+  Download,
+  Trophy,
+  Loader2,
 } from 'lucide-react';
+import { useDownloadCertificate } from '@/hooks/api/useCertificate';
 import { StatCard, ModuleProgressTracker } from '@/components/programs';
 
 // ============================================
@@ -58,7 +67,11 @@ const STATUS_CONFIG = {
 
 function LoadingSkeleton() {
   return (
-    <div className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8" role="status" aria-label="Loading program details">
+    <div
+      className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8"
+      role="status"
+      aria-label="Loading program details"
+    >
       <div className="animate-pulse">
         <div className="h-6 bg-muted rounded w-32 mb-6" />
         <div className="flex items-start gap-4 mb-8">
@@ -110,11 +123,7 @@ export default function ProgramDetailPage() {
   const { data: program, isLoading, error } = useProgram(activeTenantId || undefined, programId);
 
   // Get user's enrollment
-  const { data: myEnrollment } = useMyEnrollment(
-    activeTenantId || undefined,
-    programId,
-    user?.id
-  );
+  const { data: myEnrollment } = useMyEnrollment(activeTenantId || undefined, programId, user?.id);
 
   // Get progress data for the enrollment
   const { data: progressData } = useLearnerProgress(
@@ -129,6 +138,17 @@ export default function ProgramDetailPage() {
     programId,
     myEnrollment?.id
   );
+
+  const {
+    download: downloadCert,
+    isDownloading: isDownloadingCert,
+    error: certError,
+  } = useDownloadCertificate();
+
+  const handleDownloadCertificate = useCallback(() => {
+    if (!activeTenantId || !myEnrollment?.id || !program?.name) return;
+    downloadCert(activeTenantId, programId, myEnrollment.id, program.name);
+  }, [activeTenantId, myEnrollment?.id, program?.name, programId, downloadCert]);
 
   const handleContinueLearning = useCallback(() => {
     const tenantParam = activeTenantId ? `?tenantId=${activeTenantId}` : '';
@@ -157,7 +177,8 @@ export default function ProgramDetailPage() {
           (l) => lessonProgressMap.get(l.id) === 'completed'
         ).length;
         const totalLessons = lessons.length;
-        const moduleProgress = totalLessons > 0 ? Math.round((lessonsCompleted / totalLessons) * 100) : 0;
+        const moduleProgress =
+          totalLessons > 0 ? Math.round((lessonsCompleted / totalLessons) * 100) : 0;
 
         // Determine module status
         let status: 'completed' | 'in-progress' | 'locked' = 'locked';
@@ -210,45 +231,55 @@ export default function ProgramDetailPage() {
   }, [program?.modules, program?.config?.sequentialAccess, progressData?.lessons]);
 
   // Calculate stats from real data
-  const { totalModules, completedModules, overallProgress, pointsEarned, totalPointsAvailable } = useMemo(() => {
-    const total = modulesWithProgress.length || program?.modules?.length || 0;
-    const completed = modulesWithProgress.filter((m) => m.status === 'completed').length;
-    const currentModule = modulesWithProgress.find((m) => m.status === 'in-progress');
-    const progress = progressData?.progress?.percentage ||
-      (total > 0 ? Math.round((completed / total) * 100 + (currentModule?.progress || 0) / total) : 0);
-    const totalPoints = progressData?.progress?.totalPoints ||
-      modulesWithProgress.reduce((sum, m) => sum + m.lessons.reduce((s, l) => s + l.points, 0), 0);
-    const earned = progressData?.progress?.pointsEarned || 0;
+  const { totalModules, completedModules, overallProgress, pointsEarned, totalPointsAvailable } =
+    useMemo(() => {
+      const total = modulesWithProgress.length || program?.modules?.length || 0;
+      const completed = modulesWithProgress.filter((m) => m.status === 'completed').length;
+      const currentModule = modulesWithProgress.find((m) => m.status === 'in-progress');
+      const progress =
+        progressData?.progress?.percentage ||
+        (total > 0
+          ? Math.round((completed / total) * 100 + (currentModule?.progress || 0) / total)
+          : 0);
+      const totalPoints =
+        progressData?.progress?.totalPoints ||
+        modulesWithProgress.reduce(
+          (sum, m) => sum + m.lessons.reduce((s, l) => s + l.points, 0),
+          0
+        );
+      const earned = progressData?.progress?.pointsEarned || 0;
 
-    return {
-      totalModules: total,
-      completedModules: completed,
-      overallProgress: progress,
-      pointsEarned: earned,
-      totalPointsAvailable: totalPoints,
-    };
-  }, [modulesWithProgress, program?.modules?.length, progressData?.progress]);
+      return {
+        totalModules: total,
+        completedModules: completed,
+        overallProgress: progress,
+        pointsEarned: earned,
+        totalPointsAvailable: totalPoints,
+      };
+    }, [modulesWithProgress, program?.modules?.length, progressData?.progress]);
 
   // Derive learning outcomes — prefer saved objectives, fall back to module titles
   const learningOutcomes = useMemo(() => {
-    const objectives = (program?.config?.objectives as Array<{ id: string; text: string }> | undefined);
+    const objectives = program?.config?.objectives as
+      | Array<{ id: string; text: string }>
+      | undefined;
     if (objectives && objectives.length > 0) {
-      return objectives.map(o => o.text).filter(Boolean);
+      return objectives.map((o) => o.text).filter(Boolean);
     }
     if (!program?.modules) return [];
     return program.modules
-      .filter(m => m.depth === 0)
+      .filter((m) => m.depth === 0)
       .sort((a, b) => a.order - b.order)
-      .map(m => m.description || m.title)
+      .map((m) => m.description || m.title)
       .slice(0, 8);
   }, [program?.config?.objectives, program?.modules]);
 
   // Derive program structure from content types with average durations
   const programStructure = useMemo(() => {
     if (!program?.modules) return [];
-    const allLessons = program.modules.flatMap(m => m.lessons || []);
+    const allLessons = program.modules.flatMap((m) => m.lessons || []);
     const typeData = new Map<string, { count: number; totalDuration: number }>();
-    allLessons.forEach(lesson => {
+    allLessons.forEach((lesson) => {
       const type = lesson.contentType;
       const existing = typeData.get(type) || { count: 0, totalDuration: 0 };
       existing.count += 1;
@@ -269,7 +300,8 @@ export default function ProgramDetailPage() {
   const programDuration = useMemo(() => {
     if (program?.startDate && program?.endDate) {
       const weeks = Math.ceil(
-        (new Date(program.endDate).getTime() - new Date(program.startDate).getTime()) / (7 * 24 * 60 * 60 * 1000)
+        (new Date(program.endDate).getTime() - new Date(program.startDate).getTime()) /
+          (7 * 24 * 60 * 60 * 1000)
       );
       return `~${weeks} weeks`;
     }
@@ -287,7 +319,10 @@ export default function ProgramDetailPage() {
       : 'No due date';
 
     const weeks = program?.endDate
-      ? Math.max(0, Math.ceil((new Date(program.endDate).getTime() - Date.now()) / (7 * 24 * 60 * 60 * 1000)))
+      ? Math.max(
+          0,
+          Math.ceil((new Date(program.endDate).getTime() - Date.now()) / (7 * 24 * 60 * 60 * 1000))
+        )
       : null;
 
     return { dueDate: date, weeksRemaining: weeks };
@@ -296,8 +331,14 @@ export default function ProgramDetailPage() {
   // Loading states
   if (isAgencyUser && tenantsLoading) {
     return (
-      <div className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 flex items-center justify-center h-64" role="status">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent" aria-hidden="true"></div>
+      <div
+        className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 flex items-center justify-center h-64"
+        role="status"
+      >
+        <div
+          className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"
+          aria-hidden="true"
+        ></div>
         <span className="sr-only">Loading...</span>
       </div>
     );
@@ -306,7 +347,9 @@ export default function ProgramDetailPage() {
   if (!activeTenantId) {
     return (
       <div className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8">
-        <p className="text-muted-foreground" role="status">No tenant context available.</p>
+        <p className="text-muted-foreground" role="status">
+          No tenant context available.
+        </p>
       </div>
     );
   }
@@ -336,7 +379,10 @@ export default function ProgramDetailPage() {
             href="/programs"
             className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-accent transition-colors group focus:outline-none focus:text-accent"
           >
-            <ChevronLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" aria-hidden="true" />
+            <ChevronLeft
+              className="w-4 h-4 transition-transform group-hover:-translate-x-1"
+              aria-hidden="true"
+            />
             Back to Programs
           </Link>
         </nav>
@@ -393,7 +439,10 @@ export default function ProgramDetailPage() {
         </header>
 
         {/* Program Stats */}
-        <section className="mb-6 sm:mb-8 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4" aria-label="Program statistics">
+        <section
+          className="mb-6 sm:mb-8 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4"
+          aria-label="Program statistics"
+        >
           <StatCard
             icon={<Award className="w-4 h-4 text-accent" />}
             label="Total Points"
@@ -425,41 +474,119 @@ export default function ProgramDetailPage() {
         </section>
 
         {/* Module Progress Tracker */}
-        <ModuleProgressTracker modules={modulesWithProgress} programName={program.name} onContinue={handleContinueLearning} />
+        <ModuleProgressTracker
+          modules={modulesWithProgress}
+          programName={program.name}
+          onContinue={handleContinueLearning}
+        />
+
+        {/* Completion Certificate Banner */}
+        {myEnrollment?.status === 'completed' && (
+          <section
+            className="mb-6 sm:mb-8 animate-fade-in-up"
+            style={{ animationDelay: '200ms' }}
+            aria-label="Program completion"
+          >
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-xl p-5 sm:p-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0">
+                <Trophy className="w-6 h-6 text-green-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-base font-semibold text-green-800 mb-0.5">
+                  Congratulations — Program Complete!
+                </h2>
+                <p className="text-sm text-green-700">
+                  You&apos;ve successfully completed{' '}
+                  <span className="font-medium">{program.name}</span>.
+                  {myEnrollment.completedAt && (
+                    <>
+                      {' '}
+                      Finished on{' '}
+                      {new Date(myEnrollment.completedAt).toLocaleDateString('en-US', {
+                        month: 'long',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                      .
+                    </>
+                  )}
+                </p>
+                {certError && <p className="text-xs text-red-600 mt-1">{certError}</p>}
+              </div>
+              <button
+                onClick={handleDownloadCertificate}
+                disabled={isDownloadingCert}
+                className="flex items-center gap-2 px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-60 flex-shrink-0"
+                aria-label="Download completion certificate"
+              >
+                {isDownloadingCert ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+                {isDownloadingCert ? 'Generating…' : 'Download Certificate'}
+              </button>
+            </div>
+          </section>
+        )}
 
         {/* Program Overview (2-column grid) */}
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8" aria-label="Program overview">
+        <section
+          className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8"
+          aria-label="Program overview"
+        >
           {/* What You'll Learn */}
-          <div className="bg-card border border-border rounded-xl p-5 sm:p-6 transition-all hover:shadow-md animate-fade-in-up" style={{ animationDelay: '250ms' }}>
+          <div
+            className="bg-card border border-border rounded-xl p-5 sm:p-6 transition-all hover:shadow-md animate-fade-in-up"
+            style={{ animationDelay: '250ms' }}
+          >
             <h2 className="text-lg font-semibold text-sidebar-foreground mb-4">
               What You'll Learn
             </h2>
             <ul className="space-y-3" aria-label="Learning outcomes">
               {learningOutcomes.map((outcome, index) => (
-                <li key={index} className="flex items-start gap-3 text-sm text-muted-foreground group">
+                <li
+                  key={index}
+                  className="flex items-start gap-3 text-sm text-muted-foreground group"
+                >
                   <span
                     className="w-2 h-2 rounded-full bg-accent flex-shrink-0 mt-1.5"
                     aria-hidden="true"
                   />
-                  <span className="group-hover:text-sidebar-foreground transition-colors">{outcome}</span>
+                  <span className="group-hover:text-sidebar-foreground transition-colors">
+                    {outcome}
+                  </span>
                 </li>
               ))}
             </ul>
           </div>
 
           {/* Program Structure */}
-          <div className="bg-card border border-border rounded-xl p-5 sm:p-6 transition-all hover:shadow-md animate-fade-in-up" style={{ animationDelay: '300ms' }}>
+          <div
+            className="bg-card border border-border rounded-xl p-5 sm:p-6 transition-all hover:shadow-md animate-fade-in-up"
+            style={{ animationDelay: '300ms' }}
+          >
             <h2 className="text-lg font-semibold text-sidebar-foreground mb-4">
               Program Structure
             </h2>
             <div className="space-y-4">
               <div>
-                <div className="text-sm text-sidebar-foreground font-medium mb-3">Each module includes:</div>
+                <div className="text-sm text-sidebar-foreground font-medium mb-3">
+                  Each module includes:
+                </div>
                 <ul className="space-y-2" aria-label="Module structure">
                   {programStructure.map((item, index) => (
-                    <li key={index} className="flex items-start gap-3 text-sm text-muted-foreground group">
-                      <div className="w-1.5 h-1.5 rounded-full bg-accent mt-2 flex-shrink-0" aria-hidden="true" />
-                      <span className="group-hover:text-sidebar-foreground transition-colors">{item}</span>
+                    <li
+                      key={index}
+                      className="flex items-start gap-3 text-sm text-muted-foreground group"
+                    >
+                      <div
+                        className="w-1.5 h-1.5 rounded-full bg-accent mt-2 flex-shrink-0"
+                        aria-hidden="true"
+                      />
+                      <span className="group-hover:text-sidebar-foreground transition-colors">
+                        {item}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -467,8 +594,12 @@ export default function ProgramDetailPage() {
 
               {programDuration && (
                 <div className="pt-4 border-t border-border">
-                  <div className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">Estimated Duration</div>
-                  <div className="text-sm text-sidebar-foreground font-medium">{programDuration}</div>
+                  <div className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">
+                    Estimated Duration
+                  </div>
+                  <div className="text-sm text-sidebar-foreground font-medium">
+                    {programDuration}
+                  </div>
                 </div>
               )}
             </div>
@@ -490,17 +621,30 @@ export default function ProgramDetailPage() {
                       <Target className="w-5 h-5 text-accent" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-sidebar-foreground truncate">{goal.statement}</div>
+                      <div className="text-sm font-medium text-sidebar-foreground truncate">
+                        {goal.statement}
+                      </div>
                       <div className="text-xs text-muted-foreground">
                         {goal.targetDate
-                          ? new Date(goal.targetDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+                          ? new Date(goal.targetDate).toLocaleDateString('en-US', {
+                              month: 'short',
+                              year: 'numeric',
+                            })
                           : 'No deadline'}{' '}
-                        &bull; {goal.status === 'completed' ? 'Completed' : goal.status === 'active' ? 'Active' : 'Draft'} Goal
+                        &bull;{' '}
+                        {goal.status === 'completed'
+                          ? 'Completed'
+                          : goal.status === 'active'
+                            ? 'Active'
+                            : 'Draft'}{' '}
+                        Goal
                       </div>
                     </div>
                     <div className="flex items-center gap-4 flex-shrink-0">
                       <div className="text-right">
-                        <div className="text-sm font-semibold text-sidebar-foreground">{goal.progress}%</div>
+                        <div className="text-sm font-semibold text-sidebar-foreground">
+                          {goal.progress}%
+                        </div>
                         <div className="text-xs text-muted-foreground">Progress</div>
                       </div>
                       <Link

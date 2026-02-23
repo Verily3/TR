@@ -250,7 +250,7 @@ export const defaultTemplates: AgencyTemplate[] = [
 export const defaultBranding: BrandingConfig = {
   primaryColor: "#1F2937",
   accentColor: "#E53E3E",
-  companyName: "Transformation OS",
+  companyName: "Results Tracking System",
   supportEmail: "support@transformationos.com",
   customDomain: "app.transformationos.com",
 };

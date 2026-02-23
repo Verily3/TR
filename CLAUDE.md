@@ -1,10 +1,10 @@
 # CLAUDE.md - AI Assistant Context
 
-This file provides context for AI assistants working on the Transformation OS project.
+This file provides context for AI assistants working on the Results Tracking System project.
 
 ## Project Overview
 
-**Transformation OS** is a multi-tenant B2B SaaS platform for corporate transformation and executive leadership development. It combines LMS, scorecard management, goal tracking, mentoring, and assessments.
+**Results Tracking System** is a multi-tenant B2B SaaS platform for corporate transformation and executive leadership development. It combines LMS, scorecard management, goal tracking, mentoring, and assessments.
 
 ## Repository Structure
 
@@ -67,7 +67,7 @@ TR/
 │   ├── search/                   # Search & Command Palette components
 │   └── ui/                       # Shared UI components (Card, etc.)
 │
-├── Corporate Transformation OS/  # Legacy prototype reference
+├── Corporate Results Tracking System/  # Legacy prototype reference
 │   └── src/                      # Legacy prototype components
 │
 ├── SPECS/                        # Detailed specifications
@@ -90,14 +90,18 @@ Users can switch between Agency view and Tenant view using the context switcher 
 ### Authentication
 
 - **JWT-based**: Login via `POST /api/auth/login` with `{email, password}` (argon2 hashing)
-- Access tokens (15 min) + Refresh tokens (7 day)
+- Access tokens (15 min) + Refresh tokens (7 day, rotated on each refresh)
 - Tokens stored in `localStorage` as `accessToken` / `refreshToken`
 - Auth middleware at `packages/api/src/middleware/auth.ts` verifies JWT
+- JWT secrets require 43+ characters (256-bit Base64) — validated via Zod in `env.ts`
 - Impersonation uses `X-Impersonation-Token` header + `sessionStorage`
+- API client (`packages/web/src/lib/api.ts`): 30s fetch timeout, 401 auto-refresh with retry, concurrent refresh mutex
+- Logout redirects to `/login` with full page reload (clears React Query cache)
 
 ### Impersonation
 
 Agency admins can "Login As" any tenant user to see their experience:
+
 - **Header dropdown** → "Login As User" → search modal with real-time cross-tenant search
 - API: `POST /api/admin/impersonate` starts session, `POST /api/admin/impersonate/end` ends it
 - `GET /api/agencies/me/users/search?search=` searches users across all agency tenants
@@ -109,6 +113,7 @@ Agency admins can "Login As" any tenant user to see their experience:
 ### Program Roles
 
 Users enrolled in programs have one of three roles:
+
 - **Facilitator**: Administers and leads the program
 - **Mentor**: Guides and supports learners through the program
 - **Learner**: Enrolled participant who completes the program content
@@ -122,6 +127,7 @@ The mentoring module supports ongoing 1:1 mentoring relationships outside of pro
 **Mentoring Relationships**: Mentor ↔ Mentee pairings with relationship types (mentor, coach, manager) and meeting preferences.
 
 **Mentoring Sessions**: Scheduled meetings with:
+
 - Session types: mentoring, one_on_one, check_in, review, planning
 - Session prep: Pre-session reflection by mentee (wins, challenges, topics to discuss)
 - Session notes: Public or private notes during/after sessions
@@ -130,32 +136,33 @@ The mentoring module supports ongoing 1:1 mentoring relationships outside of pro
 **Session Statuses**: scheduled → prep_in_progress → ready → completed (or cancelled/no_show)
 
 **Role Scoping in Mentoring API**:
+
 - `mentor` — sees only relationships where they are the mentor (MENTORING_VIEW_ASSIGNED)
 - `facilitator` — sees all mentor-mentee relationships within programs they facilitate (scoped via enrollmentMentorships)
 - `tenant_admin` — sees all relationships in the tenant (MENTORING_VIEW_ALL)
 
 ## Tech Stack Details
 
-| Component | Technology | Notes |
-|-----------|------------|-------|
-| Monorepo | Turborepo + pnpm | Workspaces in `packages/` and `apps/` |
-| Frontend | Next.js 14 | App Router, server components where possible |
-| UI | shadcn/ui + Tailwind | Custom theme matching prototype |
-| State | Zustand | Persistent auth store |
-| Server State | React Query | Data fetching and caching |
-| API | Hono.js | Lightweight, fast, TypeScript-first |
-| Database | PostgreSQL + Drizzle | Type-safe ORM with migrations |
-| Auth | Firebase Admin | Server-side token verification |
+| Component    | Technology           | Notes                                        |
+| ------------ | -------------------- | -------------------------------------------- |
+| Monorepo     | Turborepo + pnpm     | Workspaces in `packages/` and `apps/`        |
+| Frontend     | Next.js 14           | App Router, server components where possible |
+| UI           | shadcn/ui + Tailwind | Custom theme matching prototype              |
+| State        | Zustand              | Persistent auth store                        |
+| Server State | React Query          | Data fetching and caching                    |
+| API          | Hono.js              | Lightweight, fast, TypeScript-first          |
+| Database     | PostgreSQL + Drizzle | Type-safe ORM with migrations                |
+| Auth         | JWT (jose) + argon2  | Access/refresh tokens, password hashing      |
 
 ## Design System
 
 ### Colors (from prototype)
 
 ```css
---primary: #1F2937;        /* Dark charcoal - buttons, nav */
---accent: #E53E3E;         /* Red - active states, icons, CTAs */
---muted: #ececf0;          /* Light gray backgrounds */
---sidebar: #F9FAFB;        /* Very light gray sidebar */
+--primary: #1f2937; /* Dark charcoal - buttons, nav */
+--accent: #e53e3e; /* Red - active states, icons, CTAs */
+--muted: #ececf0; /* Light gray backgrounds */
+--sidebar: #f9fafb; /* Very light gray sidebar */
 ```
 
 ### Design Patterns
@@ -170,11 +177,13 @@ The mentoring module supports ongoing 1:1 mentoring relationships outside of pro
 ### Responsive Breakpoints
 
 The UI follows Tailwind's default breakpoints:
+
 - **Mobile first**: Default styles apply to mobile
 - **sm (640px+)**: Small tablets and larger phones in landscape
 - **lg (1024px+)**: Desktop and larger tablets
 
 Common responsive patterns:
+
 ```css
 /* Padding */
 p-4 sm:p-6 lg:p-8
@@ -196,6 +205,7 @@ sm:hidden        /* Show only on mobile */
 ### Mobile Navigation
 
 The sidebar uses a drawer pattern on mobile:
+
 - Hidden by default on mobile (`-translate-x-full`)
 - Triggered by hamburger menu in mobile header
 - Full-screen overlay backdrop when open
@@ -204,6 +214,7 @@ The sidebar uses a drawer pattern on mobile:
 ### Component Library
 
 Located in `packages/web/src/components/ui/`:
+
 - Button, Card, Input, Label, Select, Textarea
 - Avatar, DropdownMenu, Toast, Dialog, AlertDialog
 - Checkbox, Popover, MultiSelect, Tabs
@@ -213,6 +224,7 @@ Located in `packages/web/src/components/ui/`:
 ### Program Components
 
 Located in `packages/web/src/components/programs/`:
+
 - `AddParticipantModal` - Add new or existing users to programs with role selection
 - `CreateProgramWizard` - 6-step wizard for program creation (Basic Info → Objectives → Schedule → Communication → Audience → Review)
 - `wizard-types.ts` - Type definitions for wizard form data (WizardStep, WizardFormData, etc.)
@@ -230,6 +242,7 @@ Located in `packages/web/src/components/programs/`:
 ### Programs Module Architecture
 
 **Content Types** (6 types in `content_type` DB enum):
+
 - `lesson` - Rich content with video + text (used for both "Reading" and "Video" add-menu entries)
 - `quiz` - Scored questions with three per-question grading modes
 - `assignment` - Work submission
@@ -238,6 +251,7 @@ Located in `packages/web/src/components/programs/`:
 - `survey` - Embedded survey form (links to a `surveys` entity by ID)
 
 > **Note:** The add menu in the Curriculum Builder shows 11 entries grouped into sections:
+>
 > - **Content**: Reading, Video, Key Concepts (all create `lesson` records)
 > - **Reflection**: Quiz, Most Useful Idea, How You Used This Idea, Text Form (latter two create `text_form`)
 > - **Activity**: Assignment, Food for Thought (both create `assignment`), Goal, Survey
@@ -245,10 +259,12 @@ Located in `packages/web/src/components/programs/`:
 > "Reading", "Video", and "Key Concepts" all create a `lesson` DB record. "Most Useful Idea" and "How You Used This Idea" both create `text_form`. "Assignment" and "Food for Thought" both create `assignment`. The add-menu label becomes the lesson title.
 
 **Drip Scheduling**:
+
 - Module-level: `immediate`, `days_after_enrollment`, `days_after_previous`, `on_date`
 - Lesson-level: `immediate`, `sequential`, `days_after_module_start`, `on_date`
 
 **Goal Responses** (for `goal` content type):
+
 - Statement, success metrics, action steps, target date
 - Review frequency (weekly, biweekly, monthly, quarterly)
 - Periodic reviews with progress tracking
@@ -256,11 +272,13 @@ Located in `packages/web/src/components/programs/`:
 ### Mentoring Components
 
 Located in `packages/web/src/components/coaching/`:
+
 - `NewSessionModal` - Schedule new mentoring sessions with relationship selection
 
 ### Template Components
 
 Located in `packages/web/src/components/templates/`:
+
 - `CompetencyEditor` - Edit individual competency with inline question management
 - `CompetencyList` - Manage list of competencies with reorder, add/delete
 - `CreateTemplateModal` - Quick template creation with name, type, description
@@ -270,12 +288,14 @@ Located in `packages/web/src/components/templates/`:
 The assessments module has two levels:
 
 **Agency Level (Templates):**
+
 - Templates are owned by agencies and can be published to tenants
 - API routes at `/agencies/:agencyId/templates`
 - Hooks: `useTemplates`, `useTemplate`, `useCreateTemplate`, `useUpdateTemplate`, `useDeleteTemplate`, `useDuplicateTemplate`
 - Pages: `/agency/assessments` (list), `/agency/assessments/[templateId]` (editor)
 
 **Tenant Level (Assessments):**
+
 - Assessments are created from templates for specific subjects
 - API routes at `/tenants/:tenantId/assessments`
 - Full CRUD + invitations, rater responses, result computation, PDF generation, benchmarks
@@ -283,6 +303,7 @@ The assessments module has two levels:
 - Pages: `/assessments` (list with filter tabs, detail view with Overview/Raters/Results/Development/Settings tabs)
 
 **Template Structure (JSONB):**
+
 ```typescript
 {
   competencies: [{
@@ -310,6 +331,7 @@ The assessments module has two levels:
 ```
 
 **Assessment Engine** (`packages/api/src/lib/assessment-engine.ts`):
+
 - `computeAssessmentResults(assessmentId)` — computes all scores, gaps, CCI, ceiling, trend
 - Reverse scoring: `effectiveRating = scaleMax + scaleMin - rawRating` for `[R]` items
 - CCI (Coaching Capacity Index): average of `isCCI`-tagged questions, bands: Low/Moderate/High/Very High
@@ -318,12 +340,14 @@ The assessments module has two levels:
 - Gap analysis with Johari Window classification (blind_spot, hidden_strength, aligned)
 
 **PDF Report** (`packages/api/src/lib/pdf/`):
+
 - `report-generator.tsx` — 16-section LeaderShift™ report using `@react-pdf/renderer`
 - `svg-charts.ts` — Adaptive radar (180 Self vs Boss, 360 multi-rater), CCI gauge, distribution histograms, gap divergence
 - `shared-styles.ts` — Minimal executive palette: Deep Navy `#1B3A5C` + grayscale, Helvetica typography
 - Design: "A private board-level document" — no gradients, shadows, or decorative elements
 
 **Assessment Components** (`packages/web/src/components/assessments/`):
+
 - `DownloadReportButton` — PDF download button
 - `RaterResponseForm` — Public rater response form
 - `DevelopmentPlanView` — Post-assessment development planning
@@ -346,22 +370,27 @@ pnpm --filter @tr/db db:migrate           # Run migrations
 pnpm --filter @tr/db db:seed              # Seed all data: core (users, tenants, programs, assessments) + LeaderShift program
 pnpm --filter @tr/db db:seed-leadershift  # Re-seed only the LeaderShift LMS program (standalone)
 pnpm --filter @tr/db db:studio            # Open Drizzle Studio
+pnpm --filter @tr/db db:migrate-avatars   # Convert base64 avatars to file storage
+
+# Testing
+pnpm test                                 # Run all tests via Turbo (Vitest)
 ```
 
 ## Port Configuration
 
-| Service | Port | Notes |
-|---------|------|-------|
-| API     | 3002 | Hono server (`packages/api`) |
-| Web     | 3003 | Next.js frontend (`packages/web`) |
-| UI Prototype | 5173 | Vite dev server (`components/`) |
+| Service      | Port | Notes                             |
+| ------------ | ---- | --------------------------------- |
+| API          | 3002 | Hono server (`packages/api`)      |
+| Web          | 3003 | Next.js frontend (`packages/web`) |
+| UI Prototype | 5173 | Vite dev server (`components/`)   |
 
 ## Environment Variables
 
 ### API (`packages/api/.env`)
+
 ```
 PORT=3002
-DATABASE_URL=postgres://user:pass@localhost:5432/transformation_os
+DATABASE_URL=postgres://user:pass@localhost:5432/results_tracking_system
 JWT_ACCESS_SECRET=your-access-secret
 JWT_REFRESH_SECRET=your-refresh-secret
 WEB_URL=http://localhost:3003
@@ -369,9 +398,19 @@ NODE_ENV=development
 RESEND_API_KEY=re_...          # Optional — emails silently skipped if unset
 APP_URL=http://localhost:3003
 CRON_SECRET=your-cron-secret   # Secures POST /api/cron/notifications
+
+# File Storage (optional — defaults to local)
+STORAGE_PROVIDER=local         # local | s3
+STORAGE_LOCAL_DIR=./uploads    # Local storage directory
+S3_BUCKET=                     # Required when STORAGE_PROVIDER=s3
+S3_REGION=us-east-1
+S3_ENDPOINT=                   # For R2/MinIO (optional)
+S3_ACCESS_KEY_ID=
+S3_SECRET_ACCESS_KEY=
 ```
 
 ### Web (`packages/web/.env.local`)
+
 ```
 NEXT_PUBLIC_API_URL=http://localhost:3002
 ```
@@ -379,6 +418,7 @@ NEXT_PUBLIC_API_URL=http://localhost:3002
 ## Current Implementation Status
 
 ### Completed
+
 - Agency portal (6 tabs): Overview, Clients, People, Templates, Branding, Billing
 - Context switcher for Agency/Tenant views
 - JWT authentication with password login (argon2), access/refresh tokens
@@ -454,8 +494,10 @@ NEXT_PUBLIC_API_URL=http://localhost:3002
   - Real Create, Duplicate, Delete actions via mutations
   - 6-step Create Program Wizard matching prototype design
   - Program Builder Editor (`/program-builder/[programId]`) with 6 tabs: Curriculum, Participants, Info, Goals, Resources, Reports
-  - Curriculum tab: content type picker dropdown (10 add-menu entries in 3 groups), inline lesson editors per type
-  - Wizard stores objectives, email settings, reminders, audience in program `config` JSONB
+  - Curriculum tab: content type picker dropdown (11 add-menu entries in 3 groups), inline lesson editors per type
+  - Wizard stores objectives, email settings, reminders, pacing, audience, enrollment settings in program `config` JSONB
+  - Wizard draft auto-saved to localStorage ('program-wizard-draft'); amber restore banner on re-open; cleared on success
+  - Wizard Step 3 includes enrollment settings: `allowSelfEnrollment`, `requireManagerApproval`, `programCapacity`, `enableWaitlist`
 - **Settings Profile connected to real API:**
   - useMyProfile() → GET /api/users/me (full profile with phone, timezone, metadata)
   - Save via useUpdateUser(tenantId, userId) for tenant users
@@ -474,7 +516,7 @@ NEXT_PUBLIC_API_URL=http://localhost:3002
     - `POST /me/programs/:id/mark-template` — toggle template flag
     - `POST /me/programs/:id/use-template` — deep-copy for agency reuse (sets `sourceTemplateId`)
     - `POST /me/programs/:id/assign` — create tenant-scoped copy for a client
-    - `POST /me/programs/:id/duplicate` — plain duplicate (preserves `isTemplate` status)
+    - `POST /me/programs/:id/duplicate` — plain duplicate (always sets `isTemplate: false`)
     - `GET /me/programs?isTemplate=true` — filter templates only
   - Hooks: `useMarkProgramAsTemplate`, `useCreateProgramFromTemplate`, `useAssignProgramToClient`, `useAgencyProgramTemplates` (in `useAgencyPrograms.ts`)
   - UI components (`packages/web/src/components/programs/`):
@@ -586,32 +628,53 @@ NEXT_PUBLIC_API_URL=http://localhost:3002
   - Sidebar nav: surveys entry (between assessments and people) in NAV_ITEMS + NAVIGATION_BY_ROLE constants
   - Seed: "Program Satisfaction Survey" with 5 questions in `seed.ts`
 
+- **Program Creation Audit Fixes (2026-02-20):**
+  - All wizard fields now persisted: objectives, pacing, email settings, audience, enrollment settings → `config` JSONB
+  - Deep-copy endpoints (`duplicate`, `use-template`, `assign`) wrapped in `db.transaction()`
+  - Soft-delete cascade: hard-deletes modules when program deleted (lessons/tasks cascade via FK)
+  - Template lineage: `sourceTemplateName` correlated subquery in agency programs list; shown in purple in builder UI
+  - Creation email: `sendProgramCreated()` fired (fire-and-forget) in both tenant and agency create handlers
+  - Program overview `learningOutcomes`: prefers `config.objectives`, falls back to module titles
+  - Wizard timezone defaults to browser locale via `Intl.DateTimeFormat().resolvedOptions().timeZone`
+  - Per-step validation: `canProceed()` checks required fields Steps 1–3; blocks if `startDate >= endDate`
+  - Error handling: try/catch in `handleCreate` shows error in Step 6 instead of silently closing wizard
+  - Audit: `AUDITS/2026-02-20-program-creation-audit.md` — 23 issues found, 18 fixed, 3 deferred (C-04 cover image now resolved via file storage backend)
+- **File Storage Backend (full stack):**
+  - Storage abstraction: `packages/api/src/lib/storage.ts` — `StorageProvider` interface, `LocalStorage` (./uploads/), `S3Storage` (presigned URLs), `resolveFileUrl()` backward-compat helper
+  - Upload helpers: `packages/api/src/lib/upload-helpers.ts` — per-category validation (avatar 5MB, cover 5MB, resource 50MB)
+  - File serving: `GET /api/uploads/*` (local dev, mounted before auth)
+  - Upload API: `POST/DELETE /api/upload/avatar`, `POST/DELETE /api/upload/cover/:programId`
+  - Program Resources: `program_resources` table (migration 0018), CRUD API at `/api/tenants/:tenantId/programs/:programId/resources`, 5 React Query hooks, ResourcesTab UI
+  - Settings: avatar upload uses FormData (instant, no base64), cover image upload/preview/remove in InfoTab
+  - Migration: `packages/db/src/scripts/migrate-avatars.ts` — converts legacy base64 avatars to file storage
+  - Env: `STORAGE_PROVIDER` (local|s3), `S3_BUCKET`, `S3_REGION`, etc.
+- **WYSIWYG Editor (Tiptap):**
+  - `packages/web/src/components/ui/rich-text-editor.tsx` — Tiptap with Bold, Italic, Underline, Strike, Heading, BulletList, OrderedList, Code Block, HR, inline link popover
+  - Used for: lesson `introduction`, `mainContent`, `keyTakeaway`; assignment `introduction` + `instructions`; goal `introduction`; text_form `introduction`
+  - Learner side: `isHtmlContent()` guard + `dangerouslySetInnerHTML` with Tailwind prose classes in ReadingContent, AssignmentContent, GoalContent, SubmissionContent
+
 ### In Progress
-- Connect Notifications page to real API (hooks + API routes built; frontend page still uses mock data)
+
+- Nothing currently in progress
 
 ### Pages Using Mock Data (No API Routes Yet)
-- Scorecard — no API routes, no DB schema
-- Planning & Goals — DB schema exists (`planning/`), no API routes
-- Notifications — DB schema + API routes built; frontend page not yet wired to real API
-- Help & Support — static content, no API needed
+
+- Help & Support — static content, no API needed (all other pages are on real API)
 
 ### Not Yet Implemented
-- API routes for: Planning, Scorecard
-- Session prep form (edit mode for mentees)
-- Certificate/diploma generation
-- Rich content editor (WYSIWYG for lessons)
-- Lesson resources/attachments upload UI
-- Real-time updates (WebSocket / SSE)
-- Programs admin view: settings and advanced features (basic editor built)
+
+- Real-time updates (WebSocket / SSE) — not scoped
+- 3HAG visual wizard UI — DB/API/create modal exist; no step-by-step wizard with timeline visualization
 
 ### Test Accounts (after running `pnpm --filter @tr/db db:seed`)
+
 - `admin@acme.com` - Agency Owner (has agencyId, no tenantId) - password: `password123`
 - `admin@techcorp.com` - Tenant Admin (tenantId, no enrollments)
 - `coach@techcorp.com` - Facilitator
-- `mentor@techcorp.com` - Mentor
-- `john.doe@techcorp.com` - Learner (enrolled in "Leadership Essentials")
-- `jane.smith@techcorp.com` - Learner
-- `alex.wilson@techcorp.com` - Learner
+- `mentor@techcorp.com` - Mentor (Emily Rodriguez — 2 mentoring relationships, 3 sessions with John, 1 session with Jane)
+- `john.doe@techcorp.com` - Learner (enrolled in "Leadership Essentials"; mentee of Emily; session prep submitted for "Progress Check-in")
+- `jane.smith@techcorp.com` - Learner (mentee of Emily; 1 upcoming planning session)
+- `alex.wilson@techcorp.com` - Learner (enrolled in "Leadership Essentials")
 
 ## Code Style Guidelines
 
@@ -621,7 +684,7 @@ NEXT_PUBLIC_API_URL=http://localhost:3002
 4. **Imports**: Absolute imports using `@/` alias
 5. **State**: Zustand for global state, React Query for server state
 6. **API calls**: Use the API client from `@/lib/api.ts`
-7. **Hooks**: Use hooks from `@/hooks/api/` for data fetching (usePrograms, useGoals, useTenants, useMentoringSessions, useActionItems, useMentoringRelationships, useMentoringStats, useTemplates, useAssessments, useAssessmentResults, useComputeResults, useDownloadReport, useAssessmentBenchmarks, useAgencyPrograms, useAgencyUserSearch, useMyProfile, useImpersonate, useMyNav, useRolePermissions, useUserPermissionOverrides, useSurveys, useSubmitSurveyResponse, usePublicSurvey, useMyQuizAttempts, useSubmitQuiz, etc.)
+7. **Hooks**: Use hooks from `@/hooks/api/` for data fetching (usePrograms, useGoals, useTenants, useMentoringSessions, useActionItems, useMentoringRelationships, useMentoringStats, useTemplates, useAssessments, useAssessmentResults, useComputeResults, useDownloadReport, useAssessmentBenchmarks, useAgencyPrograms, useAgencyUserSearch, useMyProfile, useImpersonate, useMyNav, useRolePermissions, useUserPermissionOverrides, useSurveys, useSubmitSurveyResponse, usePublicSurvey, useMyQuizAttempts, useSubmitQuiz, useResources, useUploadResource, useAddResourceLink, useUpdateResource, useDeleteResource, etc.)
 
 ## UI Prototype (components/)
 
@@ -639,6 +702,7 @@ npm run dev
 ### Prototype Structure
 
 Each module follows a consistent pattern:
+
 - `types.ts` - TypeScript interfaces and types
 - `data.ts` - Mock data and helper functions
 - `*Page.tsx` - Main page component
@@ -647,20 +711,21 @@ Each module follows a consistent pattern:
 
 ### Key Features
 
-| Module | Components | Features |
-|--------|------------|----------|
-| Dashboard | JourneyHub, Leaderboard, MySchedule, LearningQueue | Progress tracking, gamification |
-| Scorecard | RoleMission, KPIs, Competencies, OrgHealth | Performance metrics |
-| Programs | ProgramsPage, ProgramDetail, ModuleViewLMS | Learning experience |
-| Mentoring | SessionCard, RelationshipCard, NewSessionModal | Session management |
-| Notifications | NotificationDropdown, NotificationCard, Preferences | Real-time alerts |
-| Search | SearchCommand (Cmd+K), SearchPage | Global search with categories |
-| Onboarding | OnboardingWizard (7 steps) | New user setup |
-| Help | HelpPage, FAQSection, SupportTicketModal | Self-service support |
+| Module        | Components                                          | Features                        |
+| ------------- | --------------------------------------------------- | ------------------------------- |
+| Dashboard     | JourneyHub, Leaderboard, MySchedule, LearningQueue  | Progress tracking, gamification |
+| Scorecard     | RoleMission, KPIs, Competencies, OrgHealth          | Performance metrics             |
+| Programs      | ProgramsPage, ProgramDetail, ModuleViewLMS          | Learning experience             |
+| Mentoring     | SessionCard, RelationshipCard, NewSessionModal      | Session management              |
+| Notifications | NotificationDropdown, NotificationCard, Preferences | Real-time alerts                |
+| Search        | SearchCommand (Cmd+K), SearchPage                   | Global search with categories   |
+| Onboarding    | OnboardingWizard (7 steps)                          | New user setup                  |
+| Help          | HelpPage, FAQSection, SupportTicketModal            | Self-service support            |
 
 ### Mobile/Responsive
 
 All components are mobile-responsive with:
+
 - Collapsible sidebar drawer on mobile
 - Mobile header with hamburger menu
 - Responsive grids (1→2→3 columns)
@@ -673,29 +738,34 @@ All components are mobile-responsive with:
 - **PRD**: `overview.txt` (detailed product requirements)
 - **Specifications**: `SPECS/` folder (detailed module specs)
 - **UI Prototype**: `components/` (Vite + React app at localhost:5173)
-- **Legacy Prototype**: `Corporate Transformation OS/src/` (original reference)
+- **Legacy Prototype**: `Corporate Results Tracking System/src/` (original reference)
 
 ## Common Tasks
 
 ### Adding a new page
+
 1. Create page at `packages/web/src/app/(dashboard)/[route]/page.tsx`
 2. Use `"use client"` if needed
 3. Follow the layout pattern: `max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8`
 4. Add navigation item in `packages/web/src/components/layout/sidebar.tsx`
 
 ### Adding an API route
+
 1. Create route file at `packages/api/src/routes/[name].ts`
 2. Export Hono router
 3. Import and mount in `packages/api/src/index.ts`
 
 ### Adding a database table
+
 1. Add schema in `packages/db/src/schema/`
 2. Export from `packages/db/src/schema/index.ts`
 3. Run `pnpm --filter @tr/db db:generate`
 4. Run `pnpm --filter @tr/db db:migrate`
 
 ### Agency-user tenant selector pattern
+
 Pages that need `tenantId` must support agency users (who have `agencyId` but no `tenantId`):
+
 ```tsx
 const isAgencyUser = !!(user?.agencyId && !user?.tenantId);
 const { data: tenants } = useTenants();
@@ -709,9 +779,11 @@ useEffect(() => {
 
 const tenantId = isAgencyUser ? selectedTenantId : (user?.tenantId ?? null);
 ```
-Show a `<select>` dropdown in the page header when `isAgencyUser && tenants?.length > 0`. Already applied to: `/mentoring`, `/settings/permissions`.
+
+Show a `<select>` dropdown in the page header when `isAgencyUser && tenants?.length > 0`. Already applied to: `/mentoring`, `/settings/permissions`, `/scorecard`, `/planning`.
 
 ### Adding a UI Prototype Module
+
 1. Create folder at `components/[module-name]/`
 2. Create files following the pattern:
    - `types.ts` - Define interfaces

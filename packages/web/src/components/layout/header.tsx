@@ -4,16 +4,27 @@ import { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { Menu, LogOut, Settings, UserRoundCog, ChevronDown, Bell, ArrowLeftRight } from 'lucide-react';
+import {
+  Menu,
+  LogOut,
+  Settings,
+  UserRoundCog,
+  ChevronDown,
+  Bell,
+  ArrowLeftRight,
+  Search,
+  Command,
+} from 'lucide-react';
 import { ImpersonationSearchModal } from './ImpersonationSearchModal';
 import { useUnreadCount } from '@/hooks/api/useNotifications';
 import { useEndImpersonation } from '@/hooks/api/useImpersonate';
 
 interface HeaderProps {
   onMenuClick?: () => void;
+  onSearchClick?: () => void;
 }
 
-export const Header = memo(function Header({ onMenuClick }: HeaderProps) {
+export const Header = memo(function Header({ onMenuClick, onSearchClick }: HeaderProps) {
   const { user, logout } = useAuth();
   const router = useRouter();
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -69,6 +80,29 @@ export const Header = memo(function Header({ onMenuClick }: HeaderProps) {
           </div>
         )}
 
+        {/* Search bar (desktop) */}
+        {!user?.isImpersonating && (
+          <button
+            onClick={onSearchClick}
+            className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-muted/60 border border-border rounded-lg text-sm text-muted-foreground hover:bg-muted transition-colors"
+          >
+            <Search className="w-4 h-4" />
+            <span>Search…</span>
+            <span className="ml-2 flex items-center gap-0.5 text-[11px] font-mono">
+              <Command className="w-3 h-3" />K
+            </span>
+          </button>
+        )}
+
+        {/* Search button (mobile) */}
+        <button
+          onClick={onSearchClick}
+          className="lg:hidden p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+          aria-label="Search"
+        >
+          <Search className="w-5 h-5" />
+        </button>
+
         {/* Notification bell */}
         <button
           onClick={() => router.push('/notifications')}
@@ -90,7 +124,13 @@ export const Header = memo(function Header({ onMenuClick }: HeaderProps) {
             className="flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors"
           >
             {user?.avatar ? (
-              <Image src={user.avatar} alt="" width={32} height={32} className="rounded-full object-cover" />
+              <Image
+                src={user.avatar}
+                alt=""
+                width={32}
+                height={32}
+                className="rounded-full object-cover"
+              />
             ) : (
               <div className="w-8 h-8 rounded-full bg-red-50 text-red-600 flex items-center justify-center text-sm font-medium">
                 {initials}
@@ -100,9 +140,13 @@ export const Header = memo(function Header({ onMenuClick }: HeaderProps) {
               <p className="font-medium text-gray-900">
                 {user?.firstName} {user?.lastName}
               </p>
-              <p className="text-gray-500 capitalize text-xs">{user?.roleSlug?.replace(/_/g, ' ')}</p>
+              <p className="text-gray-500 capitalize text-xs">
+                {user?.roleSlug?.replace(/_/g, ' ')}
+              </p>
             </div>
-            <ChevronDown className={`w-4 h-4 text-gray-400 hidden sm:block transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown
+              className={`w-4 h-4 text-gray-400 hidden sm:block transition-transform ${dropdownOpen ? 'rotate-180' : ''}`}
+            />
           </button>
 
           {/* Dropdown Menu */}

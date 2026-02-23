@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { eq, and, isNull, desc, sql } from 'drizzle-orm';
+import { eq, and, isNull, desc, asc, sql, inArray } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 import { hash } from 'argon2';
 import { db, schema } from '@tr/db';
 import { requirePermission, requireTenantAccess } from '../middleware/permissions.js';
@@ -9,6 +10,7 @@ import { BadRequestError, ConflictError, ForbiddenError, NotFoundError } from '.
 import { PERMISSIONS } from '@tr/shared';
 import type { Variables } from '../types/context.js';
 import type { PaginationMeta, ApiResponse } from '@tr/shared';
+import { resolveFileUrl } from '../lib/storage.js';
 
 const { users, userRoles, roles } = schema;
 
@@ -36,10 +38,7 @@ usersRoutes.get(
     const { page, limit, status, search } = c.req.valid('query');
 
     // Build where conditions
-    const conditions: any[] = [
-      eq(users.tenantId, tenantId),
-      isNull(users.deletedAt),
-    ];
+    const conditions: SQL<unknown>[] = [eq(users.tenantId, tenantId), isNull(users.deletedAt)];
 
     if (status) {
       conditions.push(eq(users.status, status));
@@ -136,13 +135,7 @@ usersRoutes.get(
     const [user] = await db
       .select()
       .from(users)
-      .where(
-        and(
-          eq(users.id, userId),
-          eq(users.tenantId, tenantId),
-          isNull(users.deletedAt)
-        )
-      )
+      .where(and(eq(users.id, userId), eq(users.tenantId, tenantId), isNull(users.deletedAt)))
       .limit(1);
 
     if (!user) {
@@ -178,11 +171,7 @@ usersRoutes.get(
 usersRoutes.get('/me', async (c) => {
   const currentUser = c.get('user');
 
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, currentUser.id))
-    .limit(1);
+  const [user] = await db.select().from(users).where(eq(users.id, currentUser.id)).limit(1);
 
   if (!user) {
     throw new NotFoundError('User');
@@ -200,9 +189,12 @@ usersRoutes.get('/me', async (c) => {
     .innerJoin(roles, eq(userRoles.roleId, roles.id))
     .where(eq(userRoles.userId, user.id));
 
+  const avatarUrl = await resolveFileUrl(user.avatar);
+
   return c.json({
     data: {
       ...user,
+      avatar: avatarUrl,
       passwordHash: undefined,
       roles: userRolesData,
     },
@@ -225,6 +217,13 @@ usersRoutes.patch('/me', zValidator('json', updateMeSchema), async (c) => {
   const currentUser = c.get('user');
   const body = c.req.valid('json');
 
+  // Reject base64 avatar uploads — use POST /api/upload/avatar instead
+  if (body.avatar && body.avatar.startsWith('data:')) {
+    throw new BadRequestError(
+      'Base64 avatar upload is no longer supported. Use POST /api/upload/avatar with multipart form data.'
+    );
+  }
+
   const [updated] = await db
     .update(users)
     .set({
@@ -234,9 +233,12 @@ usersRoutes.patch('/me', zValidator('json', updateMeSchema), async (c) => {
     .where(eq(users.id, currentUser.id))
     .returning();
 
+  const avatarUrl = await resolveFileUrl(updated.avatar);
+
   return c.json({
     data: {
       ...updated,
+      avatar: avatarUrl,
       passwordHash: undefined,
     },
   });
@@ -247,13 +249,18 @@ usersRoutes.patch('/me', zValidator('json', updateMeSchema), async (c) => {
 // ============================================
 
 const createUserSchema = z.object({
-  email: z.string().email().max(255),
+  email: z
+    .string()
+    .email()
+    .max(255)
+    .transform((v) => v.toLowerCase().trim()),
   firstName: z.string().min(1).max(100),
   lastName: z.string().min(1).max(100),
-  password: z.string().min(8).max(100).optional(),
+  password: z.string().min(12).max(100).optional(),
   title: z.string().max(200).optional(),
   department: z.string().max(200).optional(),
   role: z.enum(['learner', 'mentor', 'facilitator', 'tenant_admin']),
+  managerId: z.string().uuid().nullable().optional(),
 });
 
 const updateUserSchema = z.object({
@@ -292,7 +299,9 @@ usersRoutes.post(
 
     const tenant = c.get('tenant')!;
     if (Number(userCount) >= tenant.usersLimit) {
-      throw new BadRequestError(`User limit reached (${tenant.usersLimit}). Cannot add more users.`);
+      throw new BadRequestError(
+        `User limit reached (${tenant.usersLimit}). Cannot add more users.`
+      );
     }
 
     // Check email uniqueness within tenant
@@ -300,11 +309,7 @@ usersRoutes.post(
       .select({ id: users.id })
       .from(users)
       .where(
-        and(
-          eq(users.email, body.email),
-          eq(users.tenantId, tenantId),
-          isNull(users.deletedAt)
-        )
+        and(eq(users.email, body.email), eq(users.tenantId, tenantId), isNull(users.deletedAt))
       )
       .limit(1);
 
@@ -316,12 +321,7 @@ usersRoutes.post(
     const [role] = await db
       .select()
       .from(roles)
-      .where(
-        and(
-          eq(roles.slug, body.role),
-          eq(roles.tenantId, tenantId)
-        )
-      )
+      .where(and(eq(roles.slug, body.role), eq(roles.tenantId, tenantId)))
       .limit(1);
 
     if (!role) {
@@ -348,6 +348,7 @@ usersRoutes.post(
           passwordHash,
           title: body.title,
           department: body.department,
+          managerId: body.managerId ?? null,
         })
         .returning();
 
@@ -359,15 +360,18 @@ usersRoutes.post(
       return newUser;
     });
 
-    return c.json({
-      data: {
-        ...result,
-        passwordHash: undefined,
-        roleSlug: body.role,
-        roleName: role.name,
-        roleLevel: role.level,
+    return c.json(
+      {
+        data: {
+          ...result,
+          passwordHash: undefined,
+          roleSlug: body.role,
+          roleName: role.name,
+          roleLevel: role.level,
+        },
       },
-    }, 201);
+      201
+    );
   }
 );
 
@@ -387,13 +391,7 @@ usersRoutes.put(
     const [existing] = await db
       .select()
       .from(users)
-      .where(
-        and(
-          eq(users.id, userId),
-          eq(users.tenantId, tenantId),
-          isNull(users.deletedAt)
-        )
-      )
+      .where(and(eq(users.id, userId), eq(users.tenantId, tenantId), isNull(users.deletedAt)))
       .limit(1);
 
     if (!existing) {
@@ -406,11 +404,7 @@ usersRoutes.put(
         .select({ id: users.id })
         .from(users)
         .where(
-          and(
-            eq(users.id, body.managerId),
-            eq(users.tenantId, tenantId),
-            isNull(users.deletedAt)
-          )
+          and(eq(users.id, body.managerId), eq(users.tenantId, tenantId), isNull(users.deletedAt))
         )
         .limit(1);
 
@@ -456,13 +450,7 @@ usersRoutes.delete(
     const [existing] = await db
       .select()
       .from(users)
-      .where(
-        and(
-          eq(users.id, userId),
-          eq(users.tenantId, tenantId),
-          isNull(users.deletedAt)
-        )
-      )
+      .where(and(eq(users.id, userId), eq(users.tenantId, tenantId), isNull(users.deletedAt)))
       .limit(1);
 
     if (!existing) {
@@ -500,13 +488,7 @@ usersRoutes.put(
     const [targetUser] = await db
       .select()
       .from(users)
-      .where(
-        and(
-          eq(users.id, userId),
-          eq(users.tenantId, tenantId),
-          isNull(users.deletedAt)
-        )
-      )
+      .where(and(eq(users.id, userId), eq(users.tenantId, tenantId), isNull(users.deletedAt)))
       .limit(1);
 
     if (!targetUser) {
@@ -517,12 +499,7 @@ usersRoutes.put(
     const [newRole] = await db
       .select()
       .from(roles)
-      .where(
-        and(
-          eq(roles.slug, newRoleSlug),
-          eq(roles.tenantId, tenantId)
-        )
-      )
+      .where(and(eq(roles.slug, newRoleSlug), eq(roles.tenantId, tenantId)))
       .limit(1);
 
     if (!newRole) {
@@ -559,12 +536,7 @@ usersRoutes.put(
       for (const { id } of tenantRoleIds) {
         await tx
           .delete(userRoles)
-          .where(
-            and(
-              eq(userRoles.userId, userId),
-              eq(userRoles.roleId, id)
-            )
-          );
+          .where(and(eq(userRoles.userId, userId), eq(userRoles.roleId, id)));
       }
 
       // Assign new role
@@ -584,3 +556,136 @@ usersRoutes.put(
     });
   }
 );
+
+/**
+ * GET /api/users/tenants/:tenantId/departments
+ * List distinct departments for a tenant (computed from users table)
+ */
+usersRoutes.get('/tenants/:tenantId/departments', requireTenantAccess(), async (c) => {
+  const { tenantId } = c.req.param();
+
+  const rows = await db
+    .selectDistinct({ department: users.department })
+    .from(users)
+    .where(
+      and(
+        eq(users.tenantId, tenantId),
+        isNull(users.deletedAt),
+        sql`${users.department} IS NOT NULL AND ${users.department} != ''`
+      )
+    )
+    .orderBy(asc(users.department));
+
+  const departments = rows.map((r) => r.department).filter((d): d is string => !!d);
+
+  return c.json({ data: departments });
+});
+
+/**
+ * GET /api/users/tenants/:tenantId/me/direct-reports
+ * Return direct reports of the current user with performance summary
+ */
+usersRoutes.get('/tenants/:tenantId/me/direct-reports', requireTenantAccess(), async (c) => {
+  const { tenantId } = c.req.param();
+  const currentUser = c.get('user');
+
+  const reports = await db
+    .select({
+      id: users.id,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      title: users.title,
+      department: users.department,
+    })
+    .from(users)
+    .where(
+      and(
+        eq(users.managerId, currentUser.id),
+        eq(users.tenantId, tenantId),
+        isNull(users.deletedAt)
+      )
+    )
+    .orderBy(asc(users.firstName));
+
+  if (reports.length === 0) {
+    return c.json({ data: [] });
+  }
+
+  const reportIds = reports.map((r) => r.id);
+
+  // Avg scorecard score per direct report
+  const scorecardScores = await db
+    .select({
+      userId: schema.scorecardItems.userId,
+      avgScore: sql<number>`coalesce(round(avg(${schema.scorecardItems.score})), 0)::int`,
+    })
+    .from(schema.scorecardItems)
+    .where(
+      and(
+        inArray(schema.scorecardItems.userId, reportIds),
+        eq(schema.scorecardItems.tenantId, tenantId)
+      )
+    )
+    .groupBy(schema.scorecardItems.userId);
+
+  // Goal completion counts per direct report
+  const goalStats = await db
+    .select({
+      userId: schema.enrollments.userId,
+      total: sql<number>`count(*)::int`,
+      completed: sql<number>`count(*) filter (where ${schema.goalResponses.status} = 'completed')::int`,
+    })
+    .from(schema.goalResponses)
+    .innerJoin(schema.enrollments, eq(schema.goalResponses.enrollmentId, schema.enrollments.id))
+    .where(inArray(schema.enrollments.userId, reportIds))
+    .groupBy(schema.enrollments.userId);
+
+  // Active program counts per direct report
+  const programCounts = await db
+    .select({
+      userId: schema.enrollments.userId,
+      activeCount: sql<number>`count(*)::int`,
+    })
+    .from(schema.enrollments)
+    .innerJoin(schema.programs, eq(schema.enrollments.programId, schema.programs.id))
+    .where(
+      and(
+        inArray(schema.enrollments.userId, reportIds),
+        eq(schema.programs.tenantId, tenantId),
+        eq(schema.enrollments.status, 'active'),
+        eq(schema.enrollments.role, 'learner')
+      )
+    )
+    .groupBy(schema.enrollments.userId);
+
+  const scoreMap = new Map(scorecardScores.map((s) => [s.userId, s.avgScore]));
+  const goalMap = new Map(goalStats.map((g) => [g.userId, g]));
+  const programMap = new Map(programCounts.map((p) => [p.userId, p.activeCount]));
+
+  const getRating = (score: number): 'A' | 'A-' | 'B+' | 'B' | 'B-' => {
+    if (score >= 90) return 'A';
+    if (score >= 85) return 'A-';
+    if (score >= 80) return 'B+';
+    if (score >= 75) return 'B';
+    return 'B-';
+  };
+
+  const data = reports.map((r) => {
+    const score = scoreMap.get(r.id) ?? 0;
+    const goals = goalMap.get(r.id);
+    const programs = programMap.get(r.id) ?? 0;
+    return {
+      id: r.id,
+      name: `${r.firstName} ${r.lastName}`.trim(),
+      role: r.title ?? r.department ?? 'Team Member',
+      scorecardScore: score,
+      scorecardTrend: 'neutral' as const,
+      goalsCompleted: goals?.completed ?? 0,
+      goalsTotal: goals?.total ?? 0,
+      programsActive: programs,
+      rating: getRating(score),
+    };
+  });
+
+  return c.json({ data });
+});

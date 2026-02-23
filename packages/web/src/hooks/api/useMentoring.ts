@@ -32,10 +32,21 @@ export interface MentoringRelationship {
 export interface SessionPrep {
   id: string;
   sessionId: string;
-  wins: string[];
-  challenges: string[];
+  userId: string;
+  wins: string | null;
+  challenges: string | null;
   topicsToDiscuss: string[];
-  submittedAt?: string | null;
+  questionsForMentor: string | null;
+  submittedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SessionPrepInput {
+  wins?: string;
+  challenges?: string;
+  topicsToDiscuss?: string[];
+  questionsForMentor?: string;
 }
 
 export interface SessionNote {
@@ -141,26 +152,23 @@ export function useMentoringRelationships(tenantId: string | undefined) {
   return useQuery({
     queryKey: ['mentoringRelationships', tenantId],
     queryFn: async () => {
-      const response = await api.get<MentoringRelationship[]>(
+      const response = (await api.get<MentoringRelationship[]>(
         `/api/tenants/${tenantId}/mentoring/relationships`
-      ) as unknown as { data: MentoringRelationship[] };
+      )) as unknown as { data: MentoringRelationship[] };
       return response.data || [];
     },
     enabled: !!tenantId,
   });
 }
 
-export function useMentoringSessions(
-  tenantId: string | undefined,
-  relationshipId?: string
-) {
+export function useMentoringSessions(tenantId: string | undefined, relationshipId?: string) {
   return useQuery({
     queryKey: ['mentoringSessions', tenantId, relationshipId],
     queryFn: async () => {
       const url = relationshipId
         ? `/api/tenants/${tenantId}/mentoring/sessions?relationshipId=${relationshipId}`
         : `/api/tenants/${tenantId}/mentoring/sessions`;
-      const response = await api.get<MentoringSession[]>(url) as unknown as {
+      const response = (await api.get<MentoringSession[]>(url)) as unknown as {
         data: MentoringSession[];
       };
       return response.data || [];
@@ -169,17 +177,14 @@ export function useMentoringSessions(
   });
 }
 
-export function useMentoringActionItems(
-  tenantId: string | undefined,
-  status?: string
-) {
+export function useMentoringActionItems(tenantId: string | undefined, status?: string) {
   return useQuery({
     queryKey: ['mentoringActionItems', tenantId, status],
     queryFn: async () => {
       const url = status
         ? `/api/tenants/${tenantId}/mentoring/action-items?status=${status}`
         : `/api/tenants/${tenantId}/mentoring/action-items`;
-      const response = await api.get<ActionItem[]>(url) as unknown as {
+      const response = (await api.get<ActionItem[]>(url)) as unknown as {
         data: ActionItem[];
       };
       return response.data || [];
@@ -192,9 +197,9 @@ export function useMentoringStats(tenantId: string | undefined) {
   return useQuery({
     queryKey: ['mentoringStats', tenantId],
     queryFn: async () => {
-      const response = await api.get<MentoringStats>(
+      const response = (await api.get<MentoringStats>(
         `/api/tenants/${tenantId}/mentoring/stats`
-      ) as unknown as { data: MentoringStats };
+      )) as unknown as { data: MentoringStats };
       return response.data;
     },
     enabled: !!tenantId,
@@ -206,10 +211,10 @@ export function useCreateMentoringSession(tenantId: string | undefined) {
 
   return useMutation({
     mutationFn: async (input: CreateSessionInput) => {
-      const response = await api.post<MentoringSession>(
+      const response = (await api.post<MentoringSession>(
         `/api/tenants/${tenantId}/mentoring/sessions`,
         input
-      ) as unknown as { data: MentoringSession };
+      )) as unknown as { data: MentoringSession };
       return response.data;
     },
     onSuccess: () => {
@@ -224,10 +229,10 @@ export function useUpdateMentoringSession(tenantId: string | undefined) {
 
   return useMutation({
     mutationFn: async ({ sessionId, input }: { sessionId: string; input: UpdateSessionInput }) => {
-      const response = await api.put<MentoringSession>(
+      const response = (await api.put<MentoringSession>(
         `/api/tenants/${tenantId}/mentoring/sessions/${sessionId}`,
         input
-      ) as unknown as { data: MentoringSession };
+      )) as unknown as { data: MentoringSession };
       return response.data;
     },
     onSuccess: () => {
@@ -242,10 +247,10 @@ export function useCreateActionItem(tenantId: string | undefined) {
 
   return useMutation({
     mutationFn: async (input: CreateActionItemInput) => {
-      const response = await api.post<ActionItem>(
+      const response = (await api.post<ActionItem>(
         `/api/tenants/${tenantId}/mentoring/action-items`,
         input
-      ) as unknown as { data: ActionItem };
+      )) as unknown as { data: ActionItem };
       return response.data;
     },
     onSuccess: () => {
@@ -260,15 +265,70 @@ export function useUpdateActionItem(tenantId: string | undefined) {
 
   return useMutation({
     mutationFn: async ({ itemId, input }: { itemId: string; input: UpdateActionItemInput }) => {
-      const response = await api.put<ActionItem>(
+      const response = (await api.put<ActionItem>(
         `/api/tenants/${tenantId}/mentoring/action-items/${itemId}`,
         input
-      ) as unknown as { data: ActionItem };
+      )) as unknown as { data: ActionItem };
       return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mentoringActionItems', tenantId] });
       queryClient.invalidateQueries({ queryKey: ['mentoringStats', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['mentoringSessions', tenantId] });
+    },
+  });
+}
+
+// ─── Session Prep ────────────────────────────────────────────────────────────
+
+export function useSessionPrep(tenantId: string | null, sessionId: string | null) {
+  return useQuery({
+    queryKey: ['sessionPrep', tenantId, sessionId],
+    queryFn: async () => {
+      const response = (await api.get<SessionPrep | null>(
+        `/api/tenants/${tenantId}/mentoring/sessions/${sessionId}/prep`
+      )) as unknown as { data: SessionPrep | null };
+      return response.data;
+    },
+    enabled: !!tenantId && !!sessionId,
+  });
+}
+
+export function useSubmitSessionPrep(tenantId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ sessionId, input }: { sessionId: string; input: SessionPrepInput }) => {
+      const response = (await api.post<SessionPrep>(
+        `/api/tenants/${tenantId}/mentoring/sessions/${sessionId}/prep`,
+        input
+      )) as unknown as { data: SessionPrep };
+      return response.data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['sessionPrep', tenantId, variables.sessionId] });
+      queryClient.invalidateQueries({ queryKey: ['mentoringSessions', tenantId] });
+    },
+  });
+}
+
+export function useUpdateSessionPrep(tenantId: string | null) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      sessionId,
+      input,
+    }: {
+      sessionId: string;
+      input: Partial<SessionPrepInput>;
+    }) => {
+      const response = (await api.put<SessionPrep>(
+        `/api/tenants/${tenantId}/mentoring/sessions/${sessionId}/prep`,
+        input
+      )) as unknown as { data: SessionPrep };
+      return response.data;
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['sessionPrep', tenantId, variables.sessionId] });
       queryClient.invalidateQueries({ queryKey: ['mentoringSessions', tenantId] });
     },
   });

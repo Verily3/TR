@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { eq, and, isNull, gt } from 'drizzle-orm';
+import { eq, and, isNull, gt, desc } from 'drizzle-orm';
 import { db, schema } from '@tr/db';
 import { requireAgencyAccess, requirePermission } from '../../middleware/permissions.js';
 import { NotFoundError, ForbiddenError, BadRequestError } from '../../lib/errors.js';
@@ -9,7 +9,7 @@ import { PERMISSIONS } from '@tr/shared';
 import type { Variables } from '../../types/context.js';
 import crypto from 'node:crypto';
 
-const { users, tenants, impersonationSessions } = schema;
+const { users, tenants, impersonationSessions, roles, userRoles } = schema;
 
 export const impersonationRoutes = new Hono<{ Variables: Variables }>();
 
@@ -58,9 +58,7 @@ impersonationRoutes.post(
         .limit(1);
 
       if (!targetTenant || targetTenant.agencyId !== adminUser.agencyId) {
-        throw new ForbiddenError(
-          'Cannot impersonate users from other agencies'
-        );
+        throw new ForbiddenError('Cannot impersonate users from other agencies');
       }
     } else if (targetUser.agencyId !== adminUser.agencyId) {
       throw new ForbiddenError('Cannot impersonate users from other agencies');
@@ -69,6 +67,19 @@ impersonationRoutes.post(
     // Can't impersonate another agency admin
     if (targetUser.agencyId && !targetUser.tenantId) {
       throw new ForbiddenError('Cannot impersonate agency-level users');
+    }
+
+    // Can't impersonate a user with equal or higher role level
+    const [targetRole] = await db
+      .select({ level: roles.level })
+      .from(userRoles)
+      .innerJoin(roles, eq(userRoles.roleId, roles.id))
+      .where(eq(userRoles.userId, targetUser.id))
+      .orderBy(desc(roles.level))
+      .limit(1);
+
+    if (targetRole && targetRole.level >= adminUser.roleLevel) {
+      throw new ForbiddenError('Cannot impersonate a user with equal or higher role level');
     }
 
     // Generate secure token
@@ -135,18 +146,13 @@ impersonationRoutes.post('/end', async (c) => {
 
   // Resolve the admin's user ID regardless of whether we're currently
   // acting as the target user or as ourselves.
-  const adminUserId = user.isImpersonating
-    ? user.impersonatedBy?.userId
-    : user.id;
+  const adminUserId = user.isImpersonating ? user.impersonatedBy?.userId : user.id;
 
   if (!adminUserId) {
     throw new BadRequestError('Cannot determine admin user for this session');
   }
 
-  const tokenHash = crypto
-    .createHash('sha256')
-    .update(impersonationToken)
-    .digest('hex');
+  const tokenHash = crypto.createHash('sha256').update(impersonationToken).digest('hex');
 
   // Find active impersonation session owned by this admin
   const [session] = await db
@@ -179,85 +185,87 @@ impersonationRoutes.post('/end', async (c) => {
  * GET /api/admin/impersonate/status
  * Check current impersonation status (agency admin only)
  */
-impersonationRoutes.get('/status', requireAgencyAccess(), requirePermission(PERMISSIONS.AGENCY_IMPERSONATE), async (c) => {
-  const impersonationToken = c.req.header('X-Impersonation-Token');
+impersonationRoutes.get(
+  '/status',
+  requireAgencyAccess(),
+  requirePermission(PERMISSIONS.AGENCY_IMPERSONATE),
+  async (c) => {
+    const impersonationToken = c.req.header('X-Impersonation-Token');
 
-  if (!impersonationToken) {
-    return c.json({
-      data: {
-        isImpersonating: false,
-      },
-    });
-  }
+    if (!impersonationToken) {
+      return c.json({
+        data: {
+          isImpersonating: false,
+        },
+      });
+    }
 
-  const tokenHash = crypto
-    .createHash('sha256')
-    .update(impersonationToken)
-    .digest('hex');
+    const tokenHash = crypto.createHash('sha256').update(impersonationToken).digest('hex');
 
-  // Find active impersonation session
-  const [session] = await db
-    .select({
-      id: impersonationSessions.id,
-      adminUserId: impersonationSessions.adminUserId,
-      targetUserId: impersonationSessions.targetUserId,
-      expiresAt: impersonationSessions.expiresAt,
-      reason: impersonationSessions.reason,
-    })
-    .from(impersonationSessions)
-    .where(
-      and(
-        eq(impersonationSessions.tokenHash, tokenHash),
-        isNull(impersonationSessions.endedAt),
-        gt(impersonationSessions.expiresAt, new Date())
+    // Find active impersonation session
+    const [session] = await db
+      .select({
+        id: impersonationSessions.id,
+        adminUserId: impersonationSessions.adminUserId,
+        targetUserId: impersonationSessions.targetUserId,
+        expiresAt: impersonationSessions.expiresAt,
+        reason: impersonationSessions.reason,
+      })
+      .from(impersonationSessions)
+      .where(
+        and(
+          eq(impersonationSessions.tokenHash, tokenHash),
+          isNull(impersonationSessions.endedAt),
+          gt(impersonationSessions.expiresAt, new Date())
+        )
       )
-    )
-    .limit(1);
+      .limit(1);
 
-  if (!session) {
+    if (!session) {
+      return c.json({
+        data: {
+          isImpersonating: false,
+        },
+      });
+    }
+
+    // Get admin and target user info
+    const [adminUser] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+      })
+      .from(users)
+      .where(eq(users.id, session.adminUserId))
+      .limit(1);
+
+    const [targetUser] = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+      })
+      .from(users)
+      .where(eq(users.id, session.targetUserId))
+      .limit(1);
+
     return c.json({
       data: {
-        isImpersonating: false,
+        isImpersonating: true,
+        session: {
+          id: session.id,
+          expiresAt: session.expiresAt,
+          reason: session.reason,
+        },
+        adminUser,
+        targetUser,
       },
     });
   }
-
-  // Get admin and target user info
-  const [adminUser] = await db
-    .select({
-      id: users.id,
-      email: users.email,
-      firstName: users.firstName,
-      lastName: users.lastName,
-    })
-    .from(users)
-    .where(eq(users.id, session.adminUserId))
-    .limit(1);
-
-  const [targetUser] = await db
-    .select({
-      id: users.id,
-      email: users.email,
-      firstName: users.firstName,
-      lastName: users.lastName,
-    })
-    .from(users)
-    .where(eq(users.id, session.targetUserId))
-    .limit(1);
-
-  return c.json({
-    data: {
-      isImpersonating: true,
-      session: {
-        id: session.id,
-        expiresAt: session.expiresAt,
-        reason: session.reason,
-      },
-      adminUser,
-      targetUser,
-    },
-  });
-});
+);
 
 /**
  * GET /api/admin/impersonate/history

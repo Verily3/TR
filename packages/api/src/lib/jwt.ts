@@ -1,8 +1,5 @@
-import { SignJWT, jwtVerify } from 'jose';
-import type {
-  AccessTokenPayload,
-  RefreshTokenPayload,
-} from '@tr/shared';
+import { SignJWT, jwtVerify, errors as joseErrors } from 'jose';
+import type { AccessTokenPayload, RefreshTokenPayload } from '@tr/shared';
 
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '7d';
@@ -44,10 +41,7 @@ export class JWTService {
   /**
    * Generate a refresh token (7 day expiry)
    */
-  async generateRefreshToken(
-    userId: string,
-    sessionId: string
-  ): Promise<string> {
+  async generateRefreshToken(userId: string, sessionId: string): Promise<string> {
     return new SignJWT({ sub: userId, sid: sessionId, type: 'refresh' })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
@@ -62,7 +56,16 @@ export class JWTService {
     try {
       const { payload } = await jwtVerify(token, this.accessSecret);
       return payload as unknown as AccessTokenPayload;
-    } catch {
+    } catch (err) {
+      const reason =
+        err instanceof joseErrors.JWTExpired
+          ? 'expired'
+          : err instanceof joseErrors.JWTInvalid
+            ? 'invalid'
+            : err instanceof joseErrors.JWSSignatureVerificationFailed
+              ? 'bad_signature'
+              : 'unknown';
+      console.warn(`[JWT] Access token verification failed: ${reason}`);
       return null;
     }
   }
@@ -74,7 +77,16 @@ export class JWTService {
     try {
       const { payload } = await jwtVerify(token, this.refreshSecret);
       return payload as unknown as RefreshTokenPayload;
-    } catch {
+    } catch (err) {
+      const reason =
+        err instanceof joseErrors.JWTExpired
+          ? 'expired'
+          : err instanceof joseErrors.JWTInvalid
+            ? 'invalid'
+            : err instanceof joseErrors.JWSSignatureVerificationFailed
+              ? 'bad_signature'
+              : 'unknown';
+      console.warn(`[JWT] Refresh token verification failed: ${reason}`);
       return null;
     }
   }

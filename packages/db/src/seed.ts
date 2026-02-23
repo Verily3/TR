@@ -65,8 +65,19 @@ async function seedData(db: any) {
   await db.delete(schema.assessments);
   await db.delete(schema.assessmentBenchmarks);
   await db.delete(schema.assessmentTemplates);
+  await db.delete(schema.scorecardCompetencies);
+  await db.delete(schema.scorecardMetrics);
+  await db.delete(schema.scorecardItems);
+  await db.delete(schema.strategicGoalLinks);
+  await db.delete(schema.individualGoals);
+  await db.delete(schema.strategicPlans);
   await db.delete(schema.lessonDiscussions);
   await db.delete(schema.enrollmentMentorships);
+  await db.delete(schema.mentoringActionItems);
+  await db.delete(schema.mentoringSessionNotes);
+  await db.delete(schema.mentoringSessionPrep);
+  await db.delete(schema.mentoringSessions);
+  await db.delete(schema.mentoringRelationships);
   await db.delete(schema.surveyResponses);
   await db.delete(schema.surveyQuestions);
   await db.delete(schema.surveys);
@@ -77,6 +88,7 @@ async function seedData(db: any) {
   await db.delete(schema.goalReviews);
   await db.delete(schema.goalResponses);
   await db.delete(schema.approvalSubmissions);
+  await db.delete(schema.programResources);
   await db.delete(schema.enrollments);
   await db.delete(schema.lessons);
   await db.delete(schema.modules);
@@ -258,6 +270,7 @@ async function seedData(db: any) {
       lastName: 'Chen',
       title: 'Leadership Coach',
       department: 'Learning & Development',
+      managerId: tenantAdmin.id,
       status: 'active',
       emailVerified: true,
     })
@@ -282,6 +295,7 @@ async function seedData(db: any) {
       lastName: 'Rodriguez',
       title: 'Senior Manager',
       department: 'Operations',
+      managerId: tenantAdmin.id,
       status: 'active',
       emailVerified: true,
     })
@@ -685,6 +699,140 @@ async function seedData(db: any) {
     });
     console.log(`  ✓ Assigned mentor to enrollment ${enrollment.id}`);
   }
+
+  // ============================================================
+  // 12b. Mentoring Relationships, Sessions, Prep & Action Items
+  // ============================================================
+  console.log('\nSeeding mentoring relationships and sessions...');
+
+  // Relationship: Emily (mentor) ↔ John (mentee)
+  const [rel1] = await db.insert(schema.mentoringRelationships).values({
+    tenantId: tenant.id,
+    mentorId: mentor.id,
+    menteeId: learners[0].id, // john.doe
+    relationshipType: 'mentor',
+    status: 'active',
+    description: 'Leadership development coaching — focus on delegation and team empowerment',
+    goals: 'Develop a delegative leadership style; build trust within the team; grow into a senior leadership role',
+    startedAt: new Date('2026-02-01'),
+  }).returning();
+
+  // Relationship: Emily (mentor) ↔ Jane (mentee)
+  const [rel2] = await db.insert(schema.mentoringRelationships).values({
+    tenantId: tenant.id,
+    mentorId: mentor.id,
+    menteeId: learners[1].id, // jane.smith
+    relationshipType: 'mentor',
+    status: 'active',
+    description: 'Communication and cross-functional relationship building',
+    goals: 'Build stronger cross-functional relationships; improve executive presence; develop peer influence skills',
+    startedAt: new Date('2026-02-01'),
+  }).returning();
+
+  console.log('  ✓ Created 2 mentoring relationships');
+
+  // Session 1 (rel1): Completed kick-off
+  const [sess1] = await db.insert(schema.mentoringSessions).values({
+    relationshipId: rel1.id,
+    title: 'Kick-off Session',
+    sessionType: 'mentoring',
+    scheduledDate: '2026-02-05',
+    scheduledTime: '10:00',
+    duration: 60,
+    status: 'completed',
+    agenda: 'Introduction, goal setting, and mapping the next 3 months',
+    summary: 'Great first session. John is motivated and has clear goals around delegation. Agreed to focus on RACI framework as first practical tool.',
+  }).returning();
+
+  // Session 2 (rel1): Ready (prep submitted by John)
+  const [sess2] = await db.insert(schema.mentoringSessions).values({
+    relationshipId: rel1.id,
+    title: 'Progress Check-in',
+    sessionType: 'check_in',
+    scheduledDate: '2026-02-26',
+    scheduledTime: '10:00',
+    duration: 45,
+    status: 'ready',
+    agenda: 'Review delegation progress; RACI chart outcomes; team feedback; prepare for Q2 planning',
+  }).returning();
+
+  // Session 3 (rel1): Upcoming
+  await db.insert(schema.mentoringSessions).values({
+    relationshipId: rel1.id,
+    title: 'Monthly Mentoring Session',
+    sessionType: 'mentoring',
+    scheduledDate: '2026-03-05',
+    scheduledTime: '10:00',
+    duration: 60,
+    status: 'scheduled',
+    agenda: 'Mid-quarter review: goals progress, upcoming challenges, action items review',
+  }).returning();
+
+  // Session 4 (rel2): Jane's upcoming planning session
+  await db.insert(schema.mentoringSessions).values({
+    relationshipId: rel2.id,
+    title: 'Cross-functional Relationship Planning',
+    sessionType: 'planning',
+    scheduledDate: '2026-02-24',
+    scheduledTime: '14:00',
+    duration: 60,
+    status: 'scheduled',
+    agenda: 'Review cross-functional stakeholder map; plan outreach to department leads; set 30-day targets',
+  });
+
+  console.log('  ✓ Created 4 mentoring sessions');
+
+  // Session prep: John submitted prep for sess2 (status: ready)
+  await db.insert(schema.mentoringSessionPrep).values({
+    sessionId: sess2.id,
+    userId: learners[0].id, // John
+    wins: 'Successfully delegated the code review process to senior devs. RACI charts completed for 2 major projects. Team leads are responding well to the added ownership.',
+    challenges: 'Still feel the urge to jump in and micromanage during high-stakes moments. Finding it hard to fully step back from daily standups without feeling out of the loop.',
+    topicsToDiscuss: [
+      'How to build trust with team when delegating high-visibility tasks',
+      'Handling edge cases where stepping in is actually necessary',
+      'Planning for Q2: how to set the team up for success without over-specifying',
+    ],
+    questionsForMentor: 'How did you handle the transition from doing to leading? What helped you stay patient when things moved slower than you would have liked?',
+    submittedAt: new Date('2026-02-25T16:00:00Z'),
+  });
+  console.log('  ✓ Created session prep for John (sess2 — ready)');
+
+  // Action items (rel1: Emily ↔ John)
+  await db.insert(schema.mentoringActionItems).values([
+    {
+      sessionId: sess1.id,
+      relationshipId: rel1.id,
+      ownerId: learners[0].id, // John
+      title: 'Create RACI chart for all active Q1 projects',
+      description: 'Map out ownership and accountability for active Q1 projects using the RACI framework discussed in session.',
+      priority: 'high',
+      status: 'completed',
+      dueDate: '2026-02-12',
+      completedAt: new Date('2026-02-11T17:00:00Z'),
+    },
+    {
+      sessionId: sess1.id,
+      relationshipId: rel1.id,
+      ownerId: learners[0].id, // John
+      title: 'Delegate standup facilitation to a team lead',
+      description: 'Identify a capable team lead and hand off daily standup ownership for at least 2 weeks.',
+      priority: 'medium',
+      status: 'in_progress',
+      dueDate: '2026-02-28',
+    },
+    {
+      sessionId: sess2.id,
+      relationshipId: rel1.id,
+      ownerId: mentor.id, // Emily
+      title: 'Share article on trust-based leadership',
+      description: 'Send John recommended reading on building team trust during delegation transitions.',
+      priority: 'low',
+      status: 'pending',
+      dueDate: '2026-02-27',
+    },
+  ]);
+  console.log('  ✓ Created 3 action items (Emily ↔ John)');
 
   // ============================================================
   // 13. Dashboard Seed Data for john.doe@techcorp.com
@@ -1745,6 +1893,440 @@ async function seedData(db: any) {
 
   console.log(`  ✓ Created survey: ${satisfactionSurvey.title} (active, 5 questions)`);
   console.log('\n✅ Survey seed data complete!');
+
+  // ============================================
+  // 14b. Scorecard Seed Data
+  // ============================================
+  console.log('\nSeeding scorecard data for John Doe...');
+
+  const currentPeriod = (() => {
+    const now = new Date();
+    const q = Math.ceil((now.getMonth() + 1) / 3);
+    return `Q${q}-${now.getFullYear()}`;
+  })();
+
+  // Scorecard Items (Key Accountabilities) for John Doe
+  const [siStrategy] = await db.insert(schema.scorecardItems).values({
+    tenantId: tenant.id,
+    userId: johnDoe.id,
+    ordinal: 0,
+    title: 'Team Performance & Development',
+    description: 'Build and retain a high-performing engineering team; achieve >90% team satisfaction and reduce attrition below 10%',
+    score: 88,
+    status: 'on_track',
+    period: currentPeriod,
+  }).returning();
+
+  const [siExec] = await db.insert(schema.scorecardItems).values({
+    tenantId: tenant.id,
+    userId: johnDoe.id,
+    ordinal: 1,
+    title: 'Project Delivery & Quality',
+    description: 'Deliver all Q1 initiatives on time with <5% defect rate; maintain sprint velocity above 85 points',
+    score: 82,
+    status: 'on_track',
+    period: currentPeriod,
+  }).returning();
+
+  await db.insert(schema.scorecardItems).values({
+    tenantId: tenant.id,
+    userId: johnDoe.id,
+    ordinal: 2,
+    title: 'Cross-Functional Collaboration',
+    description: 'Strengthen partnerships with Product and Sales; lead monthly sync cadence; resolve cross-team blockers within 48 hours',
+    score: 74,
+    status: 'at_risk',
+    period: currentPeriod,
+  });
+
+  await db.insert(schema.scorecardItems).values({
+    tenantId: tenant.id,
+    userId: johnDoe.id,
+    ordinal: 3,
+    title: 'Technical Debt Reduction',
+    description: 'Reduce technical debt by 25% this quarter; prioritize refactoring in payment and auth modules',
+    score: 65,
+    status: 'needs_attention',
+    period: currentPeriod,
+  });
+  console.log('  ✓ Created 4 scorecard items for John Doe');
+
+  // Scorecard Metrics (KPIs) — Financial category
+  await db.insert(schema.scorecardMetrics).values([
+    {
+      tenantId: tenant.id,
+      userId: johnDoe.id,
+      scorecardItemId: siExec.id,
+      category: 'Delivery',
+      ordinal: 0,
+      name: 'Sprint Velocity',
+      targetValue: '85 pts',
+      actualValue: '91 pts',
+      targetNumeric: 85,
+      actualNumeric: 91,
+      changeLabel: '+7.1%',
+      trend: 'up',
+      invertTrend: 0,
+      period: currentPeriod,
+    },
+    {
+      tenantId: tenant.id,
+      userId: johnDoe.id,
+      scorecardItemId: siExec.id,
+      category: 'Delivery',
+      ordinal: 1,
+      name: 'Defect Rate',
+      targetValue: '<5%',
+      actualValue: '3.2%',
+      targetNumeric: 5,
+      actualNumeric: 3.2,
+      changeLabel: '-1.8%',
+      trend: 'down',
+      invertTrend: 1,
+      period: currentPeriod,
+    },
+    {
+      tenantId: tenant.id,
+      userId: johnDoe.id,
+      scorecardItemId: siExec.id,
+      category: 'Delivery',
+      ordinal: 2,
+      name: 'On-Time Delivery',
+      targetValue: '90%',
+      actualValue: '87%',
+      targetNumeric: 90,
+      actualNumeric: 87,
+      changeLabel: '-3%',
+      trend: 'down',
+      invertTrend: 0,
+      period: currentPeriod,
+    },
+    {
+      tenantId: tenant.id,
+      userId: johnDoe.id,
+      scorecardItemId: siStrategy.id,
+      category: 'People',
+      ordinal: 0,
+      name: 'Team Satisfaction',
+      targetValue: '90%',
+      actualValue: '87%',
+      targetNumeric: 90,
+      actualNumeric: 87,
+      changeLabel: '+2%',
+      trend: 'up',
+      invertTrend: 0,
+      period: currentPeriod,
+    },
+    {
+      tenantId: tenant.id,
+      userId: johnDoe.id,
+      scorecardItemId: siStrategy.id,
+      category: 'People',
+      ordinal: 1,
+      name: 'Attrition Rate',
+      targetValue: '<10%',
+      actualValue: '8%',
+      targetNumeric: 10,
+      actualNumeric: 8,
+      changeLabel: '-2%',
+      trend: 'down',
+      invertTrend: 1,
+      period: currentPeriod,
+    },
+  ]);
+  console.log('  ✓ Created 5 scorecard metrics for John Doe');
+
+  // Scorecard Competencies for John Doe
+  await db.insert(schema.scorecardCompetencies).values([
+    {
+      tenantId: tenant.id,
+      userId: johnDoe.id,
+      reviewerId: mentor.id,
+      ordinal: 0,
+      name: 'Strategic Thinking',
+      description: 'Ability to see the big picture, anticipate challenges, and align team goals with business objectives',
+      selfRating: 4,
+      managerRating: 4,
+      period: currentPeriod,
+    },
+    {
+      tenantId: tenant.id,
+      userId: johnDoe.id,
+      reviewerId: mentor.id,
+      ordinal: 1,
+      name: 'Team Leadership',
+      description: 'Inspiring, coaching, and developing team members to perform at their best',
+      selfRating: 4,
+      managerRating: 5,
+      period: currentPeriod,
+    },
+    {
+      tenantId: tenant.id,
+      userId: johnDoe.id,
+      reviewerId: mentor.id,
+      ordinal: 2,
+      name: 'Technical Excellence',
+      description: 'Maintaining technical depth, making sound architectural decisions, and promoting engineering best practices',
+      selfRating: 5,
+      managerRating: 4,
+      period: currentPeriod,
+    },
+    {
+      tenantId: tenant.id,
+      userId: johnDoe.id,
+      reviewerId: mentor.id,
+      ordinal: 3,
+      name: 'Communication & Influence',
+      description: 'Clearly communicating ideas to technical and non-technical stakeholders; influencing without authority',
+      selfRating: 3,
+      managerRating: 4,
+      period: currentPeriod,
+    },
+    {
+      tenantId: tenant.id,
+      userId: johnDoe.id,
+      reviewerId: mentor.id,
+      ordinal: 4,
+      name: 'Execution & Accountability',
+      description: 'Driving results through prioritization, removing blockers, and holding the team accountable',
+      selfRating: 4,
+      managerRating: 3,
+      period: currentPeriod,
+    },
+  ]);
+  console.log(`  ✓ Created 5 competency ratings for John Doe (period: ${currentPeriod})`);
+  console.log('\n✅ Scorecard seed data complete!');
+
+  // ============================================
+  // 15a. Planning Seed Data
+  // ============================================
+  console.log('\nSeeding planning data...');
+
+  // Individual goals for John Doe
+  await db.insert(schema.individualGoals).values([
+    {
+      tenantId: tenant.id,
+      userId: johnDoe.id,
+      title: 'Complete advanced leadership certification',
+      description: 'Develop executive presence and strategic communication skills through structured programme',
+      successMetrics: 'Certification earned; 360 feedback shows +10% improvement in communication scores',
+      category: 'leadership',
+      priority: 'high',
+      status: 'active',
+      progress: 65,
+      startDate: '2026-01-01',
+      targetDate: '2026-06-30',
+      reviewFrequency: 'monthly',
+    },
+    {
+      tenantId: tenant.id,
+      userId: johnDoe.id,
+      title: 'Improve team sprint velocity by 15%',
+      description: 'Optimise sprint planning, improve backlog grooming, and remove recurring blockers',
+      successMetrics: 'Sustained 15% velocity increase over 3 consecutive sprints',
+      category: 'performance',
+      priority: 'high',
+      status: 'active',
+      progress: 72,
+      startDate: '2026-01-01',
+      targetDate: '2026-03-31',
+      reviewFrequency: 'weekly',
+    },
+    {
+      tenantId: tenant.id,
+      userId: johnDoe.id,
+      title: 'Mentor two junior developers to mid-level',
+      description: 'Regular 1:1 sessions, code review guidance, and career planning for Sam and Chris',
+      category: 'professional',
+      priority: 'medium',
+      status: 'active',
+      progress: 40,
+      startDate: '2026-01-01',
+      targetDate: '2026-12-31',
+      reviewFrequency: 'monthly',
+    },
+    {
+      tenantId: tenant.id,
+      userId: johnDoe.id,
+      title: 'Reduce on-call incidents by 30%',
+      description: 'Implement better monitoring, runbooks, and automated alerting to reduce toil',
+      successMetrics: 'P1/P2 incident count drops from avg 12/month to <9/month',
+      category: 'performance',
+      priority: 'high',
+      status: 'active',
+      progress: 25,
+      startDate: '2026-01-15',
+      targetDate: '2026-06-30',
+      reviewFrequency: 'weekly',
+    },
+  ]);
+
+  // Individual goal for Jane Smith
+  await db.insert(schema.individualGoals).values([
+    {
+      tenantId: tenant.id,
+      userId: janeSmith.id,
+      title: 'Earn PMP certification',
+      description: 'Complete 35 hours of PM education and pass the PMP exam by Q3',
+      category: 'development',
+      priority: 'high',
+      status: 'active',
+      progress: 30,
+      startDate: '2026-02-01',
+      targetDate: '2026-09-30',
+      reviewFrequency: 'monthly',
+    },
+    {
+      tenantId: tenant.id,
+      userId: janeSmith.id,
+      title: 'Build cross-functional collaboration skills',
+      description: 'Lead at least 2 cross-team initiatives and improve stakeholder satisfaction scores',
+      category: 'leadership',
+      priority: 'medium',
+      status: 'active',
+      progress: 50,
+      startDate: '2026-01-01',
+      targetDate: '2026-12-31',
+      reviewFrequency: 'quarterly',
+    },
+  ]);
+
+  console.log('  ✓ Created 6 individual goals');
+
+  // Strategic plans for TechCorp
+  const [plan3hag] = await db.insert(schema.strategicPlans).values({
+    tenantId: tenant.id,
+    name: 'Market Leadership by 2028',
+    description: 'Become the top-rated employee development platform in the mid-market segment — 50 enterprise clients, 95% retention, $5M ARR',
+    planType: '3hag',
+    status: 'active',
+    startDate: '2026-01-01',
+    targetDate: '2028-12-31',
+    config: {
+      revenueTarget: 5000000,
+      marketPosition: 'Top 3 in mid-market L&D platforms',
+    },
+  }).returning();
+
+  const [planAnnual] = await db.insert(schema.strategicPlans).values({
+    tenantId: tenant.id,
+    parentPlanId: plan3hag.id,
+    name: '2026 Growth & Foundation Year',
+    description: 'Scale to 20 enterprise clients, achieve 90% retention, ship 3 new platform modules, grow team to 25',
+    planType: 'annual',
+    status: 'active',
+    startDate: '2026-01-01',
+    targetDate: '2026-12-31',
+    config: {
+      metrics: [
+        { name: 'Enterprise clients', target: '20', current: '12' },
+        { name: 'Retention rate', target: '90%', current: '87%' },
+        { name: 'Team size', target: '25', current: '18' },
+      ],
+    },
+  }).returning();
+
+  await db.insert(schema.strategicPlans).values({
+    tenantId: tenant.id,
+    parentPlanId: planAnnual.id,
+    name: 'Q1 2026 — Platform Stability & Onboarding',
+    description: 'Zero critical bugs in production, onboard 3 new enterprise clients, launch LeaderShift programme with 20+ active learners',
+    planType: 'quarterly',
+    status: 'active',
+    startDate: '2026-01-01',
+    targetDate: '2026-03-31',
+    config: {
+      okrFormat: true,
+      keyResults: [
+        'Zero P0 bugs for 8+ consecutive weeks',
+        'Onboard 3 new enterprise clients with <14-day time-to-value',
+        'LeaderShift programme live with 20+ active learners',
+      ],
+    },
+  });
+
+  console.log('  ✓ Created 3 strategic plans (3HAG, Annual, Q1 Quarterly)');
+  console.log('\n✅ Planning seed data complete!');
+
+  // ============================================
+  // 14b. Notifications for John Doe
+  // ============================================
+  const now = new Date();
+  const hoursAgo = (h: number) => new Date(now.getTime() - h * 3_600_000).toISOString();
+  const daysAgo = (d: number) => new Date(now.getTime() - d * 86_400_000).toISOString();
+
+  await db.insert(schema.notifications).values([
+    {
+      userId: johnDoe.id,
+      type: 'program_update',
+      title: 'New Module Available',
+      message: 'Module 4: Building High-Performance Teams is now unlocked in your LeaderShift program.',
+      actionUrl: '/programs',
+      actionLabel: 'Start Module',
+      priority: 'medium',
+      status: 'unread',
+      createdAt: new Date(hoursAgo(1)),
+    },
+    {
+      userId: johnDoe.id,
+      type: 'assessment_invite',
+      title: 'Assessment Invitation',
+      message: 'You have been invited to complete the LeaderShift 360 assessment. 5 raters have already responded.',
+      actionUrl: '/assessments',
+      actionLabel: 'View Assessment',
+      priority: 'high',
+      status: 'unread',
+      createdAt: new Date(hoursAgo(3)),
+    },
+    {
+      userId: johnDoe.id,
+      type: 'goal_reminder',
+      title: 'Goal Check-In Due',
+      message: 'Your Q1 goal "Improve team engagement score to 85%" is due for a weekly check-in.',
+      actionUrl: '/planning',
+      actionLabel: 'Update Progress',
+      priority: 'medium',
+      status: 'unread',
+      createdAt: new Date(hoursAgo(6)),
+    },
+    {
+      userId: johnDoe.id,
+      type: 'coaching_session',
+      title: 'Upcoming Mentoring Session',
+      message: 'You have a mentoring session with your mentor tomorrow at 10:00 AM. Session prep is available.',
+      actionUrl: '/mentoring',
+      actionLabel: 'Prepare',
+      priority: 'medium',
+      status: 'read',
+      createdAt: new Date(daysAgo(1)),
+      readAt: new Date(hoursAgo(18)),
+    },
+    {
+      userId: johnDoe.id,
+      type: 'achievement',
+      title: 'Module Completed!',
+      message: 'Congratulations! You completed Module 2: Strategic Leadership Foundations and earned 150 points.',
+      actionUrl: '/programs',
+      actionLabel: 'Continue Learning',
+      priority: 'low',
+      status: 'read',
+      createdAt: new Date(daysAgo(2)),
+      readAt: new Date(daysAgo(2)),
+    },
+    {
+      userId: johnDoe.id,
+      type: 'system',
+      title: 'Welcome to Results Tracking',
+      message: 'Your account is set up and ready. Start by exploring your program or updating your goals.',
+      actionUrl: '/dashboard',
+      actionLabel: 'Go to Dashboard',
+      priority: 'low',
+      status: 'read',
+      createdAt: new Date(daysAgo(7)),
+      readAt: new Date(daysAgo(7)),
+    },
+  ]);
+  console.log('  ✓ Created 6 notifications for john.doe@techcorp.com');
 
   // ============================================
   // 15. Additional Tenant: Apex Financial Group

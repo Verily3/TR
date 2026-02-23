@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   useNotifications,
+  useNotificationPreferences,
   useMarkRead,
   useMarkAllRead,
   useArchiveNotification,
@@ -152,24 +153,61 @@ const notificationTypeConfig: Record<
   string,
   { label: string; icon: string; bg: string; text: string }
 > = {
-  program_update: { label: 'Program Update', icon: 'BookOpen', bg: 'bg-blue-100', text: 'text-blue-700' },
-  goal_reminder: { label: 'Goal Reminder', icon: 'Target', bg: 'bg-green-100', text: 'text-green-700' },
-  assessment_invite: { label: 'Assessment', icon: 'ClipboardList', bg: 'bg-purple-100', text: 'text-purple-700' },
-  coaching_session: { label: 'Mentoring', icon: 'Users', bg: 'bg-orange-100', text: 'text-orange-700' },
-  feedback_received: { label: 'Feedback', icon: 'MessageSquare', bg: 'bg-teal-100', text: 'text-teal-700' },
-  achievement: { label: 'Achievement', icon: 'Award', bg: 'bg-yellow-100', text: 'text-yellow-700' },
+  program_update: {
+    label: 'Program Update',
+    icon: 'BookOpen',
+    bg: 'bg-blue-100',
+    text: 'text-blue-700',
+  },
+  goal_reminder: {
+    label: 'Goal Reminder',
+    icon: 'Target',
+    bg: 'bg-green-100',
+    text: 'text-green-700',
+  },
+  assessment_invite: {
+    label: 'Assessment',
+    icon: 'ClipboardList',
+    bg: 'bg-purple-100',
+    text: 'text-purple-700',
+  },
+  coaching_session: {
+    label: 'Mentoring',
+    icon: 'Users',
+    bg: 'bg-orange-100',
+    text: 'text-orange-700',
+  },
+  feedback_received: {
+    label: 'Feedback',
+    icon: 'MessageSquare',
+    bg: 'bg-teal-100',
+    text: 'text-teal-700',
+  },
+  achievement: {
+    label: 'Achievement',
+    icon: 'Award',
+    bg: 'bg-yellow-100',
+    text: 'text-yellow-700',
+  },
   mention: { label: 'Mention', icon: 'AtSign', bg: 'bg-pink-100', text: 'text-pink-700' },
   system: { label: 'System', icon: 'Settings', bg: 'bg-gray-100', text: 'text-gray-700' },
   deadline: { label: 'Deadline', icon: 'Clock', bg: 'bg-red-100', text: 'text-red-700' },
-  approval_request: { label: 'Approval', icon: 'CheckCircle', bg: 'bg-indigo-100', text: 'text-indigo-700' },
+  approval_request: {
+    label: 'Approval',
+    icon: 'CheckCircle',
+    bg: 'bg-indigo-100',
+    text: 'text-indigo-700',
+  },
   enrollment: { label: 'Enrollment', icon: 'BookOpen', bg: 'bg-blue-100', text: 'text-blue-700' },
-  assessment_reminder: { label: 'Assessment', icon: 'ClipboardList', bg: 'bg-purple-100', text: 'text-purple-700' },
+  assessment_reminder: {
+    label: 'Assessment',
+    icon: 'ClipboardList',
+    bg: 'bg-purple-100',
+    text: 'text-purple-700',
+  },
 };
 
-const priorityConfig: Record<
-  string,
-  { label: string; bg: string; text: string; dot: string }
-> = {
+const priorityConfig: Record<string, { label: string; bg: string; text: string; dot: string }> = {
   low: { label: 'Low', bg: 'bg-gray-100', text: 'text-gray-600', dot: 'bg-gray-400' },
   medium: { label: 'Medium', bg: 'bg-blue-100', text: 'text-blue-600', dot: 'bg-blue-400' },
   high: { label: 'High', bg: 'bg-orange-100', text: 'text-orange-600', dot: 'bg-orange-400' },
@@ -177,14 +215,32 @@ const priorityConfig: Record<
 };
 
 const preferenceTypeLabels: Record<string, { label: string; description: string }> = {
-  program_updates: { label: 'Program Updates', description: 'New modules, content releases, and program changes' },
-  goal_reminders: { label: 'Goal Reminders', description: 'Check-in reminders and deadline notifications' },
-  assessment_invites: { label: 'Assessment Invitations', description: 'Invitations to complete or provide feedback' },
-  coaching_sessions: { label: 'Mentoring Sessions', description: 'Session reminders, notes, and scheduling updates' },
+  program_updates: {
+    label: 'Program Updates',
+    description: 'New modules, content releases, and program changes',
+  },
+  goal_reminders: {
+    label: 'Goal Reminders',
+    description: 'Check-in reminders and deadline notifications',
+  },
+  assessment_invites: {
+    label: 'Assessment Invitations',
+    description: 'Invitations to complete or provide feedback',
+  },
+  coaching_sessions: {
+    label: 'Mentoring Sessions',
+    description: 'Session reminders, notes, and scheduling updates',
+  },
   feedback: { label: 'Feedback', description: 'When someone provides feedback on your work' },
-  achievements: { label: 'Achievements', description: 'Badges, certificates, and milestone completions' },
+  achievements: {
+    label: 'Achievements',
+    description: 'Badges, certificates, and milestone completions',
+  },
   mentions: { label: 'Mentions', description: 'When someone mentions you in discussions' },
-  system: { label: 'System Notifications', description: 'Maintenance, updates, and system announcements' },
+  system: {
+    label: 'System Notifications',
+    description: 'Maintenance, updates, and system announcements',
+  },
 };
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -352,9 +408,7 @@ function NotificationCard({
             </span>
           </div>
 
-          <p className="text-sm text-gray-500 mt-1 line-clamp-2">
-            {notification.message}
-          </p>
+          <p className="text-sm text-gray-500 mt-1 line-clamp-2">{notification.message}</p>
 
           {/* Sender & Action */}
           <div className="flex items-center justify-between mt-2">
@@ -364,14 +418,10 @@ function NotificationCard({
                   <div className="w-5 h-5 rounded-full bg-red-50 text-red-600 flex items-center justify-center text-xs font-medium">
                     {notification.sender.name.slice(0, 1)}
                   </div>
-                  <span className="text-xs text-gray-500">
-                    {notification.sender.name}
-                  </span>
+                  <span className="text-xs text-gray-500">{notification.sender.name}</span>
                 </div>
               )}
-              <span
-                className={`px-1.5 py-0.5 rounded text-xs ${typeConfig.bg} ${typeConfig.text}`}
-              >
+              <span className={`px-1.5 py-0.5 rounded text-xs ${typeConfig.bg} ${typeConfig.text}`}>
                 {typeConfig.label}
               </span>
             </div>
@@ -471,10 +521,13 @@ function PreferencesPanel({
   const [config, setConfig] = useState<NotificationPreferences>(preferences);
   const [hasChanges, setHasChanges] = useState(false);
 
-  const handleToggle = (
-    channel: 'email' | 'push' | 'inApp',
-    key: string
-  ) => {
+  // Sync local state when real preferences load from API
+  useEffect(() => {
+    setConfig(preferences);
+    setHasChanges(false);
+  }, [preferences]);
+
+  const handleToggle = (channel: 'email' | 'push' | 'inApp', key: string) => {
     setConfig((prev) => ({
       ...prev,
       [channel]: {
@@ -489,7 +542,7 @@ function PreferencesPanel({
   };
 
   const handleSave = () => {
-    // Serialize per-type channel toggles into flat JSONB preferences
+    // Serialize per-type channel toggles + extra booleans into flat JSONB preferences
     const perTypePreferences: Record<string, boolean> = {};
     for (const [key, val] of Object.entries(config.email.types)) {
       perTypePreferences[`email_${key}`] = val;
@@ -500,6 +553,10 @@ function PreferencesPanel({
     for (const [key, val] of Object.entries(config.inApp.types)) {
       perTypePreferences[`inApp_${key}`] = val;
     }
+    // Extra settings not covered by top-level API fields
+    perTypePreferences['push_enabled'] = config.push.enabled;
+    perTypePreferences['showBadge'] = config.inApp.showBadge;
+    perTypePreferences['playSound'] = config.inApp.playSound;
 
     updatePreferences.mutate({
       emailEnabled: config.email.enabled,
@@ -534,12 +591,8 @@ function PreferencesPanel({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold text-gray-900">
-            Notification Preferences
-          </h2>
-          <p className="text-sm text-gray-500">
-            Choose how and when you want to be notified
-          </p>
+          <h2 className="text-xl font-semibold text-gray-900">Notification Preferences</h2>
+          <p className="text-sm text-gray-500">Choose how and when you want to be notified</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -568,12 +621,8 @@ function PreferencesPanel({
             <Mail className="w-5 h-5 text-blue-600" />
           </div>
           <div className="flex-1">
-            <h3 className="text-lg font-medium text-gray-900">
-              Email Notifications
-            </h3>
-            <p className="text-sm text-gray-500">
-              Receive notifications via email
-            </p>
+            <h3 className="text-lg font-medium text-gray-900">Email Notifications</h3>
+            <p className="text-sm text-gray-500">Receive notifications via email</p>
           </div>
           <Toggle
             enabled={config.email.enabled}
@@ -642,12 +691,8 @@ function PreferencesPanel({
             <Smartphone className="w-5 h-5 text-purple-600" />
           </div>
           <div className="flex-1">
-            <h3 className="text-lg font-medium text-gray-900">
-              Push Notifications
-            </h3>
-            <p className="text-sm text-gray-500">
-              Receive notifications on your device
-            </p>
+            <h3 className="text-lg font-medium text-gray-900">Push Notifications</h3>
+            <p className="text-sm text-gray-500">Receive notifications on your device</p>
           </div>
           <Toggle
             enabled={config.push.enabled}
@@ -689,12 +734,8 @@ function PreferencesPanel({
             <Bell className="w-5 h-5 text-green-600" />
           </div>
           <div className="flex-1">
-            <h3 className="text-lg font-medium text-gray-900">
-              In-App Notifications
-            </h3>
-            <p className="text-sm text-gray-500">
-              Notifications within the application
-            </p>
+            <h3 className="text-lg font-medium text-gray-900">In-App Notifications</h3>
+            <p className="text-sm text-gray-500">Notifications within the application</p>
           </div>
           <Toggle
             enabled={config.inApp.enabled}
@@ -771,12 +812,8 @@ function PreferencesPanel({
             <Moon className="w-5 h-5 text-indigo-600" />
           </div>
           <div className="flex-1">
-            <h3 className="text-lg font-medium text-gray-900">
-              Quiet Hours
-            </h3>
-            <p className="text-sm text-gray-500">
-              Pause notifications during specific hours
-            </p>
+            <h3 className="text-lg font-medium text-gray-900">Quiet Hours</h3>
+            <p className="text-sm text-gray-500">Pause notifications during specific hours</p>
           </div>
           <Toggle
             enabled={config.quietHours.enabled}
@@ -796,9 +833,7 @@ function PreferencesPanel({
         {config.quietHours.enabled && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
-                Start Time
-              </label>
+              <label className="block text-sm font-medium text-gray-900 mb-2">Start Time</label>
               <input
                 type="time"
                 value={config.quietHours.start}
@@ -813,9 +848,7 @@ function PreferencesPanel({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
-                End Time
-              </label>
+              <label className="block text-sm font-medium text-gray-900 mb-2">End Time</label>
               <input
                 type="time"
                 value={config.quietHours.end}
@@ -830,9 +863,7 @@ function PreferencesPanel({
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-900 mb-2">
-                Timezone
-              </label>
+              <label className="block text-sm font-medium text-gray-900 mb-2">Timezone</label>
               <select
                 value={config.quietHours.timezone}
                 onChange={(e) => {
@@ -873,25 +904,65 @@ export default function NotificationsPage() {
 
   // ── Real API data ────────────────────────────────────────────────────────────
   const { data: apiData, isLoading } = useNotifications();
+  const { data: apiPrefs } = useNotificationPreferences();
   const markRead = useMarkRead();
   const markAllRead = useMarkAllRead();
   const archiveNotification = useArchiveNotification();
 
   // Map API notifications to the local shape (createdAt → timestamp)
-  const notificationList: Notification[] = useMemo(() =>
-    (apiData?.notifications ?? []).map((n) => ({
-      id: n.id,
-      type: (n.type as NotificationType) ?? 'system',
-      title: n.title,
-      message: n.message,
-      timestamp: n.createdAt,
-      status: n.status,
-      priority: (n.priority as NotificationPriority) ?? 'medium',
-      actionUrl: n.actionUrl ?? undefined,
-      actionLabel: n.actionLabel ?? undefined,
-    })),
+  const notificationList: Notification[] = useMemo(
+    () =>
+      (apiData?.notifications ?? []).map((n) => ({
+        id: n.id,
+        type: (n.type as NotificationType) ?? 'system',
+        title: n.title,
+        message: n.message,
+        timestamp: n.createdAt,
+        status: n.status,
+        priority: (n.priority as NotificationPriority) ?? 'medium',
+        actionUrl: n.actionUrl ?? undefined,
+        actionLabel: n.actionLabel ?? undefined,
+      })),
     [apiData]
   );
+
+  // Map API preferences (flat DB shape) to the nested local shape used by PreferencesPanel
+  const loadedPreferences = useMemo((): NotificationPreferences => {
+    if (!apiPrefs) return initialPreferences;
+    const raw = (apiPrefs.preferences ?? {}) as Record<string, boolean>;
+
+    const extractTypes = (prefix: string) =>
+      Object.fromEntries(
+        Object.keys(preferenceTypeLabels).map((key) => [
+          key,
+          raw[`${prefix}_${key}`] ?? initialPreferences.email.types[key] ?? true,
+        ])
+      );
+
+    return {
+      email: {
+        enabled: apiPrefs.emailEnabled,
+        digest: apiPrefs.emailDigest,
+        types: extractTypes('email'),
+      },
+      push: {
+        enabled: raw['push_enabled'] ?? true,
+        types: extractTypes('push'),
+      },
+      inApp: {
+        enabled: apiPrefs.inAppEnabled,
+        showBadge: raw['showBadge'] ?? true,
+        playSound: raw['playSound'] ?? false,
+        types: extractTypes('inApp'),
+      },
+      quietHours: {
+        enabled: apiPrefs.quietHoursEnabled,
+        start: apiPrefs.quietHoursStart ?? '22:00',
+        end: apiPrefs.quietHoursEnd ?? '08:00',
+        timezone: apiPrefs.timezone ?? 'America/New_York',
+      },
+    };
+  }, [apiPrefs]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -947,7 +1018,7 @@ export default function NotificationsPage() {
     return (
       <div className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8">
         <PreferencesPanel
-          preferences={initialPreferences}
+          preferences={loadedPreferences}
           onBack={() => setPageMode('notifications')}
           onSave={() => {
             /* preferences saved via PreferencesPanel internal logic */
@@ -969,12 +1040,8 @@ export default function NotificationsPage() {
               <Bell className="w-6 h-6 text-red-600" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">
-                Notifications
-              </h1>
-              <p className="text-gray-500 text-sm">
-                Stay up to date with your activities
-              </p>
+              <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Notifications</h1>
+              <p className="text-gray-500 text-sm">Stay up to date with your activities</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1062,9 +1129,7 @@ export default function NotificationsPage() {
               <button
                 onClick={() => setViewMode('all')}
                 className={`px-3 sm:px-4 py-2 rounded-lg text-sm transition-colors ${
-                  viewMode === 'all'
-                    ? 'bg-red-600 text-white'
-                    : 'text-gray-900 hover:bg-gray-50'
+                  viewMode === 'all' ? 'bg-red-600 text-white' : 'text-gray-900 hover:bg-gray-50'
                 }`}
               >
                 All
@@ -1072,18 +1137,14 @@ export default function NotificationsPage() {
               <button
                 onClick={() => setViewMode('unread')}
                 className={`px-3 sm:px-4 py-2 rounded-lg text-sm transition-colors flex items-center gap-2 ${
-                  viewMode === 'unread'
-                    ? 'bg-red-600 text-white'
-                    : 'text-gray-900 hover:bg-gray-50'
+                  viewMode === 'unread' ? 'bg-red-600 text-white' : 'text-gray-900 hover:bg-gray-50'
                 }`}
               >
                 Unread
                 {unreadCount > 0 && (
                   <span
                     className={`px-1.5 py-0.5 rounded-full text-xs ${
-                      viewMode === 'unread'
-                        ? 'bg-white/20'
-                        : 'bg-red-50 text-red-600'
+                      viewMode === 'unread' ? 'bg-white/20' : 'bg-red-50 text-red-600'
                     }`}
                   >
                     {unreadCount}
@@ -1165,9 +1226,7 @@ export default function NotificationsPage() {
             ) : (
               <div className="p-12 text-center">
                 <Bell className="w-12 h-12 text-gray-500 mx-auto mb-3 opacity-50" />
-                <h3 className="text-gray-900 font-medium mb-1">
-                  No Notifications
-                </h3>
+                <h3 className="text-gray-900 font-medium mb-1">No Notifications</h3>
                 <p className="text-sm text-gray-500">
                   {searchTerm || typeFilter !== 'all' || priorityFilter !== 'all'
                     ? 'Try adjusting your filters'
@@ -1184,9 +1243,7 @@ export default function NotificationsPage() {
         <div className="space-y-4 order-1 lg:order-2">
           {/* Quick Filters by Type */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">
-              Filter by Type
-            </h3>
+            <h3 className="text-sm font-medium text-gray-900 mb-3">Filter by Type</h3>
             <div className="space-y-2">
               {Object.entries(notificationTypeConfig).map(([key, config]) => {
                 const count = stats.byType[key] || 0;
@@ -1194,9 +1251,7 @@ export default function NotificationsPage() {
                 return (
                   <button
                     key={key}
-                    onClick={() =>
-                      setTypeFilter(typeFilter === key ? 'all' : key)
-                    }
+                    onClick={() => setTypeFilter(typeFilter === key ? 'all' : key)}
                     className={`w-full flex items-center justify-between p-2 rounded-lg transition-colors ${
                       typeFilter === key
                         ? 'bg-red-50 text-red-600'
@@ -1217,9 +1272,7 @@ export default function NotificationsPage() {
 
           {/* Quick Filters by Priority */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">
-              Filter by Priority
-            </h3>
+            <h3 className="text-sm font-medium text-gray-900 mb-3">Filter by Priority</h3>
             <div className="space-y-2">
               {Object.entries(priorityConfig).map(([key, config]) => {
                 const count = stats.byPriority[key] || 0;
@@ -1227,9 +1280,7 @@ export default function NotificationsPage() {
                 return (
                   <button
                     key={key}
-                    onClick={() =>
-                      setPriorityFilter(priorityFilter === key ? 'all' : key)
-                    }
+                    onClick={() => setPriorityFilter(priorityFilter === key ? 'all' : key)}
                     className={`w-full flex items-center justify-between p-2 rounded-lg transition-colors ${
                       priorityFilter === key
                         ? 'bg-red-50 text-red-600'
@@ -1249,9 +1300,7 @@ export default function NotificationsPage() {
 
           {/* Quick Actions */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">
-              Quick Actions
-            </h3>
+            <h3 className="text-sm font-medium text-gray-900 mb-3">Quick Actions</h3>
             <div className="space-y-2">
               <button
                 onClick={handleMarkAllAsRead}

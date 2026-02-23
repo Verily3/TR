@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
-import { useLearnerDashboard } from '@/hooks/api/useLearnerDashboard';
+import { useLearnerDashboard, useLeaderboard } from '@/hooks/api/useLearnerDashboard';
 import {
   ProgramTracker,
   WeekAtAGlance,
@@ -69,18 +69,26 @@ function StatCard({
       {isLoading ? (
         <div className="h-8 w-16 bg-muted/60 rounded animate-pulse" />
       ) : (
-        <div className={`text-2xl font-semibold ${accent ? 'text-accent' : 'text-sidebar-foreground'}`}>
+        <div
+          className={`text-2xl font-semibold ${accent ? 'text-accent' : 'text-sidebar-foreground'}`}
+        >
           {value}
         </div>
       )}
-      {sub && !isLoading && (
-        <p className="text-xs text-muted-foreground mt-1">{sub}</p>
-      )}
+      {sub && !isLoading && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
     </div>
   );
 }
 
-function SectionHeader({ title, href, linkLabel }: { title: string; href?: string; linkLabel?: string }) {
+function SectionHeader({
+  title,
+  href,
+  linkLabel,
+}: {
+  title: string;
+  href?: string;
+  linkLabel?: string;
+}) {
   return (
     <div className="flex items-center justify-between mb-4">
       <h2 className="text-base font-semibold text-sidebar-foreground">{title}</h2>
@@ -130,7 +138,10 @@ function TenantAdminDashboard() {
 
   const today = new Date();
   const dateString = today.toLocaleDateString('en-US', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
   });
 
   const { data: tenantStats, isLoading: statsLoading } = useTenantStats(tenantId);
@@ -141,8 +152,14 @@ function TenantAdminDashboard() {
 
   const programs = programsData?.programs ?? [];
   const users = (usersData?.data ?? []) as Array<{
-    id: string; firstName: string; lastName: string; email: string;
-    roleSlug?: string | null; roleName?: string | null; status: string; lastLoginAt?: string | null;
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    roleSlug?: string | null;
+    roleName?: string | null;
+    status: string;
+    lastLoginAt?: string | null;
   }>;
 
   const quickLinks = [
@@ -178,7 +195,11 @@ function TenantAdminDashboard() {
           label="Active Users"
           value={tenantStats?.activeUsers ?? 0}
           icon={UserCheck}
-          sub={tenantStats ? `${Math.round((tenantStats.activeUsers / (tenantStats.totalUsers || 1)) * 100)}% of total` : undefined}
+          sub={
+            tenantStats
+              ? `${Math.round((tenantStats.activeUsers / (tenantStats.totalUsers || 1)) * 100)}% of total`
+              : undefined
+          }
           isLoading={statsLoading}
         />
         <StatCard
@@ -207,21 +228,23 @@ function TenantAdminDashboard() {
           ) : programs.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground text-sm">
               No programs yet.{' '}
-              <Link href="/program-builder" className="text-accent hover:underline">Create one</Link>
+              <Link href="/program-builder" className="text-accent hover:underline">
+                Create one
+              </Link>
             </div>
           ) : (
             <div className="divide-y divide-border">
               {programs.map((p) => {
                 const prog = p as {
-                  id: string; name: string; status: string;
-                  enrollmentCount?: number; avgProgress?: number;
+                  id: string;
+                  name: string;
+                  status: string;
+                  enrollmentCount?: number;
+                  avgProgress?: number;
                   learnerCount?: number;
                 };
                 return (
-                  <div
-                    key={prog.id}
-                    className="flex items-center justify-between py-3 gap-4"
-                  >
+                  <div key={prog.id} className="flex items-center justify-between py-3 gap-4">
                     <div className="min-w-0 flex-1">
                       <Link
                         href={`/program-builder/${prog.id}`}
@@ -276,17 +299,38 @@ function TenantAdminDashboard() {
               <SectionHeader title="Mentoring" href="/mentoring" />
               <div className="space-y-2">
                 {[
-                  { label: 'Active Relationships', value: mentoringStats.activeRelationships, icon: Users },
-                  { label: 'Upcoming Sessions', value: mentoringStats.upcomingSessions, icon: CalendarCheck },
-                  { label: 'Action Items Due', value: mentoringStats.overdueActionItems, icon: AlertCircle, warn: mentoringStats.overdueActionItems > 0 },
-                  { label: 'Completed Sessions', value: mentoringStats.completedSessions, icon: CheckCircle2 },
+                  {
+                    label: 'Active Relationships',
+                    value: mentoringStats.activeRelationships,
+                    icon: Users,
+                  },
+                  {
+                    label: 'Upcoming Sessions',
+                    value: mentoringStats.upcomingSessions,
+                    icon: CalendarCheck,
+                  },
+                  {
+                    label: 'Action Items Due',
+                    value: mentoringStats.overdueActionItems,
+                    icon: AlertCircle,
+                    warn: mentoringStats.overdueActionItems > 0,
+                  },
+                  {
+                    label: 'Completed Sessions',
+                    value: mentoringStats.completedSessions,
+                    icon: CheckCircle2,
+                  },
                 ].map(({ label, value, icon: Icon, warn }) => (
                   <div key={label} className="flex items-center justify-between py-1.5">
                     <div className="flex items-center gap-2">
-                      <Icon className={`w-4 h-4 ${warn ? 'text-amber-500' : 'text-muted-foreground'}`} />
+                      <Icon
+                        className={`w-4 h-4 ${warn ? 'text-amber-500' : 'text-muted-foreground'}`}
+                      />
                       <span className="text-sm text-muted-foreground">{label}</span>
                     </div>
-                    <span className={`text-sm font-semibold ${warn ? 'text-amber-600' : 'text-sidebar-foreground'}`}>
+                    <span
+                      className={`text-sm font-semibold ${warn ? 'text-amber-600' : 'text-sidebar-foreground'}`}
+                    >
                       {value}
                     </span>
                   </div>
@@ -307,16 +351,33 @@ function TenantAdminDashboard() {
               {[
                 { label: 'Total', value: assessmentStats.totalAssessments, icon: ClipboardList },
                 { label: 'Active', value: assessmentStats.activeAssessments, icon: Clock },
-                { label: 'Completed', value: assessmentStats.completedAssessments, icon: CheckCircle2 },
-                { label: 'Pending Responses', value: assessmentStats.pendingResponses, icon: AlertCircle, warn: assessmentStats.pendingResponses > 0 },
-                { label: 'Avg Response Rate', value: `${Math.round(assessmentStats.averageResponseRate ?? 0)}%`, icon: TrendingUp },
+                {
+                  label: 'Completed',
+                  value: assessmentStats.completedAssessments,
+                  icon: CheckCircle2,
+                },
+                {
+                  label: 'Pending Responses',
+                  value: assessmentStats.pendingResponses,
+                  icon: AlertCircle,
+                  warn: assessmentStats.pendingResponses > 0,
+                },
+                {
+                  label: 'Avg Response Rate',
+                  value: `${Math.round(assessmentStats.averageResponseRate ?? 0)}%`,
+                  icon: TrendingUp,
+                },
               ].map(({ label, value, icon: Icon, warn }) => (
                 <div key={label} className="flex items-center justify-between py-1">
                   <div className="flex items-center gap-2">
-                    <Icon className={`w-4 h-4 ${warn ? 'text-amber-500' : 'text-muted-foreground'}`} />
+                    <Icon
+                      className={`w-4 h-4 ${warn ? 'text-amber-500' : 'text-muted-foreground'}`}
+                    />
                     <span className="text-sm text-muted-foreground">{label}</span>
                   </div>
-                  <span className={`text-sm font-semibold ${warn ? 'text-amber-600' : 'text-sidebar-foreground'}`}>
+                  <span
+                    className={`text-sm font-semibold ${warn ? 'text-amber-600' : 'text-sidebar-foreground'}`}
+                  >
                     {value}
                   </span>
                 </div>
@@ -326,7 +387,9 @@ function TenantAdminDashboard() {
         )}
 
         {/* Recent Users */}
-        <div className={`${assessmentStats ? 'lg:col-span-3' : 'lg:col-span-5'} bg-card border border-border rounded-xl p-5`}>
+        <div
+          className={`${assessmentStats ? 'lg:col-span-3' : 'lg:col-span-5'} bg-card border border-border rounded-xl p-5`}
+        >
           <SectionHeader title="Team Members" href="/people" linkLabel="Manage people" />
           {usersLoading ? (
             <SkeletonRows count={5} />
@@ -335,7 +398,8 @@ function TenantAdminDashboard() {
           ) : (
             <div className="divide-y divide-border">
               {users.map((u) => {
-                const initials = `${u.firstName?.[0] ?? ''}${u.lastName?.[0] ?? ''}`.toUpperCase() || 'U';
+                const initials =
+                  `${u.firstName?.[0] ?? ''}${u.lastName?.[0] ?? ''}`.toUpperCase() || 'U';
                 return (
                   <div key={u.id} className="flex items-center gap-3 py-3">
                     <div className="w-8 h-8 rounded-full bg-red-50 text-accent flex items-center justify-center text-xs font-medium shrink-0">
@@ -349,9 +413,13 @@ function TenantAdminDashboard() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {u.roleName && (
-                        <span className="text-xs text-muted-foreground hidden sm:block">{u.roleName}</span>
+                        <span className="text-xs text-muted-foreground hidden sm:block">
+                          {u.roleName}
+                        </span>
                       )}
-                      <span className={`w-2 h-2 rounded-full ${u.status === 'active' ? 'bg-green-500' : 'bg-gray-300'}`} />
+                      <span
+                        className={`w-2 h-2 rounded-full ${u.status === 'active' ? 'bg-green-500' : 'bg-gray-300'}`}
+                      />
                     </div>
                   </div>
                 );
@@ -371,12 +439,18 @@ function AgencyDashboard() {
 
   const today = new Date();
   const dateString = today.toLocaleDateString('en-US', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
   });
 
   const { data: agencyStats, isLoading: statsLoading } = useAgencyStats();
   const { data: agencyUsers, isLoading: usersLoading } = useAgencyUsers();
-  const { data: programsData, isLoading: programsLoading } = useAgencyPrograms({ limit: 6, status: 'active' });
+  const { data: programsData, isLoading: programsLoading } = useAgencyPrograms({
+    limit: 6,
+    status: 'active',
+  });
   const { data: tenants, isLoading: tenantsLoading } = useTenants();
 
   const programs = programsData?.programs ?? [];
@@ -413,7 +487,11 @@ function AgencyDashboard() {
           label="Active Clients"
           value={agencyStats?.activeTenants ?? 0}
           icon={CheckCircle2}
-          sub={agencyStats ? `${agencyStats.totalTenants - agencyStats.activeTenants} inactive` : undefined}
+          sub={
+            agencyStats
+              ? `${agencyStats.totalTenants - agencyStats.activeTenants} inactive`
+              : undefined
+          }
           isLoading={statsLoading}
         />
         <StatCard
@@ -442,15 +520,21 @@ function AgencyDashboard() {
           ) : programs.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground text-sm">
               No active programs.{' '}
-              <Link href="/program-builder" className="text-accent hover:underline">Create one</Link>
+              <Link href="/program-builder" className="text-accent hover:underline">
+                Create one
+              </Link>
             </div>
           ) : (
             <div className="divide-y divide-border">
               {programs.map((p) => {
                 const prog = p as {
-                  id: string; name: string; status: string;
-                  enrollmentCount?: number; avgProgress?: number;
-                  learnerCount?: number; moduleCount?: number;
+                  id: string;
+                  name: string;
+                  status: string;
+                  enrollmentCount?: number;
+                  avgProgress?: number;
+                  learnerCount?: number;
+                  moduleCount?: number;
                 };
                 const progress = prog.avgProgress ?? 0;
                 return (
@@ -512,7 +596,8 @@ function AgencyDashboard() {
               <h2 className="text-base font-semibold text-sidebar-foreground mb-4">Agency Team</h2>
               <div className="space-y-3">
                 {agencyUsers.slice(0, 4).map((u) => {
-                  const initials = `${u.firstName?.[0] ?? ''}${u.lastName?.[0] ?? ''}`.toUpperCase() || 'A';
+                  const initials =
+                    `${u.firstName?.[0] ?? ''}${u.lastName?.[0] ?? ''}`.toUpperCase() || 'A';
                   return (
                     <div key={u.id} className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-red-50 text-accent flex items-center justify-center text-xs font-medium shrink-0">
@@ -550,9 +635,7 @@ function AgencyDashboard() {
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-sm text-sidebar-foreground truncate">{t.name}</p>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xs text-muted-foreground">
-                      {t.userCount ?? 0} users
-                    </span>
+                    <span className="text-xs text-muted-foreground">{t.userCount ?? 0} users</span>
                     {t.industry && (
                       <>
                         <span className="text-muted-foreground/40">·</span>
@@ -577,10 +660,14 @@ function LearnerDashboard() {
   const { user } = useAuth();
   const tenantId = user?.tenantId;
   const { data, isLoading } = useLearnerDashboard(tenantId);
+  const { data: leaderboardData, isLoading: leaderboardLoading } = useLeaderboard(tenantId);
 
   const today = new Date();
   const dateString = today.toLocaleDateString('en-US', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
   });
 
   const actionCount = data
@@ -588,9 +675,18 @@ function LearnerDashboard() {
     : 0;
 
   const stats = [
-    { label: 'Points Earned', value: data?.summary.totalPoints.toLocaleString() ?? '0', icon: Trophy, accent: true },
+    {
+      label: 'Points Earned',
+      value: data?.summary.totalPoints.toLocaleString() ?? '0',
+      icon: Trophy,
+      accent: true,
+    },
     { label: 'Progress', value: `${data?.summary.overallProgress ?? 0}%`, icon: TrendingUp },
-    { label: 'Lessons Done', value: `${data?.summary.lessonsCompleted ?? 0}/${data?.summary.totalLessons ?? 0}`, icon: BookOpen },
+    {
+      label: 'Lessons Done',
+      value: `${data?.summary.lessonsCompleted ?? 0}/${data?.summary.totalLessons ?? 0}`,
+      icon: BookOpen,
+    },
     { label: 'Programs', value: String(data?.summary.enrolledPrograms ?? 0), icon: Flame },
   ];
 
@@ -637,10 +733,16 @@ function LearnerDashboard() {
                   className="bg-card border border-border rounded-xl p-4 hover:border-accent/30 transition-all"
                 >
                   <div className="flex items-center gap-2 mb-2">
-                    <Icon className={`w-4 h-4 ${stat.accent ? 'text-accent' : 'text-muted-foreground'}`} />
-                    <span className="text-xs text-muted-foreground uppercase tracking-wide">{stat.label}</span>
+                    <Icon
+                      className={`w-4 h-4 ${stat.accent ? 'text-accent' : 'text-muted-foreground'}`}
+                    />
+                    <span className="text-xs text-muted-foreground uppercase tracking-wide">
+                      {stat.label}
+                    </span>
                   </div>
-                  <div className={`text-xl sm:text-2xl ${stat.accent ? 'text-accent' : 'text-sidebar-foreground'}`}>
+                  <div
+                    className={`text-xl sm:text-2xl ${stat.accent ? 'text-accent' : 'text-sidebar-foreground'}`}
+                  >
                     {stat.value}
                   </div>
                 </div>
@@ -674,10 +776,7 @@ function LearnerDashboard() {
             </div>
             {tenantId && (
               <div className="lg:col-span-2">
-                <RecentComments
-                  tenantId={tenantId}
-                  discussions={data?.recentDiscussions ?? []}
-                />
+                <RecentComments tenantId={tenantId} discussions={data?.recentDiscussions ?? []} />
               </div>
             )}
           </div>
@@ -690,10 +789,27 @@ function LearnerDashboard() {
               pendingApprovals={data?.pendingApprovals ?? []}
               summary={data?.summary ?? { totalPoints: 0, overallProgress: 0 }}
             />
-            <LearningQueue />
+            <LearningQueue
+              isLoading={isLoading}
+              items={data?.upcomingItems.slice(0, 3).map((item) => ({
+                id: item.lessonId,
+                title: item.lessonTitle,
+                type:
+                  item.contentType === 'assignment' ? ('template' as const) : ('article' as const),
+                duration: item.durationMinutes ? `${item.durationMinutes} min` : undefined,
+                description: `In ${item.moduleTitle} · ${item.programName}`,
+                linkedTo: item.programName,
+                action:
+                  item.contentType === 'assignment'
+                    ? 'Complete Assignment'
+                    : item.contentType === 'goal'
+                      ? 'Set Goal'
+                      : 'Start',
+              }))}
+            />
           </div>
 
-          <Leaderboard />
+          <Leaderboard participants={leaderboardData} isLoading={leaderboardLoading} />
         </>
       )}
     </div>

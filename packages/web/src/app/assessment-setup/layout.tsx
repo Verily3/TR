@@ -13,12 +13,12 @@ export default function AssessmentSetupLayout({ children }: { children: ReactNod
           <div className="w-7 h-7 rounded-md bg-accent flex items-center justify-center">
             <span className="text-accent-foreground font-bold text-xs">T</span>
           </div>
-          <span className="text-sm font-semibold text-sidebar-foreground">Transformation OS</span>
+          <span className="text-sm font-semibold text-sidebar-foreground">
+            Results Tracking System
+          </span>
         </div>
       </header>
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-        {children}
-      </main>
+      <main className="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-12">{children}</main>
     </div>
   );
 }

@@ -39,6 +39,7 @@ export interface CreateUserInput {
   title?: string;
   department?: string;
   role: 'learner' | 'mentor' | 'facilitator' | 'tenant_admin';
+  managerId?: string | null;
 }
 
 export interface UpdateUserInput {
@@ -72,9 +73,9 @@ export function useUsers(tenantId: string | undefined, params?: UsersListParams)
   return useQuery({
     queryKey: ['users', tenantId, params],
     queryFn: async () => {
-      const response = await api.get<TenantUser[]>(
+      const response = (await api.get<TenantUser[]>(
         `/api/users/tenants/${tenantId}${qs ? `?${qs}` : ''}`
-      ) as unknown as {
+      )) as unknown as {
         data: TenantUser[];
         meta?: { pagination?: { total?: number; page?: number; totalPages?: number } };
       };
@@ -88,9 +89,9 @@ export function useUser(tenantId: string | undefined, userId: string | undefined
   return useQuery({
     queryKey: ['user', tenantId, userId],
     queryFn: async () => {
-      const response = await api.get<TenantUserDetail>(
+      const response = (await api.get<TenantUserDetail>(
         `/api/users/tenants/${tenantId}/${userId}`
-      ) as unknown as { data: TenantUserDetail };
+      )) as unknown as { data: TenantUserDetail };
       return response.data;
     },
     enabled: !!tenantId && !!userId,
@@ -102,10 +103,10 @@ export function useCreateUser(tenantId: string | undefined) {
 
   return useMutation({
     mutationFn: async (input: CreateUserInput) => {
-      const response = await api.post<TenantUser>(
+      const response = (await api.post<TenantUser>(
         `/api/users/tenants/${tenantId}`,
         input
-      ) as unknown as { data: TenantUser };
+      )) as unknown as { data: TenantUser };
       return response.data;
     },
     onSuccess: () => {
@@ -120,10 +121,10 @@ export function useUpdateUser(tenantId: string | undefined, userId: string | und
 
   return useMutation({
     mutationFn: async (input: UpdateUserInput) => {
-      const response = await api.put<TenantUser>(
+      const response = (await api.put<TenantUser>(
         `/api/users/tenants/${tenantId}/${userId}`,
         input
-      ) as unknown as { data: TenantUser };
+      )) as unknown as { data: TenantUser };
       return response.data;
     },
     onSuccess: () => {
@@ -152,14 +153,58 @@ export function useChangeUserRole(tenantId: string | undefined) {
 
   return useMutation({
     mutationFn: async ({ userId, role }: { userId: string; role: ChangeRoleInput['role'] }) => {
-      const response = await api.put<{ userId: string; roleSlug: string; roleName: string; roleLevel: number }>(
-        `/api/users/tenants/${tenantId}/${userId}/role`,
-        { role }
-      ) as unknown as { data: { userId: string; roleSlug: string; roleName: string; roleLevel: number } };
+      const response = (await api.put<{
+        userId: string;
+        roleSlug: string;
+        roleName: string;
+        roleLevel: number;
+      }>(`/api/users/tenants/${tenantId}/${userId}/role`, { role })) as unknown as {
+        data: { userId: string; roleSlug: string; roleName: string; roleLevel: number };
+      };
       return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users', tenantId] });
     },
+  });
+}
+
+export function useDepartments(tenantId: string | undefined) {
+  return useQuery({
+    queryKey: ['users', 'departments', tenantId],
+    queryFn: async () => {
+      const response = (await api.get<string[]>(
+        `/api/users/tenants/${tenantId}/departments`
+      )) as unknown as { data: string[] };
+      return response.data;
+    },
+    enabled: !!tenantId,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export interface DirectReportData {
+  id: string;
+  name: string;
+  role: string;
+  scorecardScore: number;
+  scorecardTrend: 'up' | 'down' | 'neutral';
+  goalsCompleted: number;
+  goalsTotal: number;
+  programsActive: number;
+  rating: 'A' | 'A-' | 'B+' | 'B' | 'B-';
+}
+
+export function useDirectReports(tenantId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['direct-reports', tenantId],
+    queryFn: async () => {
+      const response = (await api.get<{ data: DirectReportData[] }>(
+        `/api/users/tenants/${tenantId}/me/direct-reports`
+      )) as unknown as { data: DirectReportData[] };
+      return response.data;
+    },
+    enabled: !!tenantId,
+    staleTime: 60_000,
   });
 }

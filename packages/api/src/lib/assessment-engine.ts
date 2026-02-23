@@ -13,12 +13,7 @@ import type {
 import type { TemplateConfig, TemplateQuestion } from '@tr/db/schema';
 import { computeTrend } from './trend-engine';
 
-const {
-  assessments,
-  assessmentInvitations,
-  assessmentResponses,
-  assessmentTemplates,
-} = schema;
+const { assessments, assessmentInvitations, assessmentResponses, assessmentTemplates } = schema;
 
 /**
  * Compute aggregated results for a completed assessment.
@@ -104,10 +99,7 @@ export async function computeAssessmentResults(
 
   // 3. Build score matrix
   // competencyId → questionId → raterType → ratings[]
-  const scoreMatrix = new Map<
-    string,
-    Map<string, Map<string, number[]>>
-  >();
+  const scoreMatrix = new Map<string, Map<string, Map<string, number[]>>>();
 
   // Also collect comments
   const collectedComments: {
@@ -240,18 +232,12 @@ export async function computeAssessmentResults(
       scores[rType] = round2(mean(ratings));
     }
 
-    const overallAverage =
-      allCompRatings.length > 0 ? round2(mean(allCompRatings)) : 0;
-    const othersAverage =
-      othersCompRatings.length > 0 ? round2(mean(othersCompRatings)) : 0;
-    const selfScore =
-      selfCompRatings.length > 0 ? round2(mean(selfCompRatings)) : null;
+    const overallAverage = allCompRatings.length > 0 ? round2(mean(allCompRatings)) : 0;
+    const othersAverage = othersCompRatings.length > 0 ? round2(mean(othersCompRatings)) : 0;
+    const selfScore = selfCompRatings.length > 0 ? round2(mean(selfCompRatings)) : null;
 
     // Rater agreement = stdDev across all individual rater averages (excluding self)
-    const raterAgreement =
-      othersCompRatings.length > 1
-        ? round2(stdDev(othersCompRatings))
-        : 0;
+    const raterAgreement = othersCompRatings.length > 1 ? round2(stdDev(othersCompRatings)) : 0;
 
     competencyScores.push({
       competencyId: comp.id,
@@ -269,16 +255,12 @@ export async function computeAssessmentResults(
   // 6. Overall score
   const overallScore =
     competencyScores.length > 0
-      ? round2(
-          mean(competencyScores.map((c) => c.overallAverage).filter((v) => v > 0))
-        )
+      ? round2(mean(competencyScores.map((c) => c.overallAverage).filter((v) => v > 0)))
       : 0;
 
   // 7. Response rate by type
-  const responseRateByType: Record<
-    string,
-    { invited: number; completed: number; rate: number }
-  > = {};
+  const responseRateByType: Record<string, { invited: number; completed: number; rate: number }> =
+    {};
 
   for (const inv of invitations) {
     if (!responseRateByType[inv.raterType]) {
@@ -294,10 +276,7 @@ export async function computeAssessmentResults(
     }
   }
   for (const entry of Object.values(responseRateByType)) {
-    entry.rate =
-      entry.invited > 0
-        ? Math.round((entry.completed / entry.invited) * 100)
-        : 0;
+    entry.rate = entry.invited > 0 ? Math.round((entry.completed / entry.invited) * 100) : 0;
   }
 
   // 8. Rank strengths and development areas (by others avg)
@@ -318,8 +297,7 @@ export async function computeAssessmentResults(
 
   const topItems: RankedItem[] = sortedItems.slice(0, 5).map((i) => ({
     competencyId: i.competencyId,
-    competencyName:
-      config.competencies.find((c) => c.id === i.competencyId)?.name || '',
+    competencyName: config.competencies.find((c) => c.id === i.competencyId)?.name || '',
     questionId: i.questionId,
     questionText: i.questionText,
     overallAverage: i.overallAverage,
@@ -332,8 +310,7 @@ export async function computeAssessmentResults(
     .reverse()
     .map((i) => ({
       competencyId: i.competencyId,
-      competencyName:
-        config.competencies.find((c) => c.id === i.competencyId)?.name || '',
+      competencyName: config.competencies.find((c) => c.id === i.competencyId)?.name || '',
       questionId: i.questionId,
       questionText: i.questionText,
       overallAverage: i.overallAverage,
@@ -419,9 +396,8 @@ export async function computeAssessmentResults(
         if (rType !== 'self') othersRatings.push(...ratings);
       }
     }
-    const effectiveScore = othersRatings.length > 0
-      ? round2(mean(othersRatings))
-      : itemScore.overallAverage;
+    const effectiveScore =
+      othersRatings.length > 0 ? round2(mean(othersRatings)) : itemScore.overallAverage;
 
     cciItems.push({
       competencyId: comp.id,
@@ -469,15 +445,15 @@ export async function computeAssessmentResults(
 
   // 14. Trend comparison (previous assessment for same subject + template)
   let trend;
-  try {
-    trend = await computeTrend(
-      assessmentId,
-      assessment.subjectId,
-      assessment.templateId,
-      { overallScore, competencyScores } as ComputedAssessmentResults
-    );
-  } catch {
-    // Trend is non-critical — proceed without it
+  if (assessment.subjectId) {
+    try {
+      trend = await computeTrend(assessmentId, assessment.subjectId, assessment.templateId, {
+        overallScore,
+        competencyScores,
+      } as ComputedAssessmentResults);
+    } catch {
+      // Trend is non-critical — proceed without it
+    }
   }
 
   // 15. Assemble the result

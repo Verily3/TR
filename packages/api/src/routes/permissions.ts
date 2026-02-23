@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { zValidator } from '@hono/zod-validator';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { db, schema } from '@tr/db';
@@ -12,9 +13,17 @@ export const permissionsRoutes = new Hono<{ Variables: Variables }>();
 
 // All nav items that can be toggled (excluding agency which is agency-only)
 const ALL_NAV_ITEMS = [
-  'dashboard', 'programs', 'mentoring', 'assessments',
-  'scorecard', 'planning', 'people', 'analytics',
-  'notifications', 'help', 'settings',
+  'dashboard',
+  'programs',
+  'mentoring',
+  'assessments',
+  'scorecard',
+  'planning',
+  'people',
+  'analytics',
+  'notifications',
+  'help',
+  'settings',
 ] as const;
 
 // Tenant-level roles that can be configured
@@ -53,10 +62,7 @@ async function resolveNavForUser(
     .select()
     .from(tenantUserPermissions)
     .where(
-      and(
-        eq(tenantUserPermissions.tenantId, tenantId),
-        eq(tenantUserPermissions.userId, userId)
-      )
+      and(eq(tenantUserPermissions.tenantId, tenantId), eq(tenantUserPermissions.userId, userId))
     );
   if (userOverride) {
     const granted = userOverride.grantedNavItems ?? [];
@@ -110,19 +116,22 @@ permissionsRoutes.put(
   '/roles/:roleSlug',
   requireTenantAccess(),
   requireRoleLevel(70),
+  zValidator(
+    'json',
+    z.object({
+      navItems: z.array(z.string().max(50)),
+    })
+  ),
   async (c) => {
     const tenantId = c.req.param('tenantId')!;
     const roleSlug = c.req.param('roleSlug')!;
     const user = c.get('user');
 
-    if (!CONFIGURABLE_ROLES.includes(roleSlug as typeof CONFIGURABLE_ROLES[number])) {
+    if (!CONFIGURABLE_ROLES.includes(roleSlug as (typeof CONFIGURABLE_ROLES)[number])) {
       return c.json({ error: { code: 'INVALID_ROLE', message: 'Role not configurable' } }, 400);
     }
 
-    const body = await c.req.json();
-    const { navItems } = z.object({
-      navItems: z.array(z.string()),
-    }).parse(body);
+    const { navItems } = c.req.valid('json');
 
     // Validate all nav items are known
     const valid = navItems.filter((item) => (ALL_NAV_ITEMS as readonly string[]).includes(item));
@@ -162,7 +171,9 @@ permissionsRoutes.delete(
         )
       );
 
-    return c.json({ data: { roleSlug, navItems: [...getNavigationForRole(roleSlug)], isCustomised: false } });
+    return c.json({
+      data: { roleSlug, navItems: [...getNavigationForRole(roleSlug)], isCustomised: false },
+    });
   }
 );
 
@@ -192,27 +203,19 @@ permissionsRoutes.get('/users', requireTenantAccess(), requireRoleLevel(70), asy
 
 // ─── GET /users/:userId ────────────────────────────────────────────────────────
 
-permissionsRoutes.get(
-  '/users/:userId',
-  requireTenantAccess(),
-  requireRoleLevel(70),
-  async (c) => {
-    const tenantId = c.req.param('tenantId')!;
-    const userId = c.req.param('userId')!;
+permissionsRoutes.get('/users/:userId', requireTenantAccess(), requireRoleLevel(70), async (c) => {
+  const tenantId = c.req.param('tenantId')!;
+  const userId = c.req.param('userId')!;
 
-    const [override] = await db
-      .select()
-      .from(tenantUserPermissions)
-      .where(
-        and(
-          eq(tenantUserPermissions.tenantId, tenantId),
-          eq(tenantUserPermissions.userId, userId)
-        )
-      );
+  const [override] = await db
+    .select()
+    .from(tenantUserPermissions)
+    .where(
+      and(eq(tenantUserPermissions.tenantId, tenantId), eq(tenantUserPermissions.userId, userId))
+    );
 
-    return c.json({ data: override ?? null });
-  }
-);
+  return c.json({ data: override ?? null });
+});
 
 // ─── PUT /users/:userId ────────────────────────────────────────────────────────
 
@@ -220,16 +223,19 @@ permissionsRoutes.put(
   '/users/:userId',
   requireTenantAccess(),
   requireRoleLevel(70),
+  zValidator(
+    'json',
+    z.object({
+      grantedNavItems: z.array(z.string().max(50)).default([]),
+      revokedNavItems: z.array(z.string().max(50)).default([]),
+    })
+  ),
   async (c) => {
     const tenantId = c.req.param('tenantId')!;
     const userId = c.req.param('userId')!;
     const adminUser = c.get('user');
 
-    const body = await c.req.json();
-    const { grantedNavItems, revokedNavItems } = z.object({
-      grantedNavItems: z.array(z.string()).default([]),
-      revokedNavItems: z.array(z.string()).default([]),
-    }).parse(body);
+    const { grantedNavItems, revokedNavItems } = c.req.valid('json');
 
     const [row] = await db
       .insert(tenantUserPermissions)
@@ -263,10 +269,7 @@ permissionsRoutes.delete(
     await db
       .delete(tenantUserPermissions)
       .where(
-        and(
-          eq(tenantUserPermissions.tenantId, tenantId),
-          eq(tenantUserPermissions.userId, userId)
-        )
+        and(eq(tenantUserPermissions.tenantId, tenantId), eq(tenantUserPermissions.userId, userId))
       );
 
     return c.json({ data: { success: true } });

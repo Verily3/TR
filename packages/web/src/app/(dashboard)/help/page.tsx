@@ -105,27 +105,87 @@ interface HelpCategoryItem {
 // ─── Mock Data ───────────────────────────────────────────────────────────────
 
 const helpCategories: HelpCategoryItem[] = [
-  { id: 'getting-started', name: 'Getting Started', description: 'Learn the basics and set up your account', icon: 'Rocket', articleCount: 8 },
-  { id: 'programs', name: 'Programs & Learning', description: 'Manage and participate in learning programs', icon: 'BookOpen', articleCount: 12 },
-  { id: 'goals', name: 'Goals & Planning', description: 'Set, track, and achieve your objectives', icon: 'Target', articleCount: 9 },
-  { id: 'coaching', name: 'Mentoring', description: 'Schedule sessions and manage mentoring relationships', icon: 'Users', articleCount: 7 },
-  { id: 'assessments', name: '360 Assessments', description: 'Create and complete feedback assessments', icon: 'ClipboardList', articleCount: 10 },
-  { id: 'people', name: 'Team & People', description: 'Manage your team and organization', icon: 'UserCircle', articleCount: 6 },
-  { id: 'settings', name: 'Account Settings', description: 'Configure your profile and preferences', icon: 'Settings', articleCount: 8 },
-  { id: 'billing', name: 'Billing & Subscriptions', description: 'Manage payments and subscription plans', icon: 'CreditCard', articleCount: 5 },
-  { id: 'integrations', name: 'Integrations', description: 'Connect with third-party tools', icon: 'Plug', articleCount: 6 },
-  { id: 'troubleshooting', name: 'Troubleshooting', description: 'Solve common issues and errors', icon: 'Wrench', articleCount: 11 },
+  {
+    id: 'getting-started',
+    name: 'Getting Started',
+    description: 'Learn the basics and set up your account',
+    icon: 'Rocket',
+    articleCount: 8,
+  },
+  {
+    id: 'programs',
+    name: 'Programs & Learning',
+    description: 'Manage and participate in learning programs',
+    icon: 'BookOpen',
+    articleCount: 12,
+  },
+  {
+    id: 'goals',
+    name: 'Goals & Planning',
+    description: 'Set, track, and achieve your objectives',
+    icon: 'Target',
+    articleCount: 9,
+  },
+  {
+    id: 'coaching',
+    name: 'Mentoring',
+    description: 'Schedule sessions and manage mentoring relationships',
+    icon: 'Users',
+    articleCount: 7,
+  },
+  {
+    id: 'assessments',
+    name: '360 Assessments',
+    description: 'Create and complete feedback assessments',
+    icon: 'ClipboardList',
+    articleCount: 10,
+  },
+  {
+    id: 'people',
+    name: 'Team & People',
+    description: 'Manage your team and organization',
+    icon: 'UserCircle',
+    articleCount: 6,
+  },
+  {
+    id: 'settings',
+    name: 'Account Settings',
+    description: 'Configure your profile and preferences',
+    icon: 'Settings',
+    articleCount: 8,
+  },
+  {
+    id: 'billing',
+    name: 'Billing & Subscriptions',
+    description: 'Manage payments and subscription plans',
+    icon: 'CreditCard',
+    articleCount: 5,
+  },
+  {
+    id: 'integrations',
+    name: 'Integrations',
+    description: 'Connect with third-party tools',
+    icon: 'Plug',
+    articleCount: 6,
+  },
+  {
+    id: 'troubleshooting',
+    name: 'Troubleshooting',
+    description: 'Solve common issues and errors',
+    icon: 'Wrench',
+    articleCount: 11,
+  },
 ];
 
 const articles: HelpArticle[] = [
   {
     id: 'a1',
-    title: 'Getting Started with Transformation OS',
+    title: 'Getting Started with Results Tracking System',
     slug: 'getting-started-guide',
     excerpt: 'A comprehensive guide to help you navigate and make the most of the platform',
-    content: `Getting Started with Transformation OS
+    content: `Getting Started with Results Tracking System
 
-Welcome to Transformation OS! This guide will walk you through the essential features and help you get started on your transformation journey.
+Welcome to Results Tracking System! This guide will walk you through the essential features and help you get started on your transformation journey.
 
 Setting Up Your Profile
 
@@ -418,33 +478,23 @@ Contact support with:
     id: 'a8',
     title: 'Connecting Integrations',
     slug: 'connecting-integrations',
-    excerpt: 'How to connect Transformation OS with your favorite tools',
-    content: `Connecting Integrations
+    excerpt: 'How to connect Results Tracking System with your favorite tools',
+    content: `Integrations
 
-Enhance your experience by connecting with external tools.
+The integrations page is found under Settings > Integrations. Third-party integrations are currently in development and will be available in an upcoming release.
 
-Available Integrations
+Planned Integrations
 
-- Slack: Get notifications in your workspace
-- Google Calendar: Sync sessions and deadlines
-- Microsoft Teams: Collaborate with your team
-- Zoom: Join coaching sessions directly
+The following integrations are on the roadmap:
+- Slack: Get notifications and updates in your workspace
+- Google Calendar: Sync coaching sessions and goal deadlines
+- Microsoft Teams: Collaborate and receive alerts inside Teams
+- Zoom: Launch coaching sessions directly from the platform
+- Workday: Sync HR data and org structure
 
-Setting Up an Integration
+Staying Updated
 
-1. Go to Settings > Integrations
-2. Find the integration you want
-3. Click "Connect"
-4. Authorize the connection
-5. Configure preferences
-
-Managing Connections
-
-You can:
-- View connected apps
-- Update permissions
-- Disconnect integrations
-- Troubleshoot sync issues`,
+Watch your notification center for announcements when integrations become available. Contact support if you have a specific integration request.`,
     category: 'integrations',
     tags: ['integrations', 'slack', 'calendar', 'zoom'],
     views: 456,
@@ -458,50 +508,89 @@ You can:
 ];
 
 const faqs: FAQ[] = [
-  { id: 'f1', question: 'How do I reset my password?', answer: "Click 'Forgot Password' on the login page, enter your email, and follow the instructions in the reset email. The link expires after 24 hours.", category: 'troubleshooting', order: 1 },
-  { id: 'f2', question: 'Can I change my email address?', answer: "Yes, go to Settings > Profile > Account and click 'Change Email'. You'll need to verify the new email address before the change takes effect.", category: 'settings', order: 2 },
-  { id: 'f3', question: 'How do I enroll in a learning program?', answer: "Navigate to the Programs page, browse available programs, and click 'Enroll' on the program you want to join. Some programs may require manager approval.", category: 'programs', order: 3 },
-  { id: 'f4', question: 'What happens when I complete a program?', answer: "Upon completion, you'll receive a certificate of completion, your progress will be recorded in your profile, and any associated goals will be updated.", category: 'programs', order: 4 },
-  { id: 'f5', question: 'How often should I update my goals?', answer: 'We recommend updating goal progress at least weekly. Set up reminders in your notification preferences to stay on track.', category: 'goals', order: 5 },
-  { id: 'f6', question: 'Can I reschedule a mentoring session?', answer: "Yes, you can reschedule sessions up to 24 hours before the scheduled time. Go to Mentoring, find the session, and click 'Reschedule'.", category: 'coaching', order: 6 },
-  { id: 'f7', question: 'Who can see my 360 assessment results?', answer: "By default, only you and your direct manager can see your results. Some assessments may be shared with HR or coaches based on your organization's settings.", category: 'assessments', order: 7 },
-  { id: 'f8', question: 'How do I invite team members?', answer: "Go to People > Invite Members, enter their email addresses, select their role, and send invitations. They'll receive an email to create their account.", category: 'people', order: 8 },
-  { id: 'f9', question: 'Is my data secure?', answer: 'Yes, we use industry-standard encryption, regular security audits, and comply with GDPR and SOC 2 requirements. Your data is never shared without consent.', category: 'settings', order: 9 },
-  { id: 'f10', question: 'How do I cancel my subscription?', answer: 'Contact your account administrator or our support team to discuss subscription changes. We offer flexible options including plan downgrades.', category: 'billing', order: 10 },
+  {
+    id: 'f1',
+    question: 'How do I reset my password?',
+    answer:
+      "Click 'Forgot Password' on the login page, enter your email, and follow the instructions in the reset email. The link expires after 24 hours.",
+    category: 'troubleshooting',
+    order: 1,
+  },
+  {
+    id: 'f2',
+    question: 'Can I change my email address?',
+    answer:
+      'Email address changes are handled by your administrator. Contact your tenant admin or reach out to support to request an email update.',
+    category: 'settings',
+    order: 2,
+  },
+  {
+    id: 'f3',
+    question: 'How do I enroll in a learning program?',
+    answer:
+      "Navigate to the Programs page, browse available programs, and click 'Enroll' on the program you want to join. Some programs may require manager approval.",
+    category: 'programs',
+    order: 3,
+  },
+  {
+    id: 'f4',
+    question: 'What happens when I complete a program?',
+    answer:
+      'Upon completion, your progress is recorded in your profile and any associated goals are updated. Certificate generation is coming in an upcoming release.',
+    category: 'programs',
+    order: 4,
+  },
+  {
+    id: 'f5',
+    question: 'How often should I update my goals?',
+    answer:
+      'We recommend updating goal progress at least weekly. Set up reminders in your notification preferences to stay on track.',
+    category: 'goals',
+    order: 5,
+  },
+  {
+    id: 'f6',
+    question: 'Can I reschedule a mentoring session?',
+    answer:
+      "Yes, you can reschedule sessions up to 24 hours before the scheduled time. Go to Mentoring, find the session, and click 'Reschedule'.",
+    category: 'coaching',
+    order: 6,
+  },
+  {
+    id: 'f7',
+    question: 'Who can see my 360 assessment results?',
+    answer:
+      "By default, only you and your direct manager can see your results. Some assessments may be shared with HR or coaches based on your organization's settings.",
+    category: 'assessments',
+    order: 7,
+  },
+  {
+    id: 'f8',
+    question: 'How do I invite team members?',
+    answer:
+      "Go to People > Invite Members, enter their email addresses, select their role, and send invitations. They'll receive an email to create their account.",
+    category: 'people',
+    order: 8,
+  },
+  {
+    id: 'f9',
+    question: 'Is my data secure?',
+    answer:
+      'Yes, we use industry-standard encryption, regular security audits, and comply with GDPR and SOC 2 requirements. Your data is never shared without consent.',
+    category: 'settings',
+    order: 9,
+  },
+  {
+    id: 'f10',
+    question: 'How do I cancel my subscription?',
+    answer:
+      'Contact your account administrator or our support team to discuss subscription changes. We offer flexible options including plan downgrades.',
+    category: 'billing',
+    order: 10,
+  },
 ];
 
-const defaultTickets: SupportTicket[] = [
-  {
-    id: 't1',
-    subject: 'Unable to access program materials',
-    description: 'I enrolled in Leadership Fundamentals but cannot view the video content in Module 3.',
-    category: 'bug',
-    priority: 'high',
-    status: 'in_progress',
-    createdAt: '2025-01-28T10:30:00Z',
-    updatedAt: '2025-01-29T14:15:00Z',
-    assignedTo: 'Support Team',
-    messages: [
-      { id: 'm1', ticketId: 't1', sender: 'user', senderName: 'John Doe', message: 'I enrolled in Leadership Fundamentals but cannot view the video content in Module 3. The video player shows a loading spinner but never loads.', timestamp: '2025-01-28T10:30:00Z' },
-      { id: 'm2', ticketId: 't1', sender: 'support', senderName: 'Sarah (Support)', message: "Hi John, thank you for reporting this issue. We've identified a temporary problem with video streaming and our team is working on a fix. In the meantime, try clearing your browser cache or using a different browser.", timestamp: '2025-01-29T14:15:00Z' },
-    ],
-  },
-  {
-    id: 't2',
-    subject: 'Request for additional user seats',
-    description: 'We need to add 5 more users to our team plan.',
-    category: 'account',
-    priority: 'medium',
-    status: 'resolved',
-    createdAt: '2025-01-20T09:00:00Z',
-    updatedAt: '2025-01-21T11:30:00Z',
-    assignedTo: 'Billing Team',
-    messages: [
-      { id: 'm3', ticketId: 't2', sender: 'user', senderName: 'John Doe', message: 'We need to add 5 more users to our team plan. Can you help with this upgrade?', timestamp: '2025-01-20T09:00:00Z' },
-      { id: 'm4', ticketId: 't2', sender: 'support', senderName: 'Mike (Billing)', message: "Hi John, I've added 5 additional seats to your account. The prorated charge will appear on your next invoice. You can now invite new team members from the People section.", timestamp: '2025-01-21T11:30:00Z' },
-    ],
-  },
-];
+const defaultTickets: SupportTicket[] = [];
 
 const categoryConfig: Record<ArticleCategory, { bg: string; text: string }> = {
   'getting-started': { bg: 'bg-purple-100', text: 'text-purple-700' },
@@ -543,9 +632,7 @@ function FAQAccordion({ items }: { items: FAQ[] }) {
   const [openIds, setOpenIds] = useState<string[]>([]);
 
   const toggleFAQ = (id: string) => {
-    setOpenIds((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
+    setOpenIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
   };
 
   if (items.length === 0) {
@@ -564,17 +651,12 @@ function FAQAccordion({ items }: { items: FAQ[] }) {
       {items.map((faq) => {
         const isOpen = openIds.includes(faq.id);
         return (
-          <div
-            key={faq.id}
-            className="border border-gray-200 rounded-lg overflow-hidden"
-          >
+          <div key={faq.id} className="border border-gray-200 rounded-lg overflow-hidden">
             <button
               onClick={() => toggleFAQ(faq.id)}
               className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50/50 transition-colors"
             >
-              <span className="font-medium text-gray-900 pr-4">
-                {faq.question}
-              </span>
+              <span className="font-medium text-gray-900 pr-4">{faq.question}</span>
               <ChevronDown
                 className={`w-5 h-5 text-gray-500 shrink-0 transition-transform ${
                   isOpen ? 'rotate-180' : ''
@@ -669,9 +751,7 @@ function SupportTicketModal({
                       : 'border-gray-200 hover:border-red-600/30'
                   }`}
                 >
-                  <div className="text-sm font-medium text-gray-900">
-                    {option.label}
-                  </div>
+                  <div className="text-sm font-medium text-gray-900">{option.label}</div>
                 </button>
               ))}
             </div>
@@ -726,7 +806,8 @@ function SupportTicketModal({
           <div className="p-3 bg-blue-50 rounded-lg flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
             <p className="text-sm text-blue-700">
-              <strong>Tip:</strong> Include any error messages, screenshots, or steps to reproduce the issue for faster resolution.
+              <strong>Tip:</strong> Include any error messages, screenshots, or steps to reproduce
+              the issue for faster resolution.
             </p>
           </div>
         </div>
@@ -766,20 +847,15 @@ export default function HelpPage() {
   const [tickets, setTickets] = useState<SupportTicket[]>(defaultTickets);
   const [ticketSuccess, setTicketSuccess] = useState(false);
 
-  const popularArticles = [...articles]
-    .sort((a, b) => b.views - a.views)
-    .slice(0, 4);
+  const popularArticles = [...articles].sort((a, b) => b.views - a.views).slice(0, 4);
 
   const filteredArticles = articles.filter((article) => {
     const matchesSearch =
       !searchTerm ||
       article.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       article.excerpt.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      article.tags.some((tag) =>
-        tag.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    const matchesCategory =
-      !selectedCategory || article.category === selectedCategory;
+      article.tags.some((tag) => tag.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesCategory = !selectedCategory || article.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
@@ -887,9 +963,7 @@ export default function HelpPage() {
               </div>
 
               <div className="mt-8 pt-6 border-t border-gray-200">
-                <p className="text-sm text-gray-500 mb-3">
-                  Was this article helpful?
-                </p>
+                <p className="text-sm text-gray-500 mb-3">Was this article helpful?</p>
                 <div className="flex items-center gap-3">
                   <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-gray-900">
                     <ThumbsUp className="w-4 h-4" />
@@ -915,9 +989,7 @@ export default function HelpPage() {
                       onClick={() => handleViewArticle(article)}
                       className="w-full text-left p-3 rounded-lg hover:bg-gray-50 transition-colors"
                     >
-                      <div className="text-sm font-medium text-gray-900">
-                        {article.title}
-                      </div>
+                      <div className="text-sm font-medium text-gray-900">{article.title}</div>
                       <div className="text-xs text-gray-500 mt-1">
                         {article.readingTime} min read
                       </div>
@@ -953,9 +1025,7 @@ export default function HelpPage() {
 
   if (viewMode === 'category' && selectedCategory) {
     const category = helpCategories.find((c) => c.id === selectedCategory);
-    const categoryArticles = filteredArticles.filter(
-      (a) => a.category === selectedCategory
-    );
+    const categoryArticles = filteredArticles.filter((a) => a.category === selectedCategory);
     const categoryFAQs = faqs.filter((f) => f.category === selectedCategory);
 
     return (
@@ -977,9 +1047,7 @@ export default function HelpPage() {
               })()}
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">
-                {category?.name}
-              </h1>
+              <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">{category?.name}</h1>
               <p className="text-gray-500">{category?.description}</p>
             </div>
           </div>
@@ -999,12 +1067,8 @@ export default function HelpPage() {
                     className="w-full flex items-start justify-between p-4 rounded-lg border border-gray-200 hover:border-red-600/30 transition-colors text-left"
                   >
                     <div className="flex-1">
-                      <h4 className="font-medium text-gray-900 mb-1">
-                        {article.title}
-                      </h4>
-                      <p className="text-sm text-gray-500 line-clamp-2">
-                        {article.excerpt}
-                      </p>
+                      <h4 className="font-medium text-gray-900 mb-1">{article.title}</h4>
+                      <p className="text-sm text-gray-500 line-clamp-2">{article.excerpt}</p>
                       <div className="flex items-center gap-3 mt-2 text-xs text-gray-500">
                         <span>{article.readingTime} min read</span>
                         <span>{article.views} views</span>
@@ -1014,7 +1078,9 @@ export default function HelpPage() {
                   </button>
                 ))}
                 {categoryArticles.length === 0 && (
-                  <p className="text-gray-500 text-center py-8">No articles found in this category.</p>
+                  <p className="text-gray-500 text-center py-8">
+                    No articles found in this category.
+                  </p>
                 )}
               </div>
             </div>
@@ -1067,15 +1133,16 @@ export default function HelpPage() {
         {ticketSuccess && (
           <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center gap-3">
             <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
-            <p className="text-sm text-green-800">Your support ticket has been submitted successfully. We'll get back to you within 24 hours.</p>
+            <p className="text-sm text-green-800">
+              Your support ticket has been submitted successfully. We'll get back to you within 24
+              hours.
+            </p>
           </div>
         )}
 
         <header className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">
-              My Support Tickets
-            </h1>
+            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">My Support Tickets</h1>
             <p className="text-gray-500">Track and manage your support requests</p>
           </div>
           <button
@@ -1092,10 +1159,7 @@ export default function HelpPage() {
             {tickets.map((ticket) => {
               const statusConf = ticketStatusConfig[ticket.status];
               return (
-                <div
-                  key={ticket.id}
-                  className="p-4 hover:bg-gray-50/50 cursor-pointer"
-                >
+                <div key={ticket.id} className="p-4 hover:bg-gray-50/50 cursor-pointer">
                   <div className="flex items-start justify-between mb-2 gap-3">
                     <div className="min-w-0 flex-1">
                       <h4 className="font-medium text-gray-900">{ticket.subject}</h4>
@@ -1210,7 +1274,10 @@ export default function HelpPage() {
       {ticketSuccess && (
         <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center gap-3">
           <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0" />
-          <p className="text-sm text-green-800">Your support ticket has been submitted successfully. We'll get back to you within 24 hours.</p>
+          <p className="text-sm text-green-800">
+            Your support ticket has been submitted successfully. We'll get back to you within 24
+            hours.
+          </p>
         </div>
       )}
 
@@ -1219,9 +1286,7 @@ export default function HelpPage() {
         <div className="p-3 bg-red-50 rounded-2xl inline-flex mb-4">
           <HelpCircle className="w-8 h-8 text-red-600" />
         </div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-          How can we help you?
-        </h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">How can we help you?</h1>
         <p className="text-gray-500 max-w-md mx-auto">
           Search our knowledge base or browse categories below
         </p>
@@ -1243,7 +1308,8 @@ export default function HelpPage() {
         {searchTerm && (
           <div className="mt-4">
             <p className="text-sm text-gray-500 mb-3">
-              {filteredArticles.length} result{filteredArticles.length !== 1 ? 's' : ''} for &quot;{searchTerm}&quot;
+              {filteredArticles.length} result{filteredArticles.length !== 1 ? 's' : ''} for &quot;
+              {searchTerm}&quot;
             </p>
             <div className="space-y-2">
               {filteredArticles.slice(0, 5).map((article) => (
@@ -1260,7 +1326,9 @@ export default function HelpPage() {
                 </button>
               ))}
               {filteredArticles.length === 0 && (
-                <p className="text-gray-500 text-center py-4">No articles match your search. Try different keywords or contact support.</p>
+                <p className="text-gray-500 text-center py-4">
+                  No articles match your search. Try different keywords or contact support.
+                </p>
               )}
             </div>
           </div>
@@ -1299,9 +1367,7 @@ export default function HelpPage() {
 
       {/* Categories */}
       <section className="mb-10">
-        <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">
-          Browse by Category
-        </h2>
+        <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Browse by Category</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           {helpCategories.map((category) => {
             const Icon = iconMap[category.icon] || HelpCircle;
@@ -1317,12 +1383,8 @@ export default function HelpPage() {
                 >
                   <Icon className={`w-6 h-6 ${config.text}`} />
                 </div>
-                <div className="font-medium text-gray-900 text-sm">
-                  {category.name}
-                </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {category.articleCount} articles
-                </div>
+                <div className="font-medium text-gray-900 text-sm">{category.name}</div>
+                <div className="text-xs text-gray-500 mt-1">{category.articleCount} articles</div>
               </button>
             );
           })}
@@ -1331,9 +1393,7 @@ export default function HelpPage() {
 
       {/* Popular Articles */}
       <section className="mb-10">
-        <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">
-          Popular Articles
-        </h2>
+        <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Popular Articles</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {popularArticles.map((article) => (
             <button
@@ -1349,9 +1409,7 @@ export default function HelpPage() {
                 {helpCategories.find((c) => c.id === article.category)?.name}
               </span>
               <h3 className="font-medium text-gray-900 mb-1">{article.title}</h3>
-              <p className="text-sm text-gray-500 line-clamp-2 mb-2">
-                {article.excerpt}
-              </p>
+              <p className="text-sm text-gray-500 line-clamp-2 mb-2">{article.excerpt}</p>
               <div className="flex items-center gap-3 text-xs text-gray-500">
                 <span className="flex items-center gap-1">
                   <Clock className="w-3 h-3" />

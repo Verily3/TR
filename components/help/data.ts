@@ -82,13 +82,13 @@ export const helpCategories: HelpCategory[] = [
 export const defaultArticles: HelpArticle[] = [
   {
     id: "a1",
-    title: "Getting Started with Transformation OS",
+    title: "Getting Started with Results Tracking System",
     slug: "getting-started-guide",
     excerpt: "A comprehensive guide to help you navigate and make the most of the platform",
     content: `
-# Getting Started with Transformation OS
+# Getting Started with Results Tracking System
 
-Welcome to Transformation OS! This guide will walk you through the essential features and help you get started on your transformation journey.
+Welcome to Results Tracking System! This guide will walk you through the essential features and help you get started on your transformation journey.
 
 ## Setting Up Your Profile
 
@@ -394,7 +394,7 @@ Contact support with:
     id: "a8",
     title: "Connecting Integrations",
     slug: "connecting-integrations",
-    excerpt: "How to connect Transformation OS with your favorite tools",
+    excerpt: "How to connect Results Tracking System with your favorite tools",
     content: `
 # Connecting Integrations
 

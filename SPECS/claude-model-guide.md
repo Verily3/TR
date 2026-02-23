@@ -1,10 +1,11 @@
-# Claude Model Selection Guide — Transformation OS
+# Claude Model Selection Guide — Results Tracking System
 
 ## Default: Sonnet 4.5
 
 Use Sonnet for ~80% of day-to-day work. Toggle with `/fast` in Claude Code.
 
 Sonnet handles well:
+
 - Adding API endpoints following existing patterns
 - Creating React components and hooks from specs
 - SQL query tweaks and schema updates
@@ -23,11 +24,11 @@ Sonnet handles well:
 
 ## Model Reference
 
-| Model | ID | Best For |
-|-------|-----|----------|
-| Opus 4.6 | `claude-opus-4-6` | Complex planning, debugging, architecture |
-| Sonnet 4.5 | `claude-sonnet-4-5-20250929` | Day-to-day coding, feature implementation |
-| Haiku 4.5 | `claude-haiku-4-5-20251001` | Simple edits, quick searches, trivial tasks |
+| Model      | ID                           | Best For                                    |
+| ---------- | ---------------------------- | ------------------------------------------- |
+| Opus 4.6   | `claude-opus-4-6`            | Complex planning, debugging, architecture   |
+| Sonnet 4.5 | `claude-sonnet-4-5-20250929` | Day-to-day coding, feature implementation   |
+| Haiku 4.5  | `claude-haiku-4-5-20251001`  | Simple edits, quick searches, trivial tasks |
 
 ## Cost/Speed Tradeoff
 

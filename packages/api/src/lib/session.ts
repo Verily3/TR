@@ -33,10 +33,7 @@ export class SessionManager {
   /**
    * Create a new session for a user
    */
-  async createSession(
-    userId: string,
-    metadata: SessionMetadata
-  ): Promise<SessionResult> {
+  async createSession(userId: string, metadata: SessionMetadata): Promise<SessionResult> {
     const refreshToken = randomBytes(32).toString('hex');
     const tokenHash = createHash('sha256').update(refreshToken).digest('hex');
 
@@ -83,12 +80,27 @@ export class SessionManager {
     if (!session) return null;
 
     // Update last active time
-    await db
-      .update(sessions)
-      .set({ lastActiveAt: new Date() })
-      .where(eq(sessions.id, session.id));
+    await db.update(sessions).set({ lastActiveAt: new Date() }).where(eq(sessions.id, session.id));
 
     return { sessionId: session.id, userId: session.userId };
+  }
+
+  /**
+   * Rotate a session's refresh token (one-time-use pattern).
+   * Replaces the stored token hash with a new one; returns the new plain-text token.
+   */
+  async rotateSession(sessionId: string): Promise<string> {
+    const newRefreshToken = randomBytes(32).toString('hex');
+    const newTokenHash = createHash('sha256').update(newRefreshToken).digest('hex');
+
+    const newExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    await db
+      .update(sessions)
+      .set({ tokenHash: newTokenHash, expiresAt: newExpiresAt, lastActiveAt: new Date() })
+      .where(eq(sessions.id, sessionId));
+
+    return newRefreshToken;
   }
 
   /**
@@ -107,10 +119,7 @@ export class SessionManager {
   /**
    * Revoke all sessions for a user (except optionally one)
    */
-  async revokeAllUserSessions(
-    userId: string,
-    exceptSessionId?: string
-  ): Promise<void> {
+  async revokeAllUserSessions(userId: string, exceptSessionId?: string): Promise<void> {
     // Get all active sessions for user
     const userSessions = await db
       .select({ id: sessions.id })
@@ -128,9 +137,7 @@ export class SessionManager {
   /**
    * Get user with their roles and permissions
    */
-  async getUserWithPermissions(
-    userId: string
-  ): Promise<UserWithPermissions | null> {
+  async getUserWithPermissions(userId: string): Promise<UserWithPermissions | null> {
     const [user] = await db
       .select()
       .from(users)

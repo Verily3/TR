@@ -2,11 +2,12 @@ import { createMiddleware } from 'hono/factory';
 import { eq, and, isNull, gt } from 'drizzle-orm';
 import crypto from 'node:crypto';
 import { jwtService } from '../lib/jwt.js';
+import { sessionManager } from '../lib/session.js';
 import { UnauthorizedError } from '../lib/errors.js';
 import { db, schema } from '@tr/db';
 import type { Variables } from '../types/context.js';
 
-const { users, roles, userRoles, impersonationSessions } = schema;
+const { users, impersonationSessions } = schema;
 
 /**
  * Auth middleware - verifies JWT access token and sets user context.
@@ -35,10 +36,7 @@ export function authMiddleware() {
     const impersonationToken = c.req.header('X-Impersonation-Token');
 
     if (impersonationToken) {
-      const tokenHash = crypto
-        .createHash('sha256')
-        .update(impersonationToken)
-        .digest('hex');
+      const tokenHash = crypto.createHash('sha256').update(impersonationToken).digest('hex');
 
       // Find active impersonation session
       const [session] = await db
@@ -66,16 +64,8 @@ export function authMiddleware() {
           .limit(1);
 
         if (targetUser) {
-          // Get target user's role
-          const [role] = await db
-            .select({
-              slug: roles.slug,
-              level: roles.level,
-            })
-            .from(userRoles)
-            .innerJoin(roles, eq(userRoles.roleId, roles.id))
-            .where(eq(userRoles.userId, targetUser.id))
-            .limit(1);
+          // Load target user's actual permissions — do NOT inherit admin's permissions
+          const targetWithPerms = await sessionManager.getUserWithPermissions(targetUser.id);
 
           c.set('user', {
             id: targetUser.id,
@@ -83,9 +73,9 @@ export function authMiddleware() {
             agencyId: targetUser.agencyId ?? undefined,
             tenantId: targetUser.tenantId ?? undefined,
             email: targetUser.email,
-            roleSlug: role?.slug ?? 'learner',
-            roleLevel: role?.level ?? 10,
-            permissions: payload.permissions, // Keep admin permissions for safety
+            roleSlug: targetWithPerms?.roleSlug ?? 'learner',
+            roleLevel: targetWithPerms?.roleLevel ?? 10,
+            permissions: targetWithPerms?.permissions ?? [],
             isImpersonating: true,
             impersonatedBy: {
               userId: session.adminUserId,

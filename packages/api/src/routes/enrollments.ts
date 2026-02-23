@@ -12,8 +12,9 @@ import { sendProgramWelcome } from '../lib/email.js';
 import { resolveEmailContent } from '../lib/email-resolver.js';
 import { createNotification } from '../lib/notifications.js';
 import { env } from '../lib/env.js';
+import { generateCertificate } from '../lib/certificate-generator.js';
 
-const { programs, enrollments, enrollmentMentorships, users } = schema;
+const { programs, enrollments, enrollmentMentorships, users, tenants } = schema;
 
 /**
  * Helper: check if a tenant has access to a program.
@@ -28,9 +29,7 @@ function programAccessCondition(tenantId: string, agencyId?: string | null) {
     sql`${tenantId} = ANY(${programs.allowedTenantIds})`,
   ];
   if (agencyId) {
-    conditions.push(
-      and(eq(programs.agencyId, agencyId), isNull(programs.tenantId))!
-    );
+    conditions.push(and(eq(programs.agencyId, agencyId), isNull(programs.tenantId))!);
   }
   return or(...conditions)!;
 }
@@ -186,11 +185,7 @@ enrollmentsRoutes.post(
     }
 
     // Verify user exists — allow cross-tenant enrollment for multi-tenant programs
-    const [enrollUser] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
+    const [enrollUser] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
 
     if (!enrollUser) {
       throw new NotFoundError('User', userId);
@@ -205,7 +200,7 @@ enrollmentsRoutes.post(
         .limit(1);
 
       if (!userTenantAccess) {
-        throw new BadRequestError('User\'s organization does not have access to this program');
+        throw new BadRequestError("User's organization does not have access to this program");
       }
     }
 
@@ -225,9 +220,7 @@ enrollmentsRoutes.post(
       const [{ enrollmentCount }] = await db
         .select({ enrollmentCount: sql<number>`count(*)` })
         .from(enrollments)
-        .where(
-          and(eq(enrollments.programId, programId), eq(enrollments.role, 'learner'))
-        );
+        .where(and(eq(enrollments.programId, programId), eq(enrollments.role, 'learner')));
 
       if (Number(enrollmentCount) >= program.config.maxCapacity && role === 'learner') {
         throw new BadRequestError('Program has reached maximum capacity');
@@ -257,7 +250,11 @@ enrollmentsRoutes.post(
 
       if (resolved.enabled) {
         const startDate = program.startDate
-          ? new Date(program.startDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+          ? new Date(program.startDate).toLocaleDateString('en-US', {
+              month: 'long',
+              day: 'numeric',
+              year: 'numeric',
+            })
           : undefined;
         const programUrl = `${env.APP_URL}/programs/${program.id}`;
 
@@ -340,8 +337,7 @@ enrollmentsRoutes.get(
     }
 
     // Get mentor assignments if this is a learner
-    let mentors: { id: string; email: string; firstName: string; lastName: string }[] =
-      [];
+    let mentors: { id: string; email: string; firstName: string; lastName: string }[] = [];
     if (enrollment.role === 'learner') {
       mentors = await db
         .select({
@@ -621,10 +617,84 @@ enrollmentsRoutes.delete(
       throw new NotFoundError('Mentorship', mentorshipId);
     }
 
-    await db
-      .delete(enrollmentMentorships)
-      .where(eq(enrollmentMentorships.id, mentorshipId));
+    await db.delete(enrollmentMentorships).where(eq(enrollmentMentorships.id, mentorshipId));
 
     return c.json({ data: { success: true } });
   }
 );
+
+// ============================================
+// CERTIFICATE ENDPOINT
+// ============================================
+
+/**
+ * GET /:enrollmentId/certificate
+ * Generate and download the completion certificate for an enrollment.
+ * Requires the enrollment to be in 'completed' status.
+ */
+enrollmentsRoutes.get('/:enrollmentId/certificate', requireTenantAccess(), async (c) => {
+  const tenant = c.get('tenant')!;
+  const user = c.get('user');
+  const programId = c.req.param('programId')!;
+  const enrollmentId = c.req.param('enrollmentId')!;
+
+  // Fetch enrollment with user + program info
+  const [row] = await db
+    .select({
+      enrollmentId: enrollments.id,
+      status: enrollments.status,
+      completedAt: enrollments.completedAt,
+      pointsEarned: enrollments.pointsEarned,
+      enrolledUserId: enrollments.userId,
+      programName: programs.name,
+      firstName: users.firstName,
+      lastName: users.lastName,
+      tenantName: tenants.name,
+    })
+    .from(enrollments)
+    .innerJoin(programs, eq(enrollments.programId, programs.id))
+    .innerJoin(users, eq(enrollments.userId, users.id))
+    .innerJoin(tenants, eq(tenants.id, tenant.id))
+    .where(
+      and(
+        eq(enrollments.id, enrollmentId),
+        eq(enrollments.programId, programId),
+        programAccessCondition(tenant.id, tenant.agencyId)
+      )
+    )
+    .limit(1);
+
+  if (!row) throw new NotFoundError('Enrollment', enrollmentId);
+
+  // Must be own certificate OR admin/facilitator
+  const isSelf = user.id === row.enrolledUserId;
+  const isAdmin = user.roleLevel >= 70;
+  if (!isSelf && !isAdmin) {
+    throw new NotFoundError('Enrollment', enrollmentId);
+  }
+
+  if (row.status !== 'completed' || !row.completedAt) {
+    throw new BadRequestError('Certificate is only available for completed programs.');
+  }
+
+  const recipientName = [row.firstName, row.lastName].filter(Boolean).join(' ') || 'Participant';
+
+  const pdfBuffer = await generateCertificate({
+    recipientName,
+    programName: row.programName,
+    completedAt: row.completedAt,
+    pointsEarned: row.pointsEarned ?? 0,
+    issuedBy: row.tenantName,
+    enrollmentId: row.enrollmentId,
+  });
+
+  const filename = `Certificate_${row.programName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+
+  return new Response(pdfBuffer, {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': pdfBuffer.length.toString(),
+    },
+  });
+});

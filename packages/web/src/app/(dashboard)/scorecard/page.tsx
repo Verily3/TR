@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Download,
   Target,
@@ -20,8 +20,22 @@ import {
   CheckCircle2,
   AlertTriangle,
   AlertCircle,
+  Loader2,
   LucideIcon,
 } from 'lucide-react';
+import { useAuth } from '@/hooks/use-auth';
+import { useTenants } from '@/hooks/api/useTenants';
+import { useMyProfile } from '@/hooks/api/useMyProfile';
+import { useDirectReports } from '@/hooks/api/useUsers';
+import {
+  useScorecard,
+  useScorecardPeriods,
+  useOrgHealth,
+  type ScorecardItem as ApiScorecardItem,
+  type MetricCategory as ApiMetricCategory,
+  type ScorecardCompetency as ApiScorecardCompetency,
+  type OrgHealthCategory,
+} from '@/hooks/api/useScorecard';
 
 // ============================================================================
 // Types
@@ -83,178 +97,102 @@ interface HealthCategory {
   trend: TrendDirection;
 }
 
+// (Static data removed — Org Health now uses real API data)
+
 // ============================================================================
-// Mock Data
+// Data Mapping
 // ============================================================================
 
-const PERIOD_OPTIONS = ['Q1 2026', 'Q4 2025', 'Q3 2025', 'Q2 2025'] as const;
-type Period = (typeof PERIOD_OPTIONS)[number];
+function getCategoryIconName(name: string): string {
+  const lower = name.toLowerCase();
+  if (
+    lower.includes('financ') ||
+    lower.includes('revenue') ||
+    lower.includes('profit') ||
+    lower.includes('ebitda')
+  )
+    return 'DollarSign';
+  if (
+    lower.includes('operat') ||
+    lower.includes('manufactur') ||
+    lower.includes('product') ||
+    lower.includes('plant')
+  )
+    return 'Factory';
+  if (
+    lower.includes('market') ||
+    lower.includes('growth') ||
+    lower.includes('sales') ||
+    lower.includes('customer')
+  )
+    return 'TrendingUp';
+  if (
+    lower.includes('people') ||
+    lower.includes('talent') ||
+    lower.includes('team') ||
+    lower.includes('culture') ||
+    lower.includes('hr')
+  )
+    return 'Users';
+  if (
+    lower.includes('complian') ||
+    lower.includes('safety') ||
+    lower.includes('risk') ||
+    lower.includes('legal') ||
+    lower.includes('audit')
+  )
+    return 'Shield';
+  if (
+    lower.includes('brand') ||
+    lower.includes('award') ||
+    lower.includes('recognit') ||
+    lower.includes('quality')
+  )
+    return 'Award';
+  return 'TrendingUp';
+}
 
-const DEFAULT_ROLE = 'Chief Executive Officer';
-const DEFAULT_MISSION =
-  'Lead the company to profitable, scalable growth by setting strategic direction, strengthening operational performance, building a high-performance leadership team, and positioning the brand as a trusted industry leader in both raw and value-added chicken products.';
-const DEFAULT_SCORE = 87;
-const DEFAULT_TREND = 5;
+function mapApiItem(item: ApiScorecardItem): Accountability {
+  const statusMap: Record<string, AccountabilityStatus> = {
+    on_track: 'on-track',
+    at_risk: 'at-risk',
+    needs_attention: 'needs-attention',
+  };
+  return {
+    id: item.id,
+    title: item.title,
+    description: item.description ?? '',
+    score: item.score,
+    status: statusMap[item.status] ?? 'on-track',
+  };
+}
 
-const accountabilities: Accountability[] = [
-  {
-    id: 'acc-1',
-    title: 'Strategic Direction & Vision',
-    description:
-      'Establish and execute a 3-5 year growth strategy aligned with market trends and company capabilities',
-    score: 92,
-    status: 'on-track',
-  },
-  {
-    id: 'acc-2',
-    title: 'Revenue & Profit Growth',
-    description:
-      'Achieve YoY revenue growth of X%, with margin expansion. Balance growth between raw and cooked segments',
-    score: 88,
-    status: 'on-track',
-  },
-  {
-    id: 'acc-3',
-    title: 'Operational Excellence',
-    description:
-      'Partner with President/COO to drive efficiencies and throughput. Benchmark OEE >85%',
-    score: 78,
-    status: 'at-risk',
-  },
-  {
-    id: 'acc-4',
-    title: 'Brand Expansion',
-    description:
-      'Grow brand awareness and trust in both B2B and retail channels; launch national campaigns',
-    score: 85,
-    status: 'on-track',
-  },
-  {
-    id: 'acc-5',
-    title: 'Talent & Culture',
-    description:
-      'Attract and retain A-player executives; achieve >90% leadership retention; drive high-performance culture',
-    score: 90,
-    status: 'on-track',
-  },
-  {
-    id: 'acc-6',
-    title: 'Board & Investor Relations',
-    description:
-      'Maintain transparent communication and trust. Deliver consistent performance against board-approved metrics',
-    score: 94,
-    status: 'on-track',
-  },
-  {
-    id: 'acc-7',
-    title: 'M&A/Strategic Partnerships',
-    description:
-      'Lead successful acquisitions or joint ventures to strengthen capabilities, market share, or capacity',
-    score: 72,
-    status: 'needs-attention',
-  },
-  {
-    id: 'acc-8',
-    title: 'Compliance & Risk Oversight',
-    description:
-      'Ensure regulatory and food safety compliance; zero critical violations; proactively mitigate risk',
-    score: 96,
-    status: 'on-track',
-  },
-];
+function mapApiCategory(cat: ApiMetricCategory): KPICategory {
+  return {
+    id: cat.category,
+    name: cat.category,
+    iconName: getCategoryIconName(cat.category),
+    kpis: cat.metrics.map((m) => ({
+      id: m.id,
+      label: m.name,
+      value: m.actualValue || '—',
+      target: m.targetValue || '—',
+      change: m.changeLabel ?? '',
+      trend: m.trend,
+      invertTrend: m.invertTrend === 1,
+    })),
+  };
+}
 
-const kpiCategories: KPICategory[] = [
-  {
-    id: 'financial',
-    name: 'Financial',
-    iconName: 'DollarSign',
-    kpis: [
-      { id: 'f1', label: 'EBITDA', value: '$24.5M', target: '$23M', change: '+6.5%', trend: 'up' },
-      { id: 'f2', label: 'Net Margin %', value: '8.2%', target: '8.0%', change: '+0.3%', trend: 'up' },
-      { id: 'f3', label: 'Revenue Growth %', value: '12.4%', target: '10%', change: '+2.4%', trend: 'up' },
-      { id: 'f4', label: 'ROIC', value: '14.8%', target: '15%', change: '-0.5%', trend: 'down' },
-    ],
-  },
-  {
-    id: 'operational',
-    name: 'Operational',
-    iconName: 'Factory',
-    kpis: [
-      { id: 'o1', label: 'Plant OEE', value: '82.3%', target: '85%', change: '-2.7%', trend: 'down' },
-      { id: 'o2', label: 'Yield %', value: '94.1%', target: '95%', change: '0%', trend: 'neutral' },
-      { id: 'o3', label: 'Downtime Hours', value: '124', target: '<100', change: '+24%', trend: 'down' },
-      { id: 'o4', label: 'Throughput/Shift', value: '12.8K lbs', target: '13K lbs', change: '+3%', trend: 'up' },
-    ],
-  },
-  {
-    id: 'market-growth',
-    name: 'Market Growth',
-    iconName: 'TrendingUp',
-    kpis: [
-      { id: 'm1', label: 'Market Share (Cooked)', value: '18.2%', target: '20%', change: '+1.5%', trend: 'up' },
-      { id: 'm2', label: 'New Product Revenue %', value: '15%', target: '12%', change: '+3%', trend: 'up' },
-      { id: 'm3', label: 'Customer Retention', value: '94%', target: '95%', change: '-1%', trend: 'down' },
-    ],
-  },
-  {
-    id: 'people-culture',
-    name: 'People & Culture',
-    iconName: 'Users',
-    kpis: [
-      { id: 'p1', label: '% A-Players in Leadership', value: '78%', target: '80%', change: '+5%', trend: 'up' },
-      { id: 'p2', label: 'Engagement Score', value: '87%', target: '85%', change: '+2%', trend: 'up' },
-      { id: 'p3', label: 'Executive Team Stability', value: '92%', target: '90%', change: '+2%', trend: 'up' },
-    ],
-  },
-  {
-    id: 'compliance-safety',
-    name: 'Compliance & Safety',
-    iconName: 'Shield',
-    kpis: [
-      { id: 'c1', label: 'USDA/FDA Audit Score', value: '98', target: '>95', change: '+3%', trend: 'up' },
-      { id: 'c2', label: 'Critical Violations', value: '0', target: '0', change: '0', trend: 'neutral' },
-      { id: 'c3', label: 'TRIR', value: '2.1', target: '<2.5', change: '-15%', trend: 'up', invertTrend: true },
-    ],
-  },
-  {
-    id: 'brand-strength',
-    name: 'Brand Strength',
-    iconName: 'Award',
-    kpis: [
-      { id: 'b1', label: 'National Distribution Points', value: '8,420', target: '9,000', change: '+12%', trend: 'up' },
-      { id: 'b2', label: 'Brand Recall Rate', value: '42%', target: '45%', change: '+3%', trend: 'up' },
-      { id: 'b3', label: 'NPS (B2B & Retail)', value: '67', target: '70', change: '+5', trend: 'up' },
-    ],
-  },
-];
-
-const competencies: Competency[] = [
-  { id: 'comp-1', name: 'Visionary Leadership', description: 'Sees around corners and guides the company toward strategic advantage', selfRating: 4, mentorRating: 4 },
-  { id: 'comp-2', name: 'Financial Acumen', description: 'Deep P&L mastery; understands drivers of value creation', selfRating: 5, mentorRating: 5 },
-  { id: 'comp-3', name: 'Influence & Communication', description: 'Inspires trust with board, customers, regulators, and employees', selfRating: 4, mentorRating: 5 },
-  { id: 'comp-4', name: 'Talent Magnet', description: 'Attracts and retains top executives and key talent', selfRating: 4, mentorRating: 4 },
-  { id: 'comp-5', name: 'Operational Savvy', description: 'Understands complexities of vertically integrated food processing', selfRating: 3, mentorRating: 3 },
-  { id: 'comp-6', name: 'Customer Intuition', description: 'Understands evolving customer demands across channels', selfRating: 4, mentorRating: 4 },
-  { id: 'comp-7', name: 'Execution Focus', description: 'Drives accountability and consistent delivery against critical goals', selfRating: 5, mentorRating: 4 },
-  { id: 'comp-8', name: 'Crisis Leadership', description: 'Maintains clarity and calm in times of volatility', selfRating: 4, mentorRating: 5 },
-  { id: 'comp-9', name: 'High Integrity', description: 'Embodies ethical, safety-first, and compliant business conduct', selfRating: 5, mentorRating: 5 },
-];
-
-const directReports: DirectReport[] = [
-  { id: 'dr-1', name: 'Sarah Mitchell', role: 'President/COO', scorecardScore: 89, scorecardTrend: 'up', goalsCompleted: 5, goalsTotal: 6, programsActive: 2, rating: 'A' },
-  { id: 'dr-2', name: 'Marcus Chen', role: 'CFO', scorecardScore: 92, scorecardTrend: 'up', goalsCompleted: 4, goalsTotal: 4, programsActive: 1, rating: 'A' },
-  { id: 'dr-3', name: 'Jennifer Lopez', role: 'CMO', scorecardScore: 85, scorecardTrend: 'up', goalsCompleted: 3, goalsTotal: 5, programsActive: 3, rating: 'A-' },
-  { id: 'dr-4', name: 'David Park', role: 'VP Operations', scorecardScore: 78, scorecardTrend: 'up', goalsCompleted: 2, goalsTotal: 4, programsActive: 2, rating: 'B+' },
-  { id: 'dr-5', name: 'Amanda Brooks', role: 'VP Sales', scorecardScore: 88, scorecardTrend: 'up', goalsCompleted: 6, goalsTotal: 7, programsActive: 1, rating: 'A' },
-];
-
-const healthCategories: HealthCategory[] = [
-  { id: 'health-1', name: 'Strategy', score: 88, change: 3, trend: 'up' },
-  { id: 'health-2', name: 'Execution', score: 82, change: 0, trend: 'neutral' },
-  { id: 'health-3', name: 'Culture', score: 90, change: 3, trend: 'up' },
-  { id: 'health-4', name: 'Learning', score: 85, change: 3, trend: 'up' },
-  { id: 'health-5', name: 'Innovation', score: 78, change: -2, trend: 'down' },
-];
+function mapApiCompetency(comp: ApiScorecardCompetency): Competency {
+  return {
+    id: comp.id,
+    name: comp.name,
+    description: comp.description ?? '',
+    selfRating: comp.selfRating,
+    mentorRating: comp.managerRating,
+  };
+}
 
 // ============================================================================
 // Icon Map (for KPI categories)
@@ -474,12 +412,35 @@ function StatusBadge({
   showIcon?: boolean;
   size?: 'sm' | 'md';
 }) {
-  const statusConfig: Record<string, { icon: LucideIcon; bg: string; text: string; border: string }> = {
-    success: { icon: CheckCircle2, bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' },
-    warning: { icon: AlertTriangle, bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' },
+  const statusConfig: Record<
+    string,
+    { icon: LucideIcon; bg: string; text: string; border: string }
+  > = {
+    success: {
+      icon: CheckCircle2,
+      bg: 'bg-green-50',
+      text: 'text-green-700',
+      border: 'border-green-200',
+    },
+    warning: {
+      icon: AlertTriangle,
+      bg: 'bg-yellow-50',
+      text: 'text-yellow-700',
+      border: 'border-yellow-200',
+    },
     danger: { icon: AlertCircle, bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200' },
-    info: { icon: CheckCircle2, bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
-    neutral: { icon: CheckCircle2, bg: 'bg-gray-100', text: 'text-gray-500', border: 'border-gray-200' },
+    info: {
+      icon: CheckCircle2,
+      bg: 'bg-blue-50',
+      text: 'text-blue-700',
+      border: 'border-blue-200',
+    },
+    neutral: {
+      icon: CheckCircle2,
+      bg: 'bg-gray-100',
+      text: 'text-gray-500',
+      border: 'border-gray-200',
+    },
   };
 
   const sizeClasses = {
@@ -502,7 +463,12 @@ function StatusBadge({
 }
 
 function Avatar({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' | 'lg' | 'xl' }) {
-  const sizeClasses = { sm: 'w-8 h-8 text-xs', md: 'w-10 h-10 text-sm', lg: 'w-12 h-12 text-base', xl: 'w-16 h-16 text-lg' };
+  const sizeClasses = {
+    sm: 'w-8 h-8 text-xs',
+    md: 'w-10 h-10 text-sm',
+    lg: 'w-12 h-12 text-base',
+    xl: 'w-16 h-16 text-lg',
+  };
 
   const gradients = [
     'from-violet-500 to-purple-600',
@@ -543,10 +509,15 @@ function Avatar({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' | 'lg'
 // Section: Role & Mission
 // ============================================================================
 
-function RoleMissionSection() {
-  const trendDirection: TrendDirection = DEFAULT_TREND > 0 ? 'up' : DEFAULT_TREND < 0 ? 'down' : 'neutral';
-  const trendValue = `${DEFAULT_TREND > 0 ? '+' : ''}${DEFAULT_TREND} vs Q4`;
-
+function RoleMissionSection({
+  role,
+  mission,
+  score,
+}: {
+  role: string;
+  mission: string;
+  score: number;
+}) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-8">
       <div className="flex flex-col sm:flex-row items-start justify-between gap-8">
@@ -556,9 +527,13 @@ function RoleMissionSection() {
             <Target className="w-4 h-4 text-red-600" aria-hidden="true" />
             <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Role</span>
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">{DEFAULT_ROLE}</h2>
-          <div className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Mission</div>
-          <p className="text-sm text-gray-500 leading-relaxed max-w-3xl">{DEFAULT_MISSION}</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">{role || '—'}</h2>
+          <div className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+            Mission
+          </div>
+          <p className="text-sm text-gray-500 leading-relaxed max-w-3xl">
+            {mission || 'No mission statement set.'}
+          </p>
         </div>
 
         {/* Right: Score Gauge */}
@@ -567,22 +542,19 @@ function RoleMissionSection() {
             Overall Score
           </div>
           <CircularProgress
-            value={DEFAULT_SCORE}
+            value={score}
             max={100}
             size={120}
             strokeWidth={10}
             variant="auto"
             label={
               <div className="flex flex-col items-center">
-                <span className="text-3xl font-bold text-gray-900">{DEFAULT_SCORE}</span>
+                <span className="text-3xl font-bold text-gray-900">{score}</span>
                 <span className="text-xs text-gray-500">/ 100</span>
               </div>
             }
-            ariaLabel={`Overall score: ${DEFAULT_SCORE} out of 100`}
+            ariaLabel={`Overall score: ${score} out of 100`}
           />
-          <div className="mt-3">
-            <TrendIndicator direction={trendDirection} value={trendValue} variant="pill" size="md" />
-          </div>
         </div>
       </div>
     </div>
@@ -608,7 +580,7 @@ const accountabilityBorderColors: Record<AccountabilityStatus, string> = {
   'needs-attention': 'border-red-200 hover:border-red-300',
 };
 
-function KeyAccountabilitiesSection() {
+function KeyAccountabilitiesSection({ items }: { items: Accountability[] }) {
   return (
     <section className="mb-8">
       <header className="mb-4">
@@ -634,38 +606,59 @@ function KeyAccountabilitiesSection() {
         </div>
       </header>
 
-      <div
-        className="grid grid-cols-1 md:grid-cols-2 gap-4"
-        role="list"
-        aria-label="Key accountabilities"
-      >
-        {accountabilities.map((item) => {
-          const status = accountabilityStatusMap[item.status];
-          const progressVariant =
-            item.status === 'on-track' ? 'success' : item.status === 'at-risk' ? 'warning' : 'danger';
+      {items.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+          <p className="text-sm text-gray-500">No accountability items for this period.</p>
+        </div>
+      ) : (
+        <div
+          className="grid grid-cols-1 md:grid-cols-2 gap-4"
+          role="list"
+          aria-label="Key accountabilities"
+        >
+          {items.map((item) => {
+            const status = accountabilityStatusMap[item.status];
+            const progressVariant =
+              item.status === 'on-track'
+                ? 'success'
+                : item.status === 'at-risk'
+                  ? 'warning'
+                  : 'danger';
 
-          return (
-            <div
-              key={item.id}
-              className={`bg-white rounded-xl shadow-sm border p-5 transition-colors ${accountabilityBorderColors[item.status]}`}
-              role="listitem"
-              aria-label={`${item.title}: ${item.score} points, ${status.label}`}
-            >
-              <div className="flex items-start justify-between gap-4 mb-4">
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-gray-900 mb-1">{item.title}</h4>
-                  <p className="text-xs text-gray-500 leading-relaxed">{item.description}</p>
+            return (
+              <div
+                key={item.id}
+                className={`bg-white rounded-xl shadow-sm border p-5 transition-colors ${accountabilityBorderColors[item.status]}`}
+                role="listitem"
+                aria-label={`${item.title}: ${item.score} points, ${status.label}`}
+              >
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-medium text-gray-900 mb-1">{item.title}</h4>
+                    <p className="text-xs text-gray-500 leading-relaxed">{item.description}</p>
+                  </div>
+                  <div className="flex-shrink-0 text-right">
+                    <div className="text-2xl font-semibold text-gray-900 mb-1">{item.score}</div>
+                    <StatusBadge
+                      status={status.type}
+                      label={status.label}
+                      showIcon={false}
+                      size="sm"
+                    />
+                  </div>
                 </div>
-                <div className="flex-shrink-0 text-right">
-                  <div className="text-2xl font-semibold text-gray-900 mb-1">{item.score}</div>
-                  <StatusBadge status={status.type} label={status.label} showIcon={false} size="sm" />
-                </div>
+                <ProgressBar
+                  value={item.score}
+                  max={100}
+                  variant={progressVariant}
+                  size="md"
+                  ariaLabel={`Progress: ${item.score}%`}
+                />
               </div>
-              <ProgressBar value={item.score} max={100} variant={progressVariant} size="md" ariaLabel={`Progress: ${item.score}%`} />
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </section>
   );
 }
@@ -685,12 +678,27 @@ function KPICardInline({ kpi }: { kpi: KPI }) {
       aria-label={`${kpi.label}: ${kpi.value}`}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
-        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">{kpi.label}</span>
-        <TrendIndicator direction={kpi.trend} value={kpi.change} variant="pill" iconStyle="arrow" size="sm" />
+        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+          {kpi.label}
+        </span>
+        <TrendIndicator
+          direction={kpi.trend}
+          value={kpi.change}
+          variant="pill"
+          iconStyle="arrow"
+          size="sm"
+        />
       </div>
       <div className="text-2xl font-semibold text-gray-900 mb-3">{kpi.value}</div>
       <div className="flex items-center gap-2">
-        <ProgressBar value={75} max={100} size="sm" variant={progressVariant} className="flex-1" ariaLabel={`Target progress for ${kpi.label}`} />
+        <ProgressBar
+          value={75}
+          max={100}
+          size="sm"
+          variant={progressVariant}
+          className="flex-1"
+          ariaLabel={`Target progress for ${kpi.label}`}
+        />
         <span className="text-xs text-gray-500 whitespace-nowrap">{kpi.target}</span>
       </div>
     </div>
@@ -722,17 +730,23 @@ function KPICategoryCardInline({ category }: { category: KPICategory }) {
   );
 }
 
-function KPIDashboardSection() {
+function KPIDashboardSection({ categories }: { categories: KPICategory[] }) {
   return (
     <section className="mb-8">
       <header className="mb-4">
         <h2 className="text-gray-900 font-semibold">Key Performance Indicators</h2>
       </header>
-      <div className="space-y-6" role="list" aria-label="KPI categories">
-        {kpiCategories.map((category) => (
-          <KPICategoryCardInline key={category.id} category={category} />
-        ))}
-      </div>
+      {categories.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+          <p className="text-sm text-gray-500">No KPI metrics for this period.</p>
+        </div>
+      ) : (
+        <div className="space-y-6" role="list" aria-label="KPI categories">
+          {categories.map((category) => (
+            <KPICategoryCardInline key={category.id} category={category} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -823,10 +837,29 @@ function CompetencyRow({
   );
 }
 
-function APlayerCompetenciesSection() {
+function APlayerCompetenciesSection({ items }: { items: Competency[] }) {
   const maxRating = 5;
-  const avgSelf = competencies.reduce((sum, c) => sum + c.selfRating, 0) / competencies.length;
-  const avgMentor = competencies.reduce((sum, c) => sum + c.mentorRating, 0) / competencies.length;
+
+  if (items.length === 0) {
+    return (
+      <section className="mb-8">
+        <header className="mb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-red-600" aria-hidden="true">
+              <Star className="w-5 h-5" />
+            </span>
+            <h2 className="text-gray-900 font-semibold">A-Player Competencies</h2>
+          </div>
+        </header>
+        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center">
+          <p className="text-sm text-gray-500">No competency ratings for this period.</p>
+        </div>
+      </section>
+    );
+  }
+
+  const avgSelf = items.reduce((sum, c) => sum + c.selfRating, 0) / items.length;
+  const avgMentor = items.reduce((sum, c) => sum + c.mentorRating, 0) / items.length;
   const overallGap = avgMentor - avgSelf;
   const gapDirection: TrendDirection = overallGap > 0 ? 'up' : overallGap < 0 ? 'down' : 'neutral';
 
@@ -857,7 +890,11 @@ function APlayerCompetenciesSection() {
               <span className="text-gray-500">Gap:</span>
               <span
                 className={`font-medium tabular-nums ${
-                  overallGap > 0 ? 'text-green-600' : overallGap < 0 ? 'text-red-600' : 'text-gray-500'
+                  overallGap > 0
+                    ? 'text-green-600'
+                    : overallGap < 0
+                      ? 'text-red-600'
+                      : 'text-gray-500'
                 }`}
               >
                 {overallGap > 0 ? '+' : ''}
@@ -870,7 +907,10 @@ function APlayerCompetenciesSection() {
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {/* Table Header */}
-        <div className="grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 border-b border-gray-200" role="row">
+        <div
+          className="grid grid-cols-12 gap-4 px-6 py-3 bg-gray-50 border-b border-gray-200"
+          role="row"
+        >
           <div
             className="col-span-6 text-xs font-medium text-gray-500 uppercase tracking-wide"
             role="columnheader"
@@ -899,12 +939,12 @@ function APlayerCompetenciesSection() {
 
         {/* Table Body */}
         <div role="rowgroup">
-          {competencies.map((competency, index) => (
+          {items.map((competency, index) => (
             <CompetencyRow
               key={competency.id}
               competency={competency}
               maxRating={maxRating}
-              isLast={index === competencies.length - 1}
+              isLast={index === items.length - 1}
             />
           ))}
         </div>
@@ -930,7 +970,10 @@ function ReportRow({ report }: { report: DirectReport }) {
   const goalsVariant = goalsPercent >= 80 ? 'success' : goalsPercent >= 50 ? 'warning' : 'danger';
 
   return (
-    <tr className="border-b border-gray-200 last:border-0 hover:bg-gray-50 transition-colors group" role="row">
+    <tr
+      className="border-b border-gray-200 last:border-0 hover:bg-gray-50 transition-colors group"
+      role="row"
+    >
       {/* Name & Role */}
       <td className="px-6 py-4" role="cell">
         <div className="flex items-center gap-3">
@@ -979,7 +1022,10 @@ function ReportRow({ report }: { report: DirectReport }) {
       {/* Programs */}
       <td className="px-6 py-4" role="cell">
         <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 rounded-full">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" aria-hidden="true" />
+          <span
+            className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"
+            aria-hidden="true"
+          />
           <span className="text-sm text-gray-900">{report.programsActive} Active</span>
         </div>
       </td>
@@ -1007,7 +1053,9 @@ function ReportRow({ report }: { report: DirectReport }) {
   );
 }
 
-function DirectReportsSection() {
+function DirectReportsSection({ tenantId }: { tenantId: string | null }) {
+  const { data: reports, isLoading } = useDirectReports(tenantId);
+
   return (
     <section className="mb-8">
       <header className="mb-4">
@@ -1020,57 +1068,69 @@ function DirectReportsSection() {
       </header>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full" role="table">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr role="row">
-                <th
-                  className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wide"
-                  role="columnheader"
-                  scope="col"
-                >
-                  Name
-                </th>
-                <th
-                  className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wide"
-                  role="columnheader"
-                  scope="col"
-                >
-                  Scorecard
-                </th>
-                <th
-                  className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wide"
-                  role="columnheader"
-                  scope="col"
-                >
-                  Goals Progress
-                </th>
-                <th
-                  className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wide"
-                  role="columnheader"
-                  scope="col"
-                >
-                  Programs
-                </th>
-                <th
-                  className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wide"
-                  role="columnheader"
-                  scope="col"
-                >
-                  Rating
-                </th>
-                <th className="px-6 py-4" role="columnheader" scope="col">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody role="rowgroup">
-              {directReports.map((report) => (
-                <ReportRow key={report.id} report={report} />
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {isLoading ? (
+          <div className="p-6 space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-12 bg-gray-100 rounded-lg animate-pulse" />
+            ))}
+          </div>
+        ) : !reports || reports.length === 0 ? (
+          <div className="p-10 text-center text-sm text-gray-500">
+            No direct reports configured. Set a manager in user profiles to populate this section.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full" role="table">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr role="row">
+                  <th
+                    className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wide"
+                    role="columnheader"
+                    scope="col"
+                  >
+                    Name
+                  </th>
+                  <th
+                    className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wide"
+                    role="columnheader"
+                    scope="col"
+                  >
+                    Scorecard
+                  </th>
+                  <th
+                    className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wide"
+                    role="columnheader"
+                    scope="col"
+                  >
+                    Goals Progress
+                  </th>
+                  <th
+                    className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wide"
+                    role="columnheader"
+                    scope="col"
+                  >
+                    Programs
+                  </th>
+                  <th
+                    className="text-left px-6 py-4 text-xs font-medium text-gray-500 uppercase tracking-wide"
+                    role="columnheader"
+                    scope="col"
+                  >
+                    Rating
+                  </th>
+                  <th className="px-6 py-4" role="columnheader" scope="col">
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody role="rowgroup">
+                {reports.map((report) => (
+                  <ReportRow key={report.id} report={report} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -1102,10 +1162,16 @@ function HealthCard({ category }: { category: HealthCategory }) {
   );
 }
 
-function OrganizationalHealthSection() {
-  const avgScore = Math.round(
-    healthCategories.reduce((sum, c) => sum + c.score, 0) / healthCategories.length
-  );
+function OrganizationalHealthSection({ tenantId }: { tenantId: string | null }) {
+  const { data: categories, isLoading } = useOrgHealth(tenantId);
+  const displayCategories: OrgHealthCategory[] =
+    categories && categories.length > 0 ? categories : [];
+  const avgScore =
+    displayCategories.length > 0
+      ? Math.round(
+          displayCategories.reduce((sum, c) => sum + c.score, 0) / displayCategories.length
+        )
+      : 0;
 
   return (
     <section className="mb-8">
@@ -1124,15 +1190,27 @@ function OrganizationalHealthSection() {
         </div>
       </header>
 
-      <div
-        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4"
-        role="list"
-        aria-label="Organizational health categories"
-      >
-        {healthCategories.map((category) => (
-          <HealthCard key={category.id} category={category} />
-        ))}
-      </div>
+      {isLoading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="h-40 bg-gray-100 rounded-xl animate-pulse" />
+          ))}
+        </div>
+      ) : displayCategories.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-10 text-center text-sm text-gray-500">
+          No scorecard metric data available for this period.
+        </div>
+      ) : (
+        <div
+          className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4"
+          role="list"
+          aria-label="Organizational health categories"
+        >
+          {displayCategories.map((category) => (
+            <HealthCard key={category.id} category={category} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -1142,16 +1220,89 @@ function OrganizationalHealthSection() {
 // ============================================================================
 
 export default function ScorecardPage() {
-  const [selectedPeriod, setSelectedPeriod] = useState<Period>('Q1 2026');
+  const { user } = useAuth();
+  const isAgencyUser = !!(user?.agencyId && !user?.tenantId);
+  const { data: tenants } = useTenants();
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isAgencyUser && tenants?.length && !selectedTenantId) {
+      setSelectedTenantId(tenants[0].id);
+    }
+  }, [isAgencyUser, tenants, selectedTenantId]);
+
+  const tenantId = isAgencyUser ? selectedTenantId : (user?.tenantId ?? null);
+
+  // Period state — initialized from API data
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('');
+
+  const { data: periodsData } = useScorecardPeriods(tenantId);
+  const periods = periodsData ?? [];
+
+  useEffect(() => {
+    if (periods.length > 0 && !selectedPeriod) {
+      setSelectedPeriod(periods[0]);
+    }
+  }, [periods, selectedPeriod]);
+
+  const { data: scorecardData, isLoading } = useScorecard(tenantId, selectedPeriod || undefined);
+  const { data: profileData } = useMyProfile();
 
   const handleExport = useCallback(() => {
-    // In a real app, this would trigger a report export
-    console.log(`Exporting report for ${selectedPeriod}`);
-  }, [selectedPeriod]);
+    if (!scorecardData || !selectedPeriod) return;
+
+    const lines: string[] = [];
+    lines.push(`Executive Scorecard - ${selectedPeriod}`);
+    lines.push(`Overall Score: ${scorecardData.overallScore ?? 'N/A'}%`);
+    lines.push('');
+
+    // Accountabilities
+    lines.push('ACCOUNTABILITIES');
+    for (const item of scorecardData.items ?? []) {
+      lines.push(`  ${item.title}: ${item.score ?? 'N/A'}/10`);
+    }
+    lines.push('');
+
+    // KPIs by category
+    lines.push('KEY PERFORMANCE INDICATORS');
+    for (const cat of scorecardData.metricCategories ?? []) {
+      lines.push(`  ${cat.category}`);
+      for (const m of cat.metrics) {
+        lines.push(
+          `    ${m.name}: ${m.actualValue ?? 'N/A'} / ${m.targetValue ?? 'N/A'} (${m.trend ?? 'neutral'})`
+        );
+      }
+    }
+    lines.push('');
+
+    // Competencies
+    lines.push('COMPETENCIES');
+    for (const c of scorecardData.competencies ?? []) {
+      lines.push(
+        `  ${c.name}: Self ${c.selfRating ?? 'N/A'} | Manager ${c.managerRating ?? 'N/A'}`
+      );
+    }
+
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `scorecard-${selectedPeriod}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [selectedPeriod, scorecardData]);
 
   const handlePeriodChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedPeriod(e.target.value as Period);
+    setSelectedPeriod(e.target.value);
   }, []);
+
+  // Map API data to internal types
+  const accountabilities = (scorecardData?.items ?? []).map(mapApiItem);
+  const kpiCategories = (scorecardData?.metricCategories ?? []).map(mapApiCategory);
+  const competencies = (scorecardData?.competencies ?? []).map(mapApiCompetency);
+  const overallScore = scorecardData?.overallScore ?? 0;
+  const userRole = profileData?.title ?? '';
+  const userMission = profileData?.metadata?.bio ?? '';
 
   return (
     <div className="max-w-[1400px] mx-auto">
@@ -1164,7 +1315,22 @@ export default function ScorecardPage() {
               Strategic performance dashboard for organizational leadership
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Agency user tenant selector */}
+            {isAgencyUser && tenants && tenants.length > 0 && (
+              <select
+                value={selectedTenantId ?? ''}
+                onChange={(e) => setSelectedTenantId(e.target.value)}
+                className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent"
+                aria-label="Select client"
+              >
+                {tenants.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <label htmlFor="period-select" className="sr-only">
               Select reporting period
             </label>
@@ -1172,13 +1338,18 @@ export default function ScorecardPage() {
               id="period-select"
               value={selectedPeriod}
               onChange={handlePeriodChange}
-              className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent"
+              disabled={periods.length === 0}
+              className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent disabled:opacity-50"
             >
-              {PERIOD_OPTIONS.map((period) => (
-                <option key={period} value={period}>
-                  {period}
-                </option>
-              ))}
+              {periods.length === 0 ? (
+                <option value="">Loading periods…</option>
+              ) : (
+                periods.map((period) => (
+                  <option key={period} value={period}>
+                    {period}
+                  </option>
+                ))
+              )}
             </select>
             <button
               onClick={handleExport}
@@ -1191,23 +1362,31 @@ export default function ScorecardPage() {
         </div>
       </header>
 
-      {/* Role & Mission Card */}
-      <RoleMissionSection />
+      {isLoading ? (
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="w-8 h-8 text-red-600 animate-spin" />
+        </div>
+      ) : (
+        <>
+          {/* Role & Mission Card */}
+          <RoleMissionSection role={userRole} mission={userMission} score={overallScore} />
 
-      {/* Key Accountabilities */}
-      <KeyAccountabilitiesSection />
+          {/* Key Accountabilities */}
+          <KeyAccountabilitiesSection items={accountabilities} />
 
-      {/* KPI Dashboard */}
-      <KPIDashboardSection />
+          {/* KPI Dashboard */}
+          <KPIDashboardSection categories={kpiCategories} />
 
-      {/* A-Player Competencies */}
-      <APlayerCompetenciesSection />
+          {/* A-Player Competencies */}
+          <APlayerCompetenciesSection items={competencies} />
 
-      {/* Direct Reports Performance */}
-      <DirectReportsSection />
+          {/* Direct Reports Performance */}
+          <DirectReportsSection tenantId={tenantId} />
 
-      {/* Organizational Health Score */}
-      <OrganizationalHealthSection />
+          {/* Organizational Health Score */}
+          <OrganizationalHealthSection tenantId={tenantId} />
+        </>
+      )}
     </div>
   );
 }

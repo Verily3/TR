@@ -1,19 +1,19 @@
-# Transformation OS
+# Results Tracking System
 
 A multi-tenant B2B SaaS platform for corporate transformation and executive leadership development. Combines LMS, 360 assessments, goal tracking, mentoring, and analytics in one integrated system.
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|------------|
-| Monorepo | Turborepo + pnpm |
-| Frontend | Next.js 15 (App Router) |
-| UI | shadcn/ui + Tailwind CSS |
-| Server state | TanStack Query v5 |
-| Global state | Zustand |
-| API | Hono.js |
-| Database | PostgreSQL + Drizzle ORM |
-| Auth | JWT (jose) + argon2 |
+| Layer        | Technology               |
+| ------------ | ------------------------ |
+| Monorepo     | Turborepo + pnpm         |
+| Frontend     | Next.js 15 (App Router)  |
+| UI           | shadcn/ui + Tailwind CSS |
+| Server state | TanStack Query v5        |
+| Global state | Zustand                  |
+| API          | Hono.js                  |
+| Database     | PostgreSQL + Drizzle ORM |
+| Auth         | JWT (jose) + argon2      |
 
 ## Quick Start
 
@@ -34,6 +34,7 @@ pnpm dev
 ```
 
 Services:
+
 - **API** → http://localhost:3002
 - **Web** → http://localhost:3003
 - **UI Prototype** → `cd components && npm run dev` → http://localhost:5173
@@ -65,12 +66,14 @@ packages/
 ## Features
 
 ### Multi-tenant Architecture
+
 - **Agency** accounts own the platform, create clients, and build program templates
 - **Tenant** (client) accounts run programs and assessments for their employees
 - Context switcher lets agency users toggle between agency view and any tenant view
 - Impersonation system for agency admins to view tenant user experiences
 
 ### LMS / Programs
+
 - Curriculum builder: modules, lessons, 6 content types (`lesson`, `quiz`, `assignment`, `text_form`, `goal`, `survey`)
 - Add-menu with 11 entries in 3 groups: Content, Reflection, Activity
 - Drip scheduling at module and lesson level
@@ -78,6 +81,7 @@ packages/
 - Program roles: Facilitator, Mentor, Learner
 
 ### Program Templates
+
 - Mark any program as a reusable template
 - "Start from Scratch or Template" choice modal when creating programs
 - Create from template: deep-copies all modules/lessons/tasks with new IDs
@@ -85,6 +89,7 @@ packages/
 - Templates tab in Program Builder with "Template" badges and 3-dot menu actions
 
 ### Assessments (360/180)
+
 - Configurable templates: competencies, rating scales, rater types
 - Rater invitation workflow with public token-based response forms
 - Scoring engine: reverse scoring, gap analysis, Johari window, CCI
@@ -93,22 +98,26 @@ packages/
 - 16-section LeaderShift™ PDF report via `@react-pdf/renderer`
 
 ### Mentoring
+
 - Mentor↔Mentee relationships with session scheduling
 - Session lifecycle: scheduled → prep → ready → completed
 - Pre-session reflection, public/private notes, action items with priority tracking
 - Role-scoped views: mentor sees their mentees, facilitator sees program scope, admin sees all
 
 ### Analytics
+
 - Real-time data from 5 tabs: Overview, Programs, Assessments, Team, Goals
 - Agency users filter by client and time range (7d / 30d / 90d / 12m)
 - Enrollment/completion trend charts, department breakdowns, goal category analysis
 
 ### Role-Based Navigation
+
 - Per-role and per-user nav item overrides stored in database
 - 3-layer resolution: hardcoded defaults → role DB override → user DB override
 - Admin screen at `/settings/permissions` for toggle-based management
 
 ### Quizzes
+
 - Scored question sets embedded in program lessons
 - Three short-answer grading modes: `auto_complete`, `keyword` (match against keyword list), `manual` (awaits facilitator review)
 - Attempt tracking with `quiz_attempts` table; retake limit enforcement
@@ -116,6 +125,7 @@ packages/
 - Facilitator manual grading endpoint for `pending_grade` attempts
 
 ### Surveys
+
 - Standalone feedback forms with public share link (no login required) or login-required mode
 - 7 question types: single choice, multiple choice, text, rating, NPS, yes/no, ranking
 - Results dashboard with per-question charts (bar charts, NPS breakdown, rating distribution)
@@ -124,6 +134,7 @@ packages/
 - Public page at `/survey/[token]` (outside the auth wrapper)
 
 ### Email & Notifications
+
 - Resend email service (10 typed helpers: assessment invites, welcome, digest, etc.)
 - In-app notification center with unread count badge
 - Cron endpoint for scheduled jobs (weekly digest, inactivity, due-date reminders)
@@ -143,22 +154,23 @@ pnpm --filter @tr/db db:studio     # Open Drizzle Studio (database browser)
 
 After running `db:seed` (password: `password123` for all):
 
-| Email | Role | Notes |
-|-------|------|-------|
-| `admin@acme.com` | Agency Owner | Agency-level access, can impersonate users |
-| `admin@techcorp.com` | Tenant Admin | Full TechCorp tenant access |
-| `coach@techcorp.com` | Facilitator | Program facilitation role |
-| `mentor@techcorp.com` | Mentor | Mentoring relationships |
-| `john.doe@techcorp.com` | Learner | Enrolled in Leadership Essentials |
-| `jane.smith@techcorp.com` | Learner | — |
-| `alex.wilson@techcorp.com` | Learner | — |
+| Email                      | Role         | Notes                                      |
+| -------------------------- | ------------ | ------------------------------------------ |
+| `admin@acme.com`           | Agency Owner | Agency-level access, can impersonate users |
+| `admin@techcorp.com`       | Tenant Admin | Full TechCorp tenant access                |
+| `coach@techcorp.com`       | Facilitator  | Program facilitation role                  |
+| `mentor@techcorp.com`      | Mentor       | Mentoring relationships                    |
+| `john.doe@techcorp.com`    | Learner      | Enrolled in Leadership Essentials          |
+| `jane.smith@techcorp.com`  | Learner      | —                                          |
+| `alex.wilson@techcorp.com` | Learner      | —                                          |
 
 ## Environment Variables
 
 ### `packages/api/.env`
+
 ```
 PORT=3002
-DATABASE_URL=postgres://user:pass@localhost:5432/transformation_os
+DATABASE_URL=postgres://user:pass@localhost:5432/results_tracking_system
 JWT_SECRET=your-secret-here
 RESEND_API_KEY=re_...            # Optional — email sending via Resend
 APP_URL=http://localhost:3003
@@ -166,6 +178,7 @@ CRON_SECRET=your-cron-secret     # Optional — secures /api/cron endpoints
 ```
 
 ### `packages/web/.env.local`
+
 ```
 NEXT_PUBLIC_API_URL=http://localhost:3002
 ```

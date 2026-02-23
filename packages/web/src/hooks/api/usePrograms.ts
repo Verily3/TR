@@ -48,7 +48,7 @@ export function usePrograms(tenantId: string | undefined, params?: ProgramsListP
 
       // API returns { data: Program[], meta: { pagination: {...} } }
       // api.get returns the raw JSON response directly
-      const response = await api.get<Program[]>(url) as unknown as {
+      const response = (await api.get<Program[]>(url)) as unknown as {
         data: Program[];
         meta?: { pagination?: { total?: number; page?: number; limit?: number } };
       };
@@ -69,7 +69,9 @@ export function useProgram(tenantId: string | undefined, programId: string | und
     queryKey: ['program', tenantId, programId],
     queryFn: async () => {
       // API returns { data: ProgramWithModules }
-      const response = await api.get<ProgramWithModules>(`/api/tenants/${tenantId}/programs/${programId}`) as unknown as {
+      const response = (await api.get<ProgramWithModules>(
+        `/api/tenants/${tenantId}/programs/${programId}`
+      )) as unknown as {
         data: ProgramWithModules;
       };
       return response.data;
@@ -78,12 +80,78 @@ export function useProgram(tenantId: string | undefined, programId: string | und
   });
 }
 
+export interface ProgramStats {
+  totalEnrolled: number;
+  avgCompletion: number;
+  completedCount: number;
+  weeksRemaining: number | null;
+  modulePerformance: { name: string; completionPct: number }[];
+  recentActivity: { userName: string; action: string; completedAt: string | null }[];
+}
+
+export function useProgramStats(tenantId: string | undefined, programId: string | undefined) {
+  return useQuery({
+    queryKey: ['program-stats', tenantId, programId],
+    queryFn: async () => {
+      const response = (await api.get<{ data: ProgramStats }>(
+        `/api/tenants/${tenantId}/programs/${programId}/stats`
+      )) as unknown as { data: ProgramStats };
+      return response.data;
+    },
+    enabled: !!tenantId && !!programId,
+    staleTime: 60_000,
+  });
+}
+
+export interface ProgramGoal {
+  id: string;
+  statement: string;
+  status: 'draft' | 'active' | 'completed';
+  targetDate: string | null;
+  reviewFrequency: string;
+  createdAt: string;
+  lessonTitle: string;
+  learnerName: string;
+  learnerInitials: string;
+  latestProgress: number | null;
+  latestReviewDate: string | null;
+  reviewCount: number;
+}
+
+export interface ProgramGoalsData {
+  stats: {
+    total: number;
+    active: number;
+    completed: number;
+    draft: number;
+    avgProgress: number;
+  };
+  goals: ProgramGoal[];
+}
+
+export function useProgramGoals(tenantId: string | undefined, programId: string | undefined) {
+  return useQuery({
+    queryKey: ['program-goals', tenantId, programId],
+    queryFn: async () => {
+      const response = (await api.get<{ data: ProgramGoalsData }>(
+        `/api/tenants/${tenantId}/programs/${programId}/goals`
+      )) as unknown as { data: ProgramGoalsData };
+      return response.data;
+    },
+    enabled: !!tenantId && !!programId,
+    staleTime: 60_000,
+  });
+}
+
 export function useCreateProgram(tenantId: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (input: CreateProgramInput) => {
-      const response = await api.post<Program>(`/api/tenants/${tenantId}/programs`, input) as unknown as { data: Program };
+      const response = (await api.post<Program>(
+        `/api/tenants/${tenantId}/programs`,
+        input
+      )) as unknown as { data: Program };
       return response.data;
     },
     onSuccess: () => {
@@ -97,7 +165,10 @@ export function useUpdateProgram(tenantId: string | undefined, programId: string
 
   return useMutation({
     mutationFn: async (input: UpdateProgramInput) => {
-      const response = await api.put<Program>(`/api/tenants/${tenantId}/programs/${programId}`, input);
+      const response = await api.put<Program>(
+        `/api/tenants/${tenantId}/programs/${programId}`,
+        input
+      );
       return response.data;
     },
     onSuccess: () => {
@@ -125,7 +196,9 @@ export function usePublishProgram(tenantId: string | undefined, programId: strin
 
   return useMutation({
     mutationFn: async () => {
-      const response = await api.post<Program>(`/api/tenants/${tenantId}/programs/${programId}/publish`);
+      const response = await api.post<Program>(
+        `/api/tenants/${tenantId}/programs/${programId}/publish`
+      );
       return response.data;
     },
     onSuccess: () => {
@@ -140,7 +213,9 @@ export function useDuplicateProgram(tenantId: string | undefined) {
 
   return useMutation({
     mutationFn: async (programId: string) => {
-      const response = await api.post<Program>(`/api/tenants/${tenantId}/programs/${programId}/duplicate`);
+      const response = await api.post<Program>(
+        `/api/tenants/${tenantId}/programs/${programId}/duplicate`
+      );
       return response.data;
     },
     onSuccess: () => {
@@ -156,7 +231,10 @@ export function useCreateModule(tenantId: string | undefined, programId: string 
 
   return useMutation({
     mutationFn: async (input: CreateModuleInput) => {
-      const response = await api.post<Module>(`/api/tenants/${tenantId}/programs/${programId}/modules`, input);
+      const response = await api.post<Module>(
+        `/api/tenants/${tenantId}/programs/${programId}/modules`,
+        input
+      );
       return response.data;
     },
     onSuccess: () => {
@@ -170,7 +248,10 @@ export function useUpdateModule(tenantId: string | undefined, programId: string 
 
   return useMutation({
     mutationFn: async ({ moduleId, input }: { moduleId: string; input: UpdateModuleInput }) => {
-      const response = await api.put<Module>(`/api/tenants/${tenantId}/programs/${programId}/modules/${moduleId}`, input);
+      const response = await api.put<Module>(
+        `/api/tenants/${tenantId}/programs/${programId}/modules/${moduleId}`,
+        input
+      );
       return response.data;
     },
     onSuccess: () => {
@@ -197,7 +278,9 @@ export function useReorderModules(tenantId: string | undefined, programId: strin
 
   return useMutation({
     mutationFn: async (moduleIds: string[]) => {
-      await api.put(`/api/tenants/${tenantId}/programs/${programId}/modules/reorder`, { moduleIds });
+      await api.put(`/api/tenants/${tenantId}/programs/${programId}/modules/reorder`, {
+        moduleIds,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['program', tenantId, programId] });
@@ -207,7 +290,11 @@ export function useReorderModules(tenantId: string | undefined, programId: strin
 
 // ============ Lessons ============
 
-export function useCreateLesson(tenantId: string | undefined, programId: string | undefined, moduleId: string | undefined) {
+export function useCreateLesson(
+  tenantId: string | undefined,
+  programId: string | undefined,
+  moduleId: string | undefined
+) {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -224,7 +311,11 @@ export function useCreateLesson(tenantId: string | undefined, programId: string 
   });
 }
 
-export function useUpdateLesson(tenantId: string | undefined, programId: string | undefined, moduleId: string | undefined) {
+export function useUpdateLesson(
+  tenantId: string | undefined,
+  programId: string | undefined,
+  moduleId: string | undefined
+) {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -241,12 +332,18 @@ export function useUpdateLesson(tenantId: string | undefined, programId: string 
   });
 }
 
-export function useDeleteLesson(tenantId: string | undefined, programId: string | undefined, moduleId: string | undefined) {
+export function useDeleteLesson(
+  tenantId: string | undefined,
+  programId: string | undefined,
+  moduleId: string | undefined
+) {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (lessonId: string) => {
-      await api.delete(`/api/tenants/${tenantId}/programs/${programId}/modules/${moduleId}/lessons/${lessonId}`);
+      await api.delete(
+        `/api/tenants/${tenantId}/programs/${programId}/modules/${moduleId}/lessons/${lessonId}`
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['program', tenantId, programId] });
@@ -254,7 +351,11 @@ export function useDeleteLesson(tenantId: string | undefined, programId: string 
   });
 }
 
-export function useReorderLessons(tenantId: string | undefined, programId: string | undefined, moduleId: string | undefined) {
+export function useReorderLessons(
+  tenantId: string | undefined,
+  programId: string | undefined,
+  moduleId: string | undefined
+) {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -272,7 +373,11 @@ export function useReorderLessons(tenantId: string | undefined, programId: strin
 
 // ============ Enrollments ============
 
-export function useEnrollments(tenantId: string | undefined, programId: string | undefined, params?: EnrollmentsListParams) {
+export function useEnrollments(
+  tenantId: string | undefined,
+  programId: string | undefined,
+  params?: EnrollmentsListParams
+) {
   return useQuery({
     queryKey: ['enrollments', tenantId, programId, params],
     queryFn: async () => {
@@ -286,7 +391,7 @@ export function useEnrollments(tenantId: string | undefined, programId: string |
       const url = `/api/tenants/${tenantId}/programs/${programId}/enrollments${queryString ? `?${queryString}` : ''}`;
 
       // API returns { data: Enrollment[], meta: { pagination: {...} } }
-      const response = await api.get<Enrollment[]>(url) as unknown as {
+      const response = (await api.get<Enrollment[]>(url)) as unknown as {
         data: Enrollment[];
         meta?: { pagination?: { total?: number; page?: number; limit?: number } };
       };
@@ -324,7 +429,13 @@ export function useUpdateEnrollment(tenantId: string | undefined, programId: str
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ enrollmentId, input }: { enrollmentId: string; input: UpdateEnrollmentInput }) => {
+    mutationFn: async ({
+      enrollmentId,
+      input,
+    }: {
+      enrollmentId: string;
+      input: UpdateEnrollmentInput;
+    }) => {
       const response = await api.put<Enrollment>(
         `/api/tenants/${tenantId}/programs/${programId}/enrollments/${enrollmentId}`,
         input
@@ -343,7 +454,9 @@ export function useDeleteEnrollment(tenantId: string | undefined, programId: str
 
   return useMutation({
     mutationFn: async (enrollmentId: string) => {
-      await api.delete(`/api/tenants/${tenantId}/programs/${programId}/enrollments/${enrollmentId}`);
+      await api.delete(
+        `/api/tenants/${tenantId}/programs/${programId}/enrollments/${enrollmentId}`
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['enrollments', tenantId, programId] });
@@ -354,14 +467,18 @@ export function useDeleteEnrollment(tenantId: string | undefined, programId: str
 
 // ============ My Enrollment (Current User) ============
 
-export function useMyEnrollment(tenantId: string | undefined, programId: string | undefined, userId: string | undefined) {
+export function useMyEnrollment(
+  tenantId: string | undefined,
+  programId: string | undefined,
+  userId: string | undefined
+) {
   return useQuery({
     queryKey: ['myEnrollment', tenantId, programId, userId],
     queryFn: async () => {
       // Fetch all enrollments and find the current user's enrollment
-      const response = await api.get<Enrollment[]>(
+      const response = (await api.get<Enrollment[]>(
         `/api/tenants/${tenantId}/programs/${programId}/enrollments`
-      ) as unknown as { data: Enrollment[] };
+      )) as unknown as { data: Enrollment[] };
 
       const myEnrollment = response.data?.find((e) => e.userId === userId);
       return myEnrollment || null;
@@ -380,9 +497,9 @@ export function useLearnerProgress(
   return useQuery({
     queryKey: ['learnerProgress', tenantId, programId, enrollmentId],
     queryFn: async () => {
-      const response = await api.get<EnrollmentProgress>(
+      const response = (await api.get<EnrollmentProgress>(
         `/api/tenants/${tenantId}/programs/${programId}/enrollments/${enrollmentId}/progress`
-      ) as unknown as { data: EnrollmentProgress };
+      )) as unknown as { data: EnrollmentProgress };
       return response.data;
     },
     enabled: !!tenantId && !!programId && !!enrollmentId,
@@ -397,9 +514,9 @@ export function useEnrollmentGoals(
   return useQuery({
     queryKey: ['enrollmentGoals', tenantId, programId, enrollmentId],
     queryFn: async () => {
-      const response = await api.get<GoalWithProgress[]>(
+      const response = (await api.get<GoalWithProgress[]>(
         `/api/tenants/${tenantId}/programs/${programId}/enrollments/${enrollmentId}/goals`
-      ) as unknown as { data: GoalWithProgress[] };
+      )) as unknown as { data: GoalWithProgress[] };
       return response.data;
     },
     enabled: !!tenantId && !!programId && !!enrollmentId,
@@ -511,7 +628,9 @@ export function useSubmitForApproval(tenantId: string | undefined, programId: st
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['learnerProgress', tenantId, programId] });
-      queryClient.invalidateQueries({ queryKey: ['approvalSubmission', tenantId, programId, variables.lessonId] });
+      queryClient.invalidateQueries({
+        queryKey: ['approvalSubmission', tenantId, programId, variables.lessonId],
+      });
     },
   });
 }
@@ -572,13 +691,7 @@ export function useCreateDiscussionPost(
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({
-      lessonId,
-      content,
-    }: {
-      lessonId: string;
-      content: string;
-    }) => {
+    mutationFn: async ({ lessonId, content }: { lessonId: string; content: string }) => {
       const response = await api.post<DiscussionPost>(
         `/api/tenants/${tenantId}/programs/${programId}/lessons/${lessonId}/discussions`,
         { content }
@@ -586,7 +699,9 @@ export function useCreateDiscussionPost(
       return response.data;
     },
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['lessonDiscussions', tenantId, programId, variables.lessonId] });
+      queryClient.invalidateQueries({
+        queryKey: ['lessonDiscussions', tenantId, programId, variables.lessonId],
+      });
       queryClient.invalidateQueries({ queryKey: ['learnerProgress', tenantId, programId] });
     },
   });
@@ -702,7 +817,10 @@ export function useCompleteTask(tenantId: string | undefined, programId: string 
   });
 }
 
-export function useSubmitTaskForApproval(tenantId: string | undefined, programId: string | undefined) {
+export function useSubmitTaskForApproval(
+  tenantId: string | undefined,
+  programId: string | undefined
+) {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -766,9 +884,9 @@ export function useTaskProgress(
   return useQuery({
     queryKey: ['taskProgress', tenantId, programId, enrollmentId],
     queryFn: async () => {
-      const response = await api.get<TaskWithProgress[]>(
+      const response = (await api.get<TaskWithProgress[]>(
         `/api/tenants/${tenantId}/programs/${programId}/enrollments/${enrollmentId}/task-progress`
-      ) as unknown as { data: TaskWithProgress[] };
+      )) as unknown as { data: TaskWithProgress[] };
       return response.data;
     },
     enabled: !!tenantId && !!programId && !!enrollmentId,

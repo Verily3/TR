@@ -1,12 +1,6 @@
 'use client';
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  useCallback,
-} from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '@/lib/api';
 import type { AuthUser as BaseAuthUser } from '@tr/shared';
 
@@ -35,47 +29,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
 
+  // Mutex: prevent concurrent refreshUser calls
+  const refreshPromiseRef = useRef<Promise<void> | null>(null);
+
   // Track client-side mount
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
   const refreshUser = useCallback(async () => {
-    const token = localStorage.getItem('accessToken');
-    if (!token) {
-      setUser(null);
-      setIsLoading(false);
-      return;
-    }
+    // If already refreshing, return the existing promise
+    if (refreshPromiseRef.current) return refreshPromiseRef.current;
 
-    try {
-      const response = await api.get<AuthUser>('/api/auth/me');
-      setUser(response.data);
-    } catch {
-      // Token might be expired, try to refresh
-      const refreshToken = localStorage.getItem('refreshToken');
-      if (refreshToken) {
-        try {
-          const refreshResponse = await api.post<{ accessToken: string }>('/api/auth/refresh', {
-            refreshToken,
-          });
-          localStorage.setItem('accessToken', refreshResponse.data.accessToken);
-          // Retry getting user
-          const userResponse = await api.get<AuthUser>('/api/auth/me');
-          setUser(userResponse.data);
-        } catch {
-          // Refresh failed, clear tokens
+    const doRefresh = async () => {
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const response = await api.get<AuthUser>('/api/auth/me');
+        setUser(response.data);
+      } catch {
+        // Token might be expired, try to refresh
+        const refreshToken = localStorage.getItem('refreshToken');
+        if (refreshToken) {
+          try {
+            const refreshResponse = await api.post<{ accessToken: string; refreshToken: string }>(
+              '/api/auth/refresh',
+              {
+                refreshToken,
+              }
+            );
+            localStorage.setItem('accessToken', refreshResponse.data.accessToken);
+            localStorage.setItem('refreshToken', refreshResponse.data.refreshToken);
+            // Retry getting user
+            const userResponse = await api.get<AuthUser>('/api/auth/me');
+            setUser(userResponse.data);
+          } catch {
+            // Refresh failed, clear tokens
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            setUser(null);
+          }
+        } else {
           localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
           setUser(null);
         }
-      } else {
-        localStorage.removeItem('accessToken');
-        setUser(null);
+      } finally {
+        setIsLoading(false);
+        refreshPromiseRef.current = null;
       }
-    } finally {
-      setIsLoading(false);
-    }
+    };
+
+    refreshPromiseRef.current = doRefresh();
+    return refreshPromiseRef.current;
   }, []);
 
   useEffect(() => {
@@ -85,7 +95,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [isMounted, refreshUser]);
 
   const login = async (email: string, password: string) => {
-    const response = await api.post<{ accessToken: string; refreshToken: string }>('/api/auth/login', { email, password });
+    const response = await api.post<{ accessToken: string; refreshToken: string }>(
+      '/api/auth/login',
+      { email, password }
+    );
     const { accessToken, refreshToken } = response.data;
 
     localStorage.setItem('accessToken', accessToken);
@@ -104,13 +117,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem('refreshToken');
       sessionStorage.removeItem('impersonation_token');
       setUser(null);
+      // Redirect to login — full reload clears React Query cache and all client state
+      window.location.href = '/login';
     }
   };
 
   return (
-    <AuthContext.Provider
-      value={{ user, isLoading, login, logout, refreshUser }}
-    >
+    <AuthContext.Provider value={{ user, isLoading, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

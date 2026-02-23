@@ -31,6 +31,7 @@ import {
   type ActionItem,
   type CreateSessionInput,
 } from '@/hooks/api/useMentoring';
+import { SessionPrepModal } from '@/components/coaching/SessionPrepModal';
 
 // ---------------------------------------------------------------------------
 // Config / Labels
@@ -86,7 +87,7 @@ const durations = [
 function getInitials(first?: string, last?: string, fallback = 'U'): string {
   const f = (first?.[0] ?? '').toUpperCase();
   const l = (last?.[0] ?? '').toUpperCase();
-  return (f + l) || fallback;
+  return f + l || fallback;
 }
 
 function getPersonInitials(p: { firstName?: string; lastName?: string }): string {
@@ -116,7 +117,15 @@ function isUpcomingSession(s: MentoringSession) {
 // SessionCard Component
 // ---------------------------------------------------------------------------
 
-function SessionCard({ session }: { session: MentoringSession }) {
+function SessionCard({
+  session,
+  isMentee = false,
+  onPrepClick,
+}: {
+  session: MentoringSession;
+  isMentee?: boolean;
+  onPrepClick?: () => void;
+}) {
   const statusCfg = sessionStatusConfig[session.status] ?? sessionStatusConfig.scheduled;
   const typeLabel = sessionTypeLabels[session.type] ?? session.type;
   const isPast = !isUpcomingSession(session);
@@ -142,7 +151,9 @@ function SessionCard({ session }: { session: MentoringSession }) {
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className="text-sidebar-foreground font-medium">{typeLabel}</span>
-              <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusCfg.bg} ${statusCfg.text}`}>
+              <span
+                className={`px-2 py-0.5 rounded text-xs font-medium ${statusCfg.bg} ${statusCfg.text}`}
+              >
                 {statusCfg.label}
               </span>
             </div>
@@ -198,17 +209,45 @@ function SessionCard({ session }: { session: MentoringSession }) {
         </div>
 
         <div className="flex flex-col items-end gap-2 shrink-0 ml-3">
-          {session.status === 'scheduled' && !session.prep && (
-            <span className="px-3 py-1.5 bg-yellow-100 text-yellow-700 rounded-lg text-sm flex items-center gap-1">
-              <FileText className="w-4 h-4" />
-              <span className="hidden sm:inline">Start Prep</span>
-            </span>
-          )}
-          {session.status === 'ready' && (
-            <span className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm flex items-center gap-1">
-              <CheckCircle2 className="w-4 h-4" />
-              <span className="hidden sm:inline">Ready</span>
-            </span>
+          {/* Prep button / badge */}
+          {onPrepClick ? (
+            session.prep ? (
+              <button
+                onClick={onPrepClick}
+                className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm flex items-center gap-1 hover:bg-green-200 transition-colors"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span className="hidden sm:inline">{isMentee ? 'Edit Prep' : 'View Prep'}</span>
+              </button>
+            ) : isMentee ? (
+              <button
+                onClick={onPrepClick}
+                className="px-3 py-1.5 bg-yellow-100 text-yellow-700 rounded-lg text-sm flex items-center gap-1 hover:bg-yellow-200 transition-colors"
+              >
+                <FileText className="w-4 h-4" />
+                <span className="hidden sm:inline">Start Prep</span>
+              </button>
+            ) : (
+              <span className="px-3 py-1.5 bg-yellow-50 text-yellow-600 rounded-lg text-sm flex items-center gap-1">
+                <FileText className="w-4 h-4" />
+                <span className="hidden sm:inline">Awaiting Prep</span>
+              </span>
+            )
+          ) : (
+            <>
+              {session.status === 'scheduled' && !session.prep && (
+                <span className="px-3 py-1.5 bg-yellow-100 text-yellow-700 rounded-lg text-sm flex items-center gap-1">
+                  <FileText className="w-4 h-4" />
+                  <span className="hidden sm:inline">Start Prep</span>
+                </span>
+              )}
+              {session.status === 'ready' && (
+                <span className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-sm flex items-center gap-1">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span className="hidden sm:inline">Ready</span>
+                </span>
+              )}
+            </>
           )}
           {(session.actionItems?.length ?? 0) > 0 && (
             <div className="text-xs text-muted-foreground">
@@ -252,7 +291,9 @@ function MenteeCard({ relationship }: { relationship: MentoringRelationship }) {
       </div>
 
       <div className="flex items-center gap-2 flex-wrap mb-3">
-        <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusCfg.bg} ${statusCfg.text}`}>
+        <span
+          className={`px-2 py-0.5 rounded text-xs font-medium ${statusCfg.bg} ${statusCfg.text}`}
+        >
           {statusCfg.label}
         </span>
         <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
@@ -276,13 +317,7 @@ function MenteeCard({ relationship }: { relationship: MentoringRelationship }) {
 // ActionItemRow
 // ---------------------------------------------------------------------------
 
-function ActionItemRow({
-  item,
-  tenantId,
-}: {
-  item: ActionItem;
-  tenantId: string;
-}) {
+function ActionItemRow({ item, tenantId }: { item: ActionItem; tenantId: string }) {
   const updateItem = useUpdateActionItem(tenantId);
   const priorityCfg = priorityConfig[item.priority] ?? priorityConfig.medium;
   const statusCfg = actionStatusConfig[item.status] ?? actionStatusConfig.pending;
@@ -295,7 +330,9 @@ function ActionItemRow({
   };
 
   return (
-    <div className={`flex items-start gap-3 py-3 border-b border-border last:border-0 ${item.status === 'completed' ? 'opacity-60' : ''}`}>
+    <div
+      className={`flex items-start gap-3 py-3 border-b border-border last:border-0 ${item.status === 'completed' ? 'opacity-60' : ''}`}
+    >
       <button
         onClick={handleToggleComplete}
         disabled={updateItem.isPending}
@@ -310,11 +347,15 @@ function ActionItemRow({
 
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
-          <span className={`font-medium text-sm ${item.status === 'completed' ? 'line-through text-muted-foreground' : 'text-sidebar-foreground'}`}>
+          <span
+            className={`font-medium text-sm ${item.status === 'completed' ? 'line-through text-muted-foreground' : 'text-sidebar-foreground'}`}
+          >
             {item.title}
           </span>
           <div className="flex items-center gap-1 shrink-0">
-            <span className={`px-2 py-0.5 rounded text-xs font-medium ${priorityCfg.bg} ${priorityCfg.text}`}>
+            <span
+              className={`px-2 py-0.5 rounded text-xs font-medium ${priorityCfg.bg} ${priorityCfg.text}`}
+            >
               {priorityCfg.label}
             </span>
           </div>
@@ -329,13 +370,17 @@ function ActionItemRow({
             <span className="text-xs text-muted-foreground">{item.ownerName}</span>
           )}
           {item.dueDate && (
-            <span className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-red-600' : 'text-muted-foreground'}`}>
+            <span
+              className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-red-600' : 'text-muted-foreground'}`}
+            >
               <Calendar className="w-3 h-3" />
               {formatDateShort(item.dueDate)}
               {isOverdue && ' (Overdue)'}
             </span>
           )}
-          <span className={`px-2 py-0.5 rounded text-xs font-medium ${statusCfg.bg} ${statusCfg.text}`}>
+          <span
+            className={`px-2 py-0.5 rounded text-xs font-medium ${statusCfg.bg} ${statusCfg.text}`}
+          >
             {statusCfg.label}
           </span>
         </div>
@@ -361,7 +406,7 @@ function NewSessionModal({
 }) {
   const createSession = useCreateMentoringSession(tenantId);
   const [selectedRelationship, setSelectedRelationship] = useState('');
-  const [sessionType, setSessionType] = useState<typeof sessionTypes[number]>('mentoring');
+  const [sessionType, setSessionType] = useState<(typeof sessionTypes)[number]>('mentoring');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [duration, setDuration] = useState(60);
@@ -414,7 +459,8 @@ function NewSessionModal({
               <option value="">Select a relationship...</option>
               {relationships.map((rel) => (
                 <option key={rel.id} value={rel.id}>
-                  {rel.mentor.firstName} {rel.mentor.lastName} &rarr; {rel.mentee.firstName} {rel.mentee.lastName}
+                  {rel.mentor.firstName} {rel.mentor.lastName} &rarr; {rel.mentee.firstName}{' '}
+                  {rel.mentee.lastName}
                 </option>
               ))}
             </select>
@@ -471,7 +517,9 @@ function NewSessionModal({
 
           {/* Duration */}
           <div>
-            <label className="block text-sm font-medium text-sidebar-foreground mb-2">Duration</label>
+            <label className="block text-sm font-medium text-sidebar-foreground mb-2">
+              Duration
+            </label>
             <div className="flex gap-2">
               {durations.map((d) => (
                 <button
@@ -492,13 +540,17 @@ function NewSessionModal({
 
           {/* Meeting Type */}
           <div>
-            <label className="block text-sm font-medium text-sidebar-foreground mb-2">Meeting Type</label>
+            <label className="block text-sm font-medium text-sidebar-foreground mb-2">
+              Meeting Type
+            </label>
             <div className="grid grid-cols-2 gap-4">
               <button
                 type="button"
                 onClick={() => setLocationType('video')}
                 className={`p-4 border-2 rounded-lg text-left transition-colors ${
-                  locationType === 'video' ? 'border-accent bg-red-50' : 'border-border hover:border-accent/50'
+                  locationType === 'video'
+                    ? 'border-accent bg-red-50'
+                    : 'border-border hover:border-accent/50'
                 }`}
               >
                 <Video className="w-5 h-5 text-accent mb-2" />
@@ -509,7 +561,9 @@ function NewSessionModal({
                 type="button"
                 onClick={() => setLocationType('in_person')}
                 className={`p-4 border-2 rounded-lg text-left transition-colors ${
-                  locationType === 'in_person' ? 'border-accent bg-red-50' : 'border-border hover:border-accent/50'
+                  locationType === 'in_person'
+                    ? 'border-accent bg-red-50'
+                    : 'border-border hover:border-accent/50'
                 }`}
               >
                 <MapPin className="w-5 h-5 text-accent mb-2" />
@@ -521,7 +575,9 @@ function NewSessionModal({
 
           {locationType === 'video' ? (
             <div>
-              <label className="block text-sm font-medium text-sidebar-foreground mb-2">Video Link</label>
+              <label className="block text-sm font-medium text-sidebar-foreground mb-2">
+                Video Link
+              </label>
               <input
                 type="url"
                 value={videoLink}
@@ -532,7 +588,9 @@ function NewSessionModal({
             </div>
           ) : (
             <div>
-              <label className="block text-sm font-medium text-sidebar-foreground mb-2">Location</label>
+              <label className="block text-sm font-medium text-sidebar-foreground mb-2">
+                Location
+              </label>
               <input
                 type="text"
                 value={location}
@@ -544,7 +602,9 @@ function NewSessionModal({
           )}
 
           <div>
-            <label className="block text-sm font-medium text-sidebar-foreground mb-2">Agenda (optional)</label>
+            <label className="block text-sm font-medium text-sidebar-foreground mb-2">
+              Agenda (optional)
+            </label>
             <textarea
               rows={3}
               value={agenda}
@@ -655,14 +715,17 @@ type MentorTab = 'mentees' | 'sessions' | 'action-items';
 
 function MentorView({
   tenantId,
+  userId,
   showNewSessionModal,
   setShowNewSessionModal,
 }: {
   tenantId: string;
+  userId: string;
   showNewSessionModal: boolean;
   setShowNewSessionModal: (v: boolean) => void;
 }) {
   const [activeTab, setActiveTab] = useState<MentorTab>('mentees');
+  const [prepSession, setPrepSession] = useState<MentoringSession | null>(null);
 
   const { data: stats, isLoading: statsLoading } = useMentoringStats(tenantId);
   const { data: relationships = [], isLoading: relLoading } = useMentoringRelationships(tenantId);
@@ -690,9 +753,24 @@ function MentorView({
         ) : (
           <>
             <StatCard icon={Users} value={stats?.activeRelationships ?? 0} label="Active Mentees" />
-            <StatCard icon={Calendar} value={stats?.upcomingSessions ?? 0} label="Upcoming Sessions" iconColor="text-blue-600" />
-            <StatCard icon={Clock} value={openActionItems.length} label="Open Action Items" iconColor="text-yellow-600" />
-            <StatCard icon={CheckCircle2} value={stats?.completedSessions ?? 0} label="Completed Sessions" iconColor="text-green-600" />
+            <StatCard
+              icon={Calendar}
+              value={stats?.upcomingSessions ?? 0}
+              label="Upcoming Sessions"
+              iconColor="text-blue-600"
+            />
+            <StatCard
+              icon={Clock}
+              value={openActionItems.length}
+              label="Open Action Items"
+              iconColor="text-yellow-600"
+            />
+            <StatCard
+              icon={CheckCircle2}
+              value={stats?.completedSessions ?? 0}
+              label="Completed Sessions"
+              iconColor="text-green-600"
+            />
           </>
         )}
       </div>
@@ -704,7 +782,9 @@ function MentorView({
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex-1 sm:flex-none px-4 py-2 rounded text-sm transition-colors whitespace-nowrap ${
-              activeTab === tab.id ? 'bg-accent text-white' : 'text-sidebar-foreground hover:bg-card'
+              activeTab === tab.id
+                ? 'bg-accent text-white'
+                : 'text-sidebar-foreground hover:bg-card'
             }`}
           >
             {tab.label}
@@ -750,7 +830,12 @@ function MentorView({
                 ) : (
                   <div className="space-y-3">
                     {upcomingSessions.map((s) => (
-                      <SessionCard key={s.id} session={s} />
+                      <SessionCard
+                        key={s.id}
+                        session={s}
+                        isMentee={userId === s.mentee.id}
+                        onPrepClick={() => setPrepSession(s)}
+                      />
                     ))}
                   </div>
                 )}
@@ -762,7 +847,12 @@ function MentorView({
                   </h3>
                   <div className="space-y-3">
                     {pastSessions.map((s) => (
-                      <SessionCard key={s.id} session={s} />
+                      <SessionCard
+                        key={s.id}
+                        session={s}
+                        isMentee={userId === s.mentee.id}
+                        onPrepClick={s.prep ? () => setPrepSession(s) : undefined}
+                      />
                     ))}
                   </div>
                 </div>
@@ -789,13 +879,21 @@ function MentorView({
         </>
       )}
 
-      {/* Modal */}
+      {/* Modals */}
       <NewSessionModal
         isOpen={showNewSessionModal}
         onClose={() => setShowNewSessionModal(false)}
         relationships={relationships}
         tenantId={tenantId}
       />
+      {prepSession && (
+        <SessionPrepModal
+          session={prepSession}
+          tenantId={tenantId}
+          isMentee={userId === prepSession.mentee.id}
+          onClose={() => setPrepSession(null)}
+        />
+      )}
     </>
   );
 }
@@ -806,7 +904,12 @@ function MentorView({
 
 type FacilitatorTab = 'overview' | 'mentors' | 'sessions' | 'action-items';
 
-function ExpandableMentorRow({ mentorId, relationships, sessions, actionItems }: {
+function ExpandableMentorRow({
+  mentorId,
+  relationships,
+  sessions,
+  actionItems,
+}: {
   mentorId: string;
   relationships: MentoringRelationship[];
   sessions: MentoringSession[];
@@ -837,9 +940,7 @@ function ExpandableMentorRow({ mentorId, relationships, sessions, actionItems }:
             <div className="font-medium text-sidebar-foreground">
               {mentor.firstName} {mentor.lastName}
             </div>
-            <div className="text-sm text-muted-foreground">
-              {mentor.title ?? mentor.email}
-            </div>
+            <div className="text-sm text-muted-foreground">{mentor.title ?? mentor.email}</div>
           </div>
         </div>
         <div className="flex items-center gap-6 mr-2">
@@ -876,14 +977,17 @@ function ExpandableMentorRow({ mentorId, relationships, sessions, actionItems }:
 
 function FacilitatorView({
   tenantId,
+  userId,
   showNewSessionModal,
   setShowNewSessionModal,
 }: {
   tenantId: string;
+  userId: string;
   showNewSessionModal: boolean;
   setShowNewSessionModal: (v: boolean) => void;
 }) {
   const [activeTab, setActiveTab] = useState<FacilitatorTab>('overview');
+  const [prepSession, setPrepSession] = useState<MentoringSession | null>(null);
 
   const { data: stats, isLoading: statsLoading } = useMentoringStats(tenantId);
   const { data: relationships = [], isLoading: relLoading } = useMentoringRelationships(tenantId);
@@ -915,9 +1019,24 @@ function FacilitatorView({
         ) : (
           <>
             <StatCard icon={Users} value={uniqueMentorIds.length} label="Total Mentors" />
-            <StatCard icon={Users} value={relationships.length} label="Total Mentees" iconColor="text-blue-600" />
-            <StatCard icon={Calendar} value={stats?.upcomingSessions ?? 0} label="Upcoming Sessions" iconColor="text-green-600" />
-            <StatCard icon={AlertCircle} value={overdueItems.length} label="Overdue Actions" iconColor="text-red-600" />
+            <StatCard
+              icon={Users}
+              value={relationships.length}
+              label="Total Mentees"
+              iconColor="text-blue-600"
+            />
+            <StatCard
+              icon={Calendar}
+              value={stats?.upcomingSessions ?? 0}
+              label="Upcoming Sessions"
+              iconColor="text-green-600"
+            />
+            <StatCard
+              icon={AlertCircle}
+              value={overdueItems.length}
+              label="Overdue Actions"
+              iconColor="text-red-600"
+            />
           </>
         )}
       </div>
@@ -929,7 +1048,9 @@ function FacilitatorView({
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex-1 sm:flex-none px-4 py-2 rounded text-sm transition-colors whitespace-nowrap ${
-              activeTab === tab.id ? 'bg-accent text-white' : 'text-sidebar-foreground hover:bg-card'
+              activeTab === tab.id
+                ? 'bg-accent text-white'
+                : 'text-sidebar-foreground hover:bg-card'
             }`}
           >
             {tab.label}
@@ -951,7 +1072,10 @@ function FacilitatorView({
               </h3>
               <div className="space-y-3">
                 {relationships.map((rel) => (
-                  <div key={rel.id} className="flex items-center gap-3 py-2 border-b border-border last:border-0">
+                  <div
+                    key={rel.id}
+                    className="flex items-center gap-3 py-2 border-b border-border last:border-0"
+                  >
                     <div className="flex -space-x-2">
                       <div className="w-8 h-8 rounded-full bg-red-50 text-accent flex items-center justify-center text-xs font-medium border-2 border-card">
                         {getPersonInitials(rel.mentor)}
@@ -969,9 +1093,13 @@ function FacilitatorView({
                         {rel.mentee.firstName} {rel.mentee.lastName}
                       </span>
                     </div>
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                      rel.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                    }`}>
+                    <span
+                      className={`px-2 py-0.5 rounded text-xs font-medium ${
+                        rel.status === 'active'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}
+                    >
                       {rel.status}
                     </span>
                   </div>
@@ -1026,7 +1154,12 @@ function FacilitatorView({
                 ) : (
                   <div className="space-y-3">
                     {upcomingSessions.map((s) => (
-                      <SessionCard key={s.id} session={s} />
+                      <SessionCard
+                        key={s.id}
+                        session={s}
+                        isMentee={userId === s.mentee.id}
+                        onPrepClick={() => setPrepSession(s)}
+                      />
                     ))}
                   </div>
                 )}
@@ -1038,7 +1171,12 @@ function FacilitatorView({
                   </h3>
                   <div className="space-y-3">
                     {pastSessions.map((s) => (
-                      <SessionCard key={s.id} session={s} />
+                      <SessionCard
+                        key={s.id}
+                        session={s}
+                        isMentee={userId === s.mentee.id}
+                        onPrepClick={s.prep ? () => setPrepSession(s) : undefined}
+                      />
                     ))}
                   </div>
                 </div>
@@ -1065,12 +1203,21 @@ function FacilitatorView({
         </>
       )}
 
+      {/* Modals */}
       <NewSessionModal
         isOpen={showNewSessionModal}
         onClose={() => setShowNewSessionModal(false)}
         relationships={relationships}
         tenantId={tenantId}
       />
+      {prepSession && (
+        <SessionPrepModal
+          session={prepSession}
+          tenantId={tenantId}
+          isMentee={userId === prepSession.mentee.id}
+          onClose={() => setPrepSession(null)}
+        />
+      )}
     </>
   );
 }
@@ -1117,7 +1264,9 @@ export default function MentoringPage() {
               className="px-3 py-2 border border-border rounded-lg text-sm text-sidebar-foreground bg-card focus:outline-none focus:ring-2 focus:ring-accent"
             >
               {tenants.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
               ))}
             </select>
           )}
@@ -1135,12 +1284,14 @@ export default function MentoringPage() {
         roleSlug === 'mentor' ? (
           <MentorView
             tenantId={tenantId}
+            userId={user?.id ?? ''}
             showNewSessionModal={showNewSessionModal}
             setShowNewSessionModal={setShowNewSessionModal}
           />
         ) : (
           <FacilitatorView
             tenantId={tenantId}
+            userId={user?.id ?? ''}
             showNewSessionModal={showNewSessionModal}
             setShowNewSessionModal={setShowNewSessionModal}
           />

@@ -293,7 +293,7 @@ export const searchableItems: SearchResult[] = [
     type: "article",
     title: "Getting Started Guide",
     subtitle: "Help • 5 min read",
-    description: "Learn the basics of Transformation OS",
+    description: "Learn the basics of Results Tracking System",
     icon: "FileText",
     url: "/help/getting-started",
     category: "help",

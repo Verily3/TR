@@ -101,6 +101,31 @@ export interface LearnerDashboardData {
   summary: DashboardSummary;
 }
 
+export interface LeaderboardParticipant {
+  id: string;
+  name: string;
+  initials: string;
+  role: string;
+  points: number;
+  progress: number;
+  change: number;
+  isCurrentUser: boolean;
+}
+
+export function useLeaderboard(tenantId: string | undefined) {
+  return useQuery({
+    queryKey: ['leaderboard', tenantId],
+    queryFn: async () => {
+      const response = (await api.get<{ data: LeaderboardParticipant[] }>(
+        `/api/tenants/${tenantId}/dashboard/leaderboard`
+      )) as unknown as { data: LeaderboardParticipant[] };
+      return response.data;
+    },
+    enabled: !!tenantId,
+    staleTime: 60_000,
+  });
+}
+
 export function useLearnerDashboard(tenantId: string | undefined) {
   return useQuery({
     queryKey: ['learnerDashboard', tenantId],

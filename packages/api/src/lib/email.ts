@@ -7,7 +7,7 @@ function getResend(): Resend {
   return _resend;
 }
 
-const FROM = 'Transformation OS <onboarding@resend.dev>';
+const FROM = 'Results Tracking System <noreply@updates.transformingresults.com>';
 
 /**
  * Core send wrapper. Returns silently if RESEND_API_KEY is not configured (dev without key).
@@ -19,7 +19,9 @@ async function send(options: {
   text?: string;
 }): Promise<void> {
   if (!env.RESEND_API_KEY) {
-    console.log(`[email] RESEND_API_KEY not set — skipping send to ${options.to}: "${options.subject}"`);
+    console.log(
+      `[email] RESEND_API_KEY not set — skipping send to ${options.to}: "${options.subject}"`
+    );
     return;
   }
   try {
@@ -140,15 +142,15 @@ export async function sendUserWelcome(params: {
   const org = params.organizationName ? ` at <strong>${params.organizationName}</strong>` : '';
   const defaultBody = `
         <p>Hi ${params.name},</p>
-        <p>Your account${org} has been created on Transformation OS. Click the button below to set your password and access your account.</p>
+        <p>Your account${org} has been created on Results Tracking System. Click the button below to set your password and access your account.</p>
         <p style="color:#6b7280;font-size:14px;">This link expires in 72 hours. If you did not expect this email, you can safely ignore it.</p>
       `;
 
   await send({
     to: params.to,
-    subject: params.overrides?.subject ?? 'Welcome to Transformation OS — Set your password',
+    subject: params.overrides?.subject ?? 'Welcome to Results Tracking System — Set your password',
     html: emailHtml({
-      title: 'Welcome to Transformation OS',
+      title: 'Welcome to Results Tracking System',
       preheader: 'Your account has been created — set your password to get started',
       body: params.overrides?.body ?? defaultBody,
       ctaUrl: params.setPasswordUrl,
@@ -174,7 +176,7 @@ export async function sendPasswordReset(params: {
     subject: params.overrides?.subject ?? 'Reset your password',
     html: emailHtml({
       title: 'Password reset request',
-      preheader: 'Click the link to reset your Transformation OS password',
+      preheader: 'Click the link to reset your Results Tracking System password',
       body: params.overrides?.body ?? defaultBody,
       ctaUrl: params.resetUrl,
       ctaLabel: 'Reset Password',
@@ -361,7 +363,8 @@ export async function sendMilestoneCelebration(params: {
 
   await send({
     to: params.to,
-    subject: params.overrides?.subject ?? `You've reached ${params.milestone}% in ${params.programName}!`,
+    subject:
+      params.overrides?.subject ?? `You've reached ${params.milestone}% in ${params.programName}!`,
     html: emailHtml({
       title: `🎉 ${params.milestone}% Complete!`,
       preheader: messages[params.milestone],
@@ -476,7 +479,7 @@ function emailHtml(params: {
           <!-- Header -->
           <tr>
             <td style="background:#1f2937;border-radius:12px 12px 0 0;padding:24px 32px;">
-              <p style="margin:0;color:#f9fafb;font-size:18px;font-weight:700;letter-spacing:-0.3px;">Transformation OS</p>
+              <p style="margin:0;color:#f9fafb;font-size:18px;font-weight:700;letter-spacing:-0.3px;">Results Tracking System</p>
             </td>
           </tr>
           <!-- Body -->
@@ -497,8 +500,8 @@ function emailHtml(params: {
           <tr>
             <td style="background:#f9fafb;border-radius:0 0 12px 12px;padding:20px 32px;border-top:1px solid #e5e7eb;">
               <p style="margin:0;color:#9ca3af;font-size:12px;line-height:1.6;">
-                You're receiving this email because you have an account on Transformation OS.<br>
-                © ${new Date().getFullYear()} Transformation OS. All rights reserved.
+                You're receiving this email because you have an account on Results Tracking System.<br>
+                © ${new Date().getFullYear()} Results Tracking System. All rights reserved.
               </p>
             </td>
           </tr>

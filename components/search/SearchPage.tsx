@@ -140,7 +140,7 @@ export function SearchPage({ initialQuery = "", onNavigate }: SearchPageProps) {
               Search
             </h1>
             <p className="text-sm sm:text-base text-muted-foreground">
-              Find anything in Transformation OS
+              Find anything in Results Tracking System
             </p>
           </div>
         </div>

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { eq, and, isNull, desc, sql, asc, or, count } from 'drizzle-orm';
+import { eq, and, isNull, desc, sql, asc, or, count, inArray } from 'drizzle-orm';
 import { db, schema } from '@tr/db';
 import { requireTenantAccess, requirePermission } from '../middleware/permissions.js';
 import { NotFoundError, BadRequestError, ForbiddenError } from '../lib/errors.js';
@@ -11,6 +11,7 @@ import type { PaginationMeta } from '@tr/shared';
 import { gradeQuizSubmission, applyManualGrades } from '../lib/quiz-engine.js';
 import { sendProgramCreated } from '../lib/email.js';
 import { env } from '../lib/env.js';
+import { resolveFileUrl } from '../lib/storage.js';
 
 const {
   programs,
@@ -20,6 +21,7 @@ const {
   lessonTasks,
   quizAttempts,
   lessonProgress,
+  goalResponses,
 } = schema;
 
 export const programsRoutes = new Hono<{ Variables: Variables }>();
@@ -40,7 +42,21 @@ const createProgramSchema = z.object({
   coverImage: z.string().optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
-  timezone: z.string().max(50).optional(),
+  timezone: z
+    .string()
+    .max(50)
+    .refine(
+      (tz) => {
+        try {
+          Intl.DateTimeFormat(undefined, { timeZone: tz });
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      { message: 'Invalid IANA timezone' }
+    )
+    .optional(),
   config: z
     .object({
       sequentialAccess: z.boolean().optional(),
@@ -67,7 +83,20 @@ const eventConfigSchema = z.object({
   date: z.string().optional(),
   startTime: z.string().optional(),
   endTime: z.string().optional(),
-  timezone: z.string().optional(),
+  timezone: z
+    .string()
+    .refine(
+      (tz) => {
+        try {
+          Intl.DateTimeFormat(undefined, { timeZone: tz });
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      { message: 'Invalid IANA timezone' }
+    )
+    .optional(),
   location: z.string().optional(),
   zoomLink: z.string().optional(),
   meetingId: z.string().optional(),
@@ -140,7 +169,9 @@ const taskConfigSchema = z.object({
   requireActionSteps: z.boolean().optional(),
   metricsGuidance: z.string().optional(),
   actionStepsGuidance: z.string().optional(),
-  submissionTypes: z.array(z.enum(['text', 'file_upload', 'url', 'video', 'presentation', 'spreadsheet'])).optional(),
+  submissionTypes: z
+    .array(z.enum(['text', 'file_upload', 'url', 'video', 'presentation', 'spreadsheet']))
+    .optional(),
   maxFileSize: z.number().optional(),
   allowedFileTypes: z.array(z.string()).optional(),
   instructions: z.string().optional(),
@@ -151,7 +182,9 @@ const createTaskSchema = z.object({
   title: z.string().min(1).max(255),
   description: z.string().optional(),
   order: z.number().int().optional(),
-  responseType: z.enum(['text', 'file_upload', 'goal', 'completion_click', 'discussion']).default('completion_click'),
+  responseType: z
+    .enum(['text', 'file_upload', 'goal', 'completion_click', 'discussion'])
+    .default('completion_click'),
   approvalRequired: z.enum(['none', 'mentor', 'facilitator', 'both']).default('none'),
   dueDate: z.string().datetime().optional(),
   dueDaysOffset: z.number().int().optional(),
@@ -193,10 +226,7 @@ programsRoutes.get(
     // Only include agency-wide programs if tenant belongs to an agency
     if (tenant.agencyId) {
       accessConditions.push(
-        and(
-          eq(programs.agencyId, tenant.agencyId),
-          isNull(programs.tenantId)
-        )!
+        and(eq(programs.agencyId, tenant.agencyId), isNull(programs.tenantId))!
       );
     }
 
@@ -327,7 +357,15 @@ programsRoutes.get(
       hasPrev: page > 1,
     };
 
-    return c.json({ data: results, meta: { pagination } });
+    // Resolve cover image URLs
+    const resolvedResults = await Promise.all(
+      results.map(async (p) => ({
+        ...p,
+        coverImage: await resolveFileUrl(p.coverImage),
+      }))
+    );
+
+    return c.json({ data: resolvedResults, meta: { pagination } });
   }
 );
 
@@ -416,10 +454,7 @@ programsRoutes.get(
 
     if (tenant.agencyId) {
       accessConditions.push(
-        and(
-          eq(programs.agencyId, tenant.agencyId),
-          isNull(programs.tenantId)
-        )!
+        and(eq(programs.agencyId, tenant.agencyId), isNull(programs.tenantId))!
       );
     }
 
@@ -428,13 +463,7 @@ programsRoutes.get(
     const [program] = await db
       .select()
       .from(programs)
-      .where(
-        and(
-          eq(programs.id, programId),
-          accessCondition,
-          isNull(programs.deletedAt)
-        )
-      )
+      .where(and(eq(programs.id, programId), accessCondition, isNull(programs.deletedAt)))
       .limit(1);
 
     if (!program) {
@@ -458,13 +487,14 @@ programsRoutes.get(
 
     // Get tasks for all lessons in the program
     const lessonIds = moduleLessons.map((l) => l.id);
-    const allTasks = lessonIds.length > 0
-      ? await db
-          .select()
-          .from(lessonTasks)
-          .where(sql`${lessonTasks.lessonId} IN ${lessonIds}`)
-          .orderBy(asc(lessonTasks.order))
-      : [];
+    const allTasks =
+      lessonIds.length > 0
+        ? await db
+            .select()
+            .from(lessonTasks)
+            .where(sql`${lessonTasks.lessonId} IN ${lessonIds}`)
+            .orderBy(asc(lessonTasks.order))
+        : [];
 
     // Get enrollment stats
     const [{ learnerCount, mentorCount, facilitatorCount }] = await db
@@ -487,15 +517,226 @@ programsRoutes.get(
         })),
     }));
 
+    const resolvedCoverImage = await resolveFileUrl(program.coverImage);
+
     return c.json({
       data: {
         ...program,
+        coverImage: resolvedCoverImage,
         modules: modulesWithLessons,
         stats: {
           learnerCount: Number(learnerCount),
           mentorCount: Number(mentorCount),
           facilitatorCount: Number(facilitatorCount),
         },
+      },
+    });
+  }
+);
+
+/**
+ * GET /api/tenants/:tenantId/programs/:programId/stats
+ * Program analytics for the Reports tab in the builder
+ */
+programsRoutes.get(
+  '/:programId/stats',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_VIEW),
+  async (c) => {
+    const { programId } = c.req.param();
+
+    // 1. Program dates
+    const [program] = await db
+      .select({ endDate: programs.endDate })
+      .from(programs)
+      .where(eq(programs.id, programId))
+      .limit(1);
+
+    // 2. Enrollment aggregates (learner role only)
+    const [enrollmentAgg] = await db
+      .select({
+        totalEnrolled: sql<number>`count(*) filter (where ${enrollments.role} = 'learner')`,
+        avgCompletion: sql<number>`coalesce(round(avg(${enrollments.progress}) filter (where ${enrollments.role} = 'learner')), 0)`,
+        completedCount: sql<number>`count(*) filter (where ${enrollments.role} = 'learner' and ${enrollments.status} = 'completed')`,
+      })
+      .from(enrollments)
+      .where(eq(enrollments.programId, programId));
+
+    const totalEnrolled = Number(enrollmentAgg.totalEnrolled ?? 0);
+    const avgCompletion = Number(enrollmentAgg.avgCompletion ?? 0);
+    const completedCount = Number(enrollmentAgg.completedCount ?? 0);
+
+    // 3. Weeks remaining
+    let weeksRemaining: number | null = null;
+    if (program?.endDate) {
+      const msLeft = new Date(program.endDate).getTime() - Date.now();
+      if (msLeft > 0) weeksRemaining = Math.ceil(msLeft / (7 * 24 * 60 * 60 * 1000));
+    }
+
+    // 4. Module performance
+    const programModules = await db
+      .select({ id: modules.id, title: modules.title, order: modules.order })
+      .from(modules)
+      .where(eq(modules.programId, programId))
+      .orderBy(asc(modules.order));
+
+    let modulePerformance: { name: string; completionPct: number }[] = [];
+    if (programModules.length > 0) {
+      const moduleIds = programModules.map((m) => m.id);
+
+      // Total lessons per module
+      const lessonCounts = await db
+        .select({ moduleId: lessons.moduleId, lessonCount: count() })
+        .from(lessons)
+        .where(inArray(lessons.moduleId, moduleIds))
+        .groupBy(lessons.moduleId);
+
+      // Completed lesson-progress rows per module (across all learner enrollments)
+      const completionCounts = await db
+        .select({
+          moduleId: lessons.moduleId,
+          completedCount: sql<number>`count(*)`,
+        })
+        .from(lessonProgress)
+        .innerJoin(lessons, eq(lessonProgress.lessonId, lessons.id))
+        .innerJoin(enrollments, eq(lessonProgress.enrollmentId, enrollments.id))
+        .where(
+          and(
+            eq(enrollments.programId, programId),
+            sql`${enrollments.role} = 'learner'`,
+            sql`${lessonProgress.status} = 'completed'`,
+            inArray(lessons.moduleId, moduleIds)
+          )
+        )
+        .groupBy(lessons.moduleId);
+
+      const lessonCountMap = Object.fromEntries(
+        lessonCounts.map((r) => [r.moduleId, Number(r.lessonCount)])
+      );
+      const completionCountMap = Object.fromEntries(
+        completionCounts.map((r) => [r.moduleId, Number(r.completedCount)])
+      );
+
+      modulePerformance = programModules.map((mod) => {
+        const lessonCount = lessonCountMap[mod.id] ?? 0;
+        const completed = completionCountMap[mod.id] ?? 0;
+        const maxPossible = lessonCount * Math.max(totalEnrolled, 1);
+        const pct = maxPossible > 0 ? Math.round((completed / maxPossible) * 100) : 0;
+        return { name: mod.title, completionPct: Math.min(pct, 100) };
+      });
+    }
+
+    // 5. Recent activity (last 10 lesson completions)
+    const recentActivityRaw = await db
+      .select({
+        userName: sql<string>`${schema.users.firstName} || ' ' || ${schema.users.lastName}`,
+        lessonTitle: lessons.title,
+        completedAt: lessonProgress.completedAt,
+      })
+      .from(lessonProgress)
+      .innerJoin(enrollments, eq(lessonProgress.enrollmentId, enrollments.id))
+      .innerJoin(schema.users, eq(enrollments.userId, schema.users.id))
+      .innerJoin(lessons, eq(lessonProgress.lessonId, lessons.id))
+      .where(and(eq(enrollments.programId, programId), sql`${lessonProgress.status} = 'completed'`))
+      .orderBy(desc(lessonProgress.completedAt))
+      .limit(10);
+
+    const recentActivity = recentActivityRaw.map((r) => ({
+      userName: r.userName,
+      action: `completed "${r.lessonTitle}"`,
+      completedAt: r.completedAt,
+    }));
+
+    return c.json({
+      data: {
+        totalEnrolled,
+        avgCompletion,
+        completedCount,
+        weeksRemaining,
+        modulePerformance,
+        recentActivity,
+      },
+    });
+  }
+);
+
+/**
+ * GET /api/tenants/:tenantId/programs/:programId/goals
+ * Aggregate goal responses set by learners in this program
+ */
+programsRoutes.get(
+  '/:programId/goals',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_VIEW),
+  async (c) => {
+    const { programId } = c.req.param();
+
+    const goals = await db
+      .select({
+        id: goalResponses.id,
+        statement: goalResponses.statement,
+        status: goalResponses.status,
+        targetDate: goalResponses.targetDate,
+        reviewFrequency: goalResponses.reviewFrequency,
+        createdAt: goalResponses.createdAt,
+        learnerFirstName: schema.users.firstName,
+        learnerLastName: schema.users.lastName,
+        lessonTitle: lessons.title,
+        latestProgress: sql<number | null>`(
+          SELECT gr.progress_percentage FROM goal_reviews gr
+          WHERE gr.goal_response_id = ${goalResponses.id}
+          ORDER BY gr.review_date DESC LIMIT 1
+        )`,
+        latestReviewDate: sql<string | null>`(
+          SELECT gr.review_date FROM goal_reviews gr
+          WHERE gr.goal_response_id = ${goalResponses.id}
+          ORDER BY gr.review_date DESC LIMIT 1
+        )`,
+        reviewCount: sql<number>`(
+          SELECT count(*) FROM goal_reviews gr
+          WHERE gr.goal_response_id = ${goalResponses.id}
+        )::int`,
+      })
+      .from(goalResponses)
+      .innerJoin(enrollments, eq(goalResponses.enrollmentId, enrollments.id))
+      .innerJoin(schema.users, eq(enrollments.userId, schema.users.id))
+      .innerJoin(lessons, eq(goalResponses.lessonId, lessons.id))
+      .where(eq(enrollments.programId, programId))
+      .orderBy(desc(goalResponses.createdAt));
+
+    const total = goals.length;
+    const active = goals.filter((g) => g.status === 'active').length;
+    const completed = goals.filter((g) => g.status === 'completed').length;
+    const draft = goals.filter((g) => g.status === 'draft').length;
+
+    const progressValues = goals
+      .filter((g) => g.latestProgress !== null)
+      .map((g) => g.latestProgress as number);
+    const avgProgress =
+      progressValues.length > 0
+        ? Math.round(progressValues.reduce((a, b) => a + b, 0) / progressValues.length)
+        : 0;
+
+    const mapped = goals.map((g) => ({
+      id: g.id,
+      statement: g.statement,
+      status: g.status,
+      targetDate: g.targetDate,
+      reviewFrequency: g.reviewFrequency,
+      createdAt: g.createdAt,
+      lessonTitle: g.lessonTitle,
+      learnerName: `${g.learnerFirstName ?? ''} ${g.learnerLastName ?? ''}`.trim(),
+      learnerInitials:
+        `${g.learnerFirstName?.[0] ?? ''}${g.learnerLastName?.[0] ?? ''}`.toUpperCase() || '?',
+      latestProgress: g.latestProgress,
+      latestReviewDate: g.latestReviewDate,
+      reviewCount: g.reviewCount,
+    }));
+
+    return c.json({
+      data: {
+        stats: { total, active, completed, draft, avgProgress },
+        goals: mapped,
       },
     });
   }
@@ -671,10 +912,7 @@ programsRoutes.post(
 
     if (tenant.agencyId) {
       accessConditions.push(
-        and(
-          eq(programs.agencyId, tenant.agencyId),
-          isNull(programs.tenantId)
-        )!
+        and(eq(programs.agencyId, tenant.agencyId), isNull(programs.tenantId))!
       );
     }
 
@@ -683,13 +921,7 @@ programsRoutes.post(
     const [existing] = await db
       .select()
       .from(programs)
-      .where(
-        and(
-          eq(programs.id, programId),
-          accessCondition,
-          isNull(programs.deletedAt)
-        )
-      )
+      .where(and(eq(programs.id, programId), accessCondition, isNull(programs.deletedAt)))
       .limit(1);
 
     if (!existing) {
@@ -709,9 +941,7 @@ programsRoutes.post(
         tenantId: tenant.id, // New program is tenant-specific
         allowedTenantIds: [],
         name: `${existing.name} (Copy)`,
-        internalName: existing.internalName
-          ? `${existing.internalName} (Copy)`
-          : null,
+        internalName: existing.internalName ? `${existing.internalName} (Copy)` : null,
         description: existing.description,
         type: existing.type,
         coverImage: existing.coverImage,
@@ -736,9 +966,7 @@ programsRoutes.post(
         .insert(modules)
         .values({
           programId: newProgram.id,
-          parentModuleId: mod.parentModuleId
-            ? moduleIdMap.get(mod.parentModuleId)
-            : null,
+          parentModuleId: mod.parentModuleId ? moduleIdMap.get(mod.parentModuleId) : null,
           title: mod.title,
           description: mod.description,
           order: mod.order,
@@ -760,21 +988,24 @@ programsRoutes.post(
         .orderBy(asc(lessons.order));
 
       for (const lesson of moduleLessons) {
-        const [newLesson] = await db.insert(lessons).values({
-          moduleId: newModule.id,
-          title: lesson.title,
-          contentType: lesson.contentType,
-          content: lesson.content,
-          order: lesson.order,
-          durationMinutes: lesson.durationMinutes,
-          points: lesson.points,
-          dripType: lesson.dripType,
-          dripValue: lesson.dripValue,
-          dripDate: lesson.dripDate,
-          visibleTo: lesson.visibleTo,
-          approvalRequired: lesson.approvalRequired,
-          status: 'draft',
-        }).returning();
+        const [newLesson] = await db
+          .insert(lessons)
+          .values({
+            moduleId: newModule.id,
+            title: lesson.title,
+            contentType: lesson.contentType,
+            content: lesson.content,
+            order: lesson.order,
+            durationMinutes: lesson.durationMinutes,
+            points: lesson.points,
+            dripType: lesson.dripType,
+            dripValue: lesson.dripValue,
+            dripDate: lesson.dripDate,
+            visibleTo: lesson.visibleTo,
+            approvalRequired: lesson.approvalRequired,
+            status: 'draft',
+          })
+          .returning();
 
         // Copy tasks for this lesson
         const lessonTaskList = await db
@@ -1197,11 +1428,7 @@ programsRoutes.post(
       .innerJoin(modules, eq(lessons.moduleId, modules.id))
       .innerJoin(programs, eq(modules.programId, programs.id))
       .where(
-        and(
-          eq(lessons.id, lessonId),
-          eq(programs.id, programId),
-          eq(programs.tenantId, tenant.id)
-        )
+        and(eq(lessons.id, lessonId), eq(programs.id, programId), eq(programs.tenantId, tenant.id))
       )
       .limit(1);
 
@@ -1359,10 +1586,14 @@ const submitQuizSchema = z.object({
 });
 
 const gradeQuizSchema = z.object({
-  questionGrades: z.array(z.object({
-    questionId: z.string(),
-    pointsAwarded: z.number().min(0),
-  })).min(1),
+  questionGrades: z
+    .array(
+      z.object({
+        questionId: z.string(),
+        pointsAwarded: z.number().min(0),
+      })
+    )
+    .min(1),
 });
 
 /**
@@ -1428,10 +1659,7 @@ programsRoutes.post(
       .select({ attemptCount: count() })
       .from(quizAttempts)
       .where(
-        and(
-          eq(quizAttempts.lessonId, lessonId),
-          eq(quizAttempts.enrollmentId, enrollment.id)
-        )
+        and(eq(quizAttempts.lessonId, lessonId), eq(quizAttempts.enrollmentId, enrollment.id))
       );
 
     const currentCount = Number(attemptCount);
@@ -1489,7 +1717,15 @@ programsRoutes.post(
         });
     }
 
-    return c.json({ data: { attempt, score: result.score, passed: result.passed, gradingStatus: result.gradingStatus, breakdown: result.breakdown } });
+    return c.json({
+      data: {
+        attempt,
+        score: result.score,
+        passed: result.passed,
+        gradingStatus: result.gradingStatus,
+        breakdown: result.breakdown,
+      },
+    });
   }
 );
 
@@ -1514,12 +1750,7 @@ programsRoutes.get(
     const [enrollment] = await db
       .select()
       .from(enrollments)
-      .where(
-        and(
-          eq(enrollments.programId, programId),
-          eq(enrollments.userId, user.id)
-        )
-      )
+      .where(and(eq(enrollments.programId, programId), eq(enrollments.userId, user.id)))
       .limit(1);
 
     if (!enrollment) return c.json({ data: [] });
@@ -1527,12 +1758,7 @@ programsRoutes.get(
     const attempts = await db
       .select()
       .from(quizAttempts)
-      .where(
-        and(
-          eq(quizAttempts.lessonId, lessonId),
-          eq(quizAttempts.enrollmentId, enrollment.id)
-        )
-      )
+      .where(and(eq(quizAttempts.lessonId, lessonId), eq(quizAttempts.enrollmentId, enrollment.id)))
       .orderBy(desc(quizAttempts.attemptNumber));
 
     return c.json({ data: attempts });
@@ -1562,7 +1788,7 @@ programsRoutes.get(
       .orderBy(desc(quizAttempts.attemptNumber));
 
     // Keep only latest attempt per enrollment
-    const latestByEnrollment = new Map<string, typeof allAttempts[0]>();
+    const latestByEnrollment = new Map<string, (typeof allAttempts)[0]>();
     for (const a of allAttempts) {
       if (!latestByEnrollment.has(a.enrollmentId)) {
         latestByEnrollment.set(a.enrollmentId, a);
@@ -1573,7 +1799,8 @@ programsRoutes.get(
     const totalAttempts = latest.length;
     const passed = latest.filter((a) => a.passed === true).length;
     const scores = latest.filter((a) => a.score !== null).map((a) => Number(a.score));
-    const avgScore = scores.length > 0 ? Math.round(scores.reduce((s, x) => s + x, 0) / scores.length) : 0;
+    const avgScore =
+      scores.length > 0 ? Math.round(scores.reduce((s, x) => s + x, 0) / scores.length) : 0;
 
     return c.json({
       data: {
@@ -1618,7 +1845,8 @@ programsRoutes.put(
 
     const content = row.lesson.content ?? {};
     const passingScore = content.passingScore ?? null;
-    const existingBreakdown = (attempt.breakdown ?? []) as import('../lib/quiz-engine.js').QuizBreakdownItem[];
+    const existingBreakdown = (attempt.breakdown ??
+      []) as import('../lib/quiz-engine.js').QuizBreakdownItem[];
 
     const updated = applyManualGrades(existingBreakdown, questionGrades, passingScore);
 

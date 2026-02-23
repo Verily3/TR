@@ -1,18 +1,24 @@
 import { Hono } from 'hono';
+import { zValidator } from '@hono/zod-validator';
+import { z } from 'zod';
 import { runMigrations, type MigrationResult } from '@tr/db';
 import { sql } from 'drizzle-orm';
+import crypto from 'node:crypto';
 
 const adminDbRoutes = new Hono();
 
 /**
  * Verify the admin secret from query param or header.
- * Uses ADMIN_SECRET env var, falls back to JWT_ACCESS_SECRET.
+ * Requires ADMIN_SECRET env var — no fallback to JWT secrets.
+ * Uses timing-safe comparison to prevent timing-oracle attacks.
  */
 function verifySecret(secret: string | undefined): boolean {
-  const expected =
-    process.env.ADMIN_SECRET || process.env.JWT_ACCESS_SECRET;
-  if (!expected) return false;
-  return secret === expected;
+  const expected = process.env.ADMIN_SECRET;
+  if (!expected || !secret) return false;
+  // Hash both sides to normalise length before timing-safe comparison
+  const expectedHash = crypto.createHash('sha256').update(expected).digest();
+  const secretHash = crypto.createHash('sha256').update(secret).digest();
+  return crypto.timingSafeEqual(expectedHash, secretHash);
 }
 
 /**
@@ -68,7 +74,7 @@ function renderHtml(result: MigrationResult): string {
 <body>
 <div class="container">
   <h1>${statusEmoji} Database Migration</h1>
-  <h2>Transformation OS — Drizzle ORM</h2>
+  <h2>Results Tracking System — Drizzle ORM</h2>
   <div class="status">${statusText}</div>
 
   <div class="meta">
@@ -124,7 +130,7 @@ function renderHtml(result: MigrationResult): string {
   </div>
 
   <footer>
-    Transformation OS &mdash; Admin Database Management<br>
+    Results Tracking System &mdash; Admin Database Management<br>
     Endpoint: GET /api/admin/db/migrate?secret=...
   </footer>
 </div>
@@ -192,12 +198,15 @@ adminDbRoutes.get('/status', async (c) => {
       appliedMigrations: rows.length,
       migrations: rows,
     });
-  } catch (err: any) {
-    return c.json({
-      status: 'error',
-      timestamp: new Date().toISOString(),
-      error: err.message,
-    }, 500);
+  } catch (err: unknown) {
+    return c.json(
+      {
+        status: 'error',
+        timestamp: new Date().toISOString(),
+        error: err instanceof Error ? err.message : String(err),
+      },
+      500
+    );
   }
 });
 
@@ -207,11 +216,20 @@ adminDbRoutes.get('/status', async (c) => {
  * Validates an admin secret. Used by the frontend to check the secret
  * before storing it in sessionStorage.
  */
-adminDbRoutes.post('/verify', async (c) => {
-  const body = await c.req.json().catch(() => ({}));
-  const secret = body.secret || c.req.header('X-Admin-Secret');
-  return c.json({ data: { valid: verifySecret(secret) } });
-});
+adminDbRoutes.post(
+  '/verify',
+  zValidator(
+    'json',
+    z.object({
+      secret: z.string().max(255).optional(),
+    })
+  ),
+  async (c) => {
+    const body = c.req.valid('json');
+    const secret = body.secret || c.req.header('X-Admin-Secret');
+    return c.json({ data: { valid: verifySecret(secret) } });
+  }
+);
 
 /**
  * GET /admin/db/health?secret=YOUR_SECRET
@@ -242,7 +260,8 @@ adminDbRoutes.get('/health', async (c) => {
     try {
       const versionRows = await db.execute(sql`SHOW server_version`);
       if (versionRows.length > 0) {
-        postgresVersion = (versionRows[0] as any).server_version || 'unknown';
+        postgresVersion =
+          ((versionRows[0] as Record<string, unknown>).server_version as string) || 'unknown';
       }
     } catch {}
 
@@ -254,9 +273,9 @@ adminDbRoutes.get('/health', async (c) => {
         FROM pg_stat_user_tables
         ORDER BY schemaname, relname
       `);
-      tables = tableRows.map((r: any) => ({
-        schema: r.schema,
-        name: r.name,
+      tables = tableRows.map((r: Record<string, unknown>) => ({
+        schema: r.schema as string,
+        name: r.name as string,
         estimatedRows: Number(r.estimated_rows) || 0,
       }));
     } catch {}
@@ -267,7 +286,7 @@ adminDbRoutes.get('/health', async (c) => {
       const migRows = await db.execute(
         sql`SELECT hash, created_at FROM drizzle.__drizzle_migrations ORDER BY created_at ASC`
       );
-      appliedList = migRows.map((r: any) => ({
+      appliedList = migRows.map((r: Record<string, unknown>) => ({
         hash: String(r.hash),
         createdAt: String(r.created_at),
       }));
@@ -315,18 +334,26 @@ adminDbRoutes.get('/health', async (c) => {
         },
       },
     });
-  } catch (err: any) {
-    return c.json({
-      data: {
-        status: 'error',
-        timestamp: new Date().toISOString(),
-        durationMs: Date.now() - start,
-        connection: { connected: false, latencyMs: 0, postgresVersion: 'unknown', databaseUrl: '(error)' },
-        tables: [],
-        migrations: { applied: 0, available: 0, pending: 0, appliedList: [], availableFiles: [] },
-        error: err.message,
+  } catch (err: unknown) {
+    return c.json(
+      {
+        data: {
+          status: 'error',
+          timestamp: new Date().toISOString(),
+          durationMs: Date.now() - start,
+          connection: {
+            connected: false,
+            latencyMs: 0,
+            postgresVersion: 'unknown',
+            databaseUrl: '(error)',
+          },
+          tables: [],
+          migrations: { applied: 0, available: 0, pending: 0, appliedList: [], availableFiles: [] },
+          error: err instanceof Error ? err.message : String(err),
+        },
       },
-    }, 500);
+      500
+    );
   }
 });
 

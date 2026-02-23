@@ -1,6 +1,30 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { useAuth } from '@/hooks/use-auth';
+import {
+  useGoals,
+  useCreateGoal,
+  useUpdateGoal,
+  useDeleteGoal,
+  useCreateStrategicPlan,
+  usePlanningSummary,
+  useStrategicPlans,
+  type PlanningGoal,
+  type GoalCategory,
+  type GoalStatus,
+  type GoalPriority,
+  type StrategicPlan,
+  type PlanType,
+  type PlanStatus,
+} from '@/hooks/api/usePlanning';
+import {
+  useScorecard,
+  useScorecardPeriods,
+  type MetricCategory,
+  type ScorecardMetric,
+} from '@/hooks/api/useScorecard';
+import { useTenants } from '@/hooks/api/useTenants';
 import {
   Calendar,
   Target,
@@ -11,13 +35,16 @@ import {
   Users,
   Clock,
   ChevronRight,
-  ChevronDown,
   X,
   Sparkles,
   Link as LinkIcon,
   DollarSign,
   Factory,
   Award,
+  Pencil,
+  Trash2,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
@@ -26,47 +53,6 @@ import {
 
 type ProgressStatus = 'on-track' | 'at-risk' | 'needs-attention';
 type GoalType = 'company' | 'team' | 'personal';
-type Quarter = 'Q1' | 'Q2' | 'Q3' | 'Q4';
-
-interface Pillar {
-  id: string;
-  name: string;
-  target: string;
-  progress: number;
-  initiatives: number;
-  status: ProgressStatus;
-}
-
-interface Objective {
-  id: string;
-  title: string;
-  owner: string;
-  ownerRole: string;
-  category: string;
-  activeQuarters: Quarter[];
-  progress: number;
-  status: ProgressStatus;
-}
-
-interface Priority {
-  id: string;
-  title: string;
-  category: string;
-  owner: string;
-  ownerRole: string;
-  dueDate: string;
-  actionsCompleted: number;
-  actionsTotal: number;
-  status: ProgressStatus;
-}
-
-interface ActionItem {
-  id: string;
-  title: string;
-  owner: string;
-  dueDate: string;
-  completed: boolean;
-}
 
 interface Goal {
   id: string;
@@ -81,29 +67,6 @@ interface Goal {
   currentValue: string;
   targetValue: string;
   status: ProgressStatus;
-}
-
-interface GoalStats {
-  total: number;
-  newThisQuarter: number;
-  onTrack: number;
-  atRisk: number;
-  needsAttention: number;
-}
-
-interface QuarterOverview {
-  theme: string;
-  prioritiesActive: number;
-  actionItemsTotal: number;
-  actionItemsComplete: number;
-  completionPercent: number;
-}
-
-interface AnnualPlan {
-  year: number;
-  completionPercent: number;
-  quartersComplete: number;
-  totalQuarters: number;
 }
 
 interface KPIMetric {
@@ -170,309 +133,8 @@ interface GoalFormData {
 }
 
 // ---------------------------------------------------------------------------
-// Mock Data
+// Goal Modal Static Options
 // ---------------------------------------------------------------------------
-
-const defaultAnnualPlan: AnnualPlan = {
-  year: 2026,
-  completionPercent: 68,
-  quartersComplete: 8,
-  totalQuarters: 12,
-};
-
-const defaultPillars: Pillar[] = [
-  {
-    id: 'pillar-1',
-    name: 'Profitable Growth',
-    target: '$250M Revenue | 12% EBITDA',
-    progress: 72,
-    initiatives: 8,
-    status: 'on-track',
-  },
-  {
-    id: 'pillar-2',
-    name: 'Operational Excellence',
-    target: '85% OEE | <2% Waste',
-    progress: 58,
-    initiatives: 6,
-    status: 'at-risk',
-  },
-  {
-    id: 'pillar-3',
-    name: 'Market Leadership',
-    target: '20% Market Share | Top 3 Brand',
-    progress: 65,
-    initiatives: 5,
-    status: 'on-track',
-  },
-];
-
-const defaultObjectives: Objective[] = [
-  {
-    id: 'obj-1',
-    title: 'Achieve $250M in total revenue with balanced growth across raw and cooked segments',
-    owner: 'CEO',
-    ownerRole: 'CEO',
-    category: 'Financial',
-    activeQuarters: ['Q1', 'Q2', 'Q3', 'Q4'],
-    progress: 78,
-    status: 'on-track',
-  },
-  {
-    id: 'obj-2',
-    title: 'Expand national distribution to 9,000+ retail points',
-    owner: 'CMO',
-    ownerRole: 'CMO',
-    category: 'Market Growth',
-    activeQuarters: ['Q1', 'Q2', 'Q3', 'Q4'],
-    progress: 62,
-    status: 'on-track',
-  },
-  {
-    id: 'obj-3',
-    title: 'Improve plant OEE to 85%',
-    owner: 'COO',
-    ownerRole: 'COO',
-    category: 'Operational',
-    activeQuarters: ['Q1', 'Q2', 'Q3', 'Q4'],
-    progress: 54,
-    status: 'at-risk',
-  },
-  {
-    id: 'obj-4',
-    title: 'Build executive bench strength - 80% A-players',
-    owner: 'CEO',
-    ownerRole: 'CEO',
-    category: 'People',
-    activeQuarters: ['Q1', 'Q2', 'Q3', 'Q4'],
-    progress: 70,
-    status: 'on-track',
-  },
-  {
-    id: 'obj-5',
-    title: 'Launch 3 new value-added product lines',
-    owner: 'CMO',
-    ownerRole: 'CMO',
-    category: 'Innovation',
-    activeQuarters: ['Q2', 'Q3', 'Q4'],
-    progress: 45,
-    status: 'needs-attention',
-  },
-];
-
-const defaultQuarterOverview: QuarterOverview = {
-  theme: 'Foundation & Momentum',
-  prioritiesActive: 12,
-  actionItemsTotal: 47,
-  actionItemsComplete: 32,
-  completionPercent: 68,
-};
-
-const defaultPriorities: Priority[] = [
-  {
-    id: 'priority-1',
-    title: 'Complete operational audit and implement Q1 efficiency improvements',
-    category: 'Operational Excellence',
-    owner: 'Sarah Mitchell',
-    ownerRole: 'President/COO',
-    dueDate: 'Mar 31, 2026',
-    actionsCompleted: 6,
-    actionsTotal: 8,
-    status: 'on-track',
-  },
-  {
-    id: 'priority-2',
-    title: 'Launch national marketing campaign',
-    category: 'Market Leadership',
-    owner: 'Jennifer Lopez',
-    ownerRole: 'CMO',
-    dueDate: 'Feb 28, 2026',
-    actionsCompleted: 10,
-    actionsTotal: 12,
-    status: 'on-track',
-  },
-  {
-    id: 'priority-3',
-    title: 'Close acquisition of regional distributor',
-    category: 'Profitable Growth',
-    owner: 'You',
-    ownerRole: 'CEO',
-    dueDate: 'Mar 15, 2026',
-    actionsCompleted: 3,
-    actionsTotal: 6,
-    status: 'at-risk',
-  },
-  {
-    id: 'priority-4',
-    title: 'Execute LeaderShift program',
-    category: 'People & Culture',
-    owner: 'You',
-    ownerRole: 'CEO',
-    dueDate: 'Mar 31, 2026',
-    actionsCompleted: 4,
-    actionsTotal: 5,
-    status: 'on-track',
-  },
-];
-
-const defaultActionItems: ActionItem[] = [
-  { id: 'action-1', title: 'Review and approve Q1 marketing budget allocation', owner: 'CMO', dueDate: 'Jan 17', completed: false },
-  { id: 'action-2', title: 'Finalize acquisition due diligence', owner: 'CFO', dueDate: 'Jan 18', completed: false },
-  { id: 'action-3', title: 'Conduct LeaderShift Module 3 session', owner: 'You', dueDate: 'Jan 16', completed: true },
-  { id: 'action-4', title: 'Review plant efficiency metrics', owner: 'You', dueDate: 'Jan 19', completed: false },
-  { id: 'action-5', title: 'Approve new product launch timeline', owner: 'CMO', dueDate: 'Jan 20', completed: false },
-  { id: 'action-6', title: 'Meet with board compensation committee', owner: 'You', dueDate: 'Jan 18', completed: true },
-];
-
-const defaultGoalStats: GoalStats = {
-  total: 18,
-  newThisQuarter: 3,
-  onTrack: 12,
-  atRisk: 4,
-  needsAttention: 2,
-};
-
-const defaultGoals: Goal[] = [
-  {
-    id: 'goal-1',
-    title: 'Increase EBITDA to $24M by end of Q1 2026',
-    type: 'company',
-    category: 'Financial',
-    owner: 'Marcus Chen',
-    ownerRole: 'CFO',
-    dueDate: 'Mar 31, 2026',
-    scorecardLink: 'Revenue & Profit Growth',
-    progress: 78,
-    currentValue: '$22.8M',
-    targetValue: '$24M',
-    status: 'on-track',
-  },
-  {
-    id: 'goal-2',
-    title: 'Achieve 85% OEE across all plants',
-    type: 'company',
-    category: 'Operational',
-    owner: 'Sarah Mitchell',
-    ownerRole: 'COO',
-    dueDate: 'Jun 30, 2026',
-    scorecardLink: 'Operational Excellence',
-    progress: 54,
-    currentValue: '82.3%',
-    targetValue: '85%',
-    status: 'at-risk',
-  },
-  {
-    id: 'goal-3',
-    title: 'Complete LeaderShift with 90%+ engagement',
-    type: 'team',
-    category: 'People',
-    owner: 'You',
-    ownerRole: 'CEO',
-    dueDate: 'Mar 31, 2026',
-    scorecardLink: 'Talent & Culture',
-    progress: 82,
-    currentValue: 'Module 7',
-    targetValue: 'Module 9',
-    status: 'on-track',
-  },
-  {
-    id: 'goal-4',
-    title: 'Expand distribution to 9,000 retail points',
-    type: 'company',
-    category: 'Market Growth',
-    owner: 'Jennifer Lopez',
-    ownerRole: 'CMO',
-    dueDate: 'Dec 31, 2026',
-    scorecardLink: 'Market Expansion',
-    progress: 62,
-    currentValue: '8,420',
-    targetValue: '9,000',
-    status: 'on-track',
-  },
-  {
-    id: 'goal-5',
-    title: 'Launch 3 new value-added product SKUs',
-    type: 'team',
-    category: 'Innovation',
-    owner: 'Jennifer Lopez',
-    ownerRole: 'CMO',
-    dueDate: 'Sep 30, 2026',
-    scorecardLink: 'Innovation Pipeline',
-    progress: 33,
-    currentValue: '1',
-    targetValue: '3 products',
-    status: 'needs-attention',
-  },
-  {
-    id: 'goal-6',
-    title: 'Achieve 80% A-player rating',
-    type: 'personal',
-    category: 'People',
-    owner: 'You',
-    ownerRole: 'CEO',
-    dueDate: 'Dec 31, 2026',
-    scorecardLink: 'Executive Bench Strength',
-    progress: 78,
-    currentValue: '78%',
-    targetValue: '80%',
-    status: 'on-track',
-  },
-];
-
-const defaultKPICategories: KPICategory[] = [
-  {
-    id: 'kpi-financial',
-    name: 'Financial Performance',
-    icon: 'DollarSign',
-    columns: 4,
-    metrics: [
-      { id: 'metric-1', name: 'Revenue', value: '$62.5M', target: '$62M', change: '+0.8%', changeDirection: 'up', unit: 'Quarterly' },
-      { id: 'metric-2', name: 'EBITDA', value: '$24.5M', target: '$23M', change: '+6.5%', changeDirection: 'up', unit: 'Annual Run Rate' },
-      { id: 'metric-3', name: 'Net Margin', value: '8.2%', target: '8.0%', change: '+0.3%', changeDirection: 'up', unit: '%' },
-      { id: 'metric-4', name: 'ROIC', value: '14.8%', target: '15%', change: '-0.5%', changeDirection: 'down', unit: '%' },
-    ],
-  },
-  {
-    id: 'kpi-operational',
-    name: 'Operational Efficiency',
-    icon: 'Factory',
-    columns: 4,
-    metrics: [
-      { id: 'metric-5', name: 'Plant OEE', value: '82.3%', target: '85%', change: '-2.7%', changeDirection: 'down' },
-      { id: 'metric-6', name: 'Product Yield', value: '94.1%', target: '95%', change: '0%', changeDirection: 'neutral' },
-      { id: 'metric-7', name: 'Throughput/Shift', value: '12.8K lbs', target: '13K lbs', change: '+3%', changeDirection: 'up' },
-      { id: 'metric-8', name: 'Downtime Hours', value: '124hrs', target: '<100hrs', change: '+24%', changeDirection: 'down' },
-    ],
-  },
-  {
-    id: 'kpi-people',
-    name: 'People & Culture',
-    icon: 'Users',
-    columns: 3,
-    metrics: [
-      { id: 'metric-9', name: 'A-Player %', value: '78%', target: '80%', change: '+5%', changeDirection: 'up' },
-      { id: 'metric-10', name: 'Engagement Score', value: '87%', target: '85%', change: '+2%', changeDirection: 'up' },
-      { id: 'metric-11', name: 'Leadership Retention', value: '92%', target: '90%', change: '+2%', changeDirection: 'up' },
-    ],
-  },
-  {
-    id: 'kpi-market',
-    name: 'Market Growth',
-    icon: 'Award',
-    columns: 3,
-    metrics: [
-      { id: 'metric-12', name: 'Market Share', value: '18.2%', target: '20%', change: '+1.5%', changeDirection: 'up' },
-      { id: 'metric-13', name: 'Distribution Points', value: '8,420', target: '9,000', change: '+12%', changeDirection: 'up' },
-      { id: 'metric-14', name: 'Brand NPS', value: '67', target: '70', change: '+5', changeDirection: 'up' },
-    ],
-  },
-];
-
-const defaultScorecardOptions: ScorecardOption[] = [
-  { id: 'scorecard-1', name: 'Operational Excellence', description: 'Partner with COO to drive efficiencies', score: 78, status: 'at-risk' },
-  { id: 'scorecard-2', name: 'Revenue & Profit Growth', description: 'Achieve profitable growth targets', score: 88, status: 'on-track' },
-  { id: 'scorecard-3', name: 'Talent & Culture', description: 'Build high-performance leadership team', score: 90, status: 'on-track' },
-];
 
 const defaultGoalSuggestions: GoalSuggestion[] = [
   {
@@ -530,13 +192,6 @@ const measurementFrequencyOptions = [
   { value: 'quarterly', label: 'Quarterly' },
 ];
 
-const annualPlanLinkOptions = [
-  { value: 'none', label: 'No link' },
-  { value: 'profitable-growth', label: 'Profitable Growth Pillar' },
-  { value: 'operational-excellence', label: 'Operational Excellence Pillar' },
-  { value: 'market-leadership', label: 'Market Leadership Pillar' },
-];
-
 const programLinkOptions = [
   { value: 'none', label: 'No link' },
   { value: 'leadershift', label: 'LeaderShift: Leading through Change' },
@@ -556,319 +211,177 @@ const accountabilityPartnerOptions = [
 // Status helpers
 // ---------------------------------------------------------------------------
 
-const pillarStatusConfig: Record<ProgressStatus, { border: string; progressBg: string; text: string; label: string }> = {
-  'on-track': { border: 'border-green-200', progressBg: 'bg-green-500', text: 'text-green-600', label: 'On Track' },
-  'at-risk': { border: 'border-yellow-200', progressBg: 'bg-yellow-500', text: 'text-yellow-600', label: 'At Risk' },
-  'needs-attention': { border: 'border-red-300', progressBg: 'bg-red-600', text: 'text-red-600', label: 'Needs Attention' },
+const goalStatusConfig: Record<
+  ProgressStatus,
+  { border: string; progressBg: string; text: string; label: string }
+> = {
+  'on-track': {
+    border: 'border-gray-200',
+    progressBg: 'bg-green-500',
+    text: 'text-green-600',
+    label: 'On Track',
+  },
+  'at-risk': {
+    border: 'border-yellow-200',
+    progressBg: 'bg-yellow-500',
+    text: 'text-yellow-600',
+    label: 'At Risk',
+  },
+  'needs-attention': {
+    border: 'border-red-300',
+    progressBg: 'bg-red-600',
+    text: 'text-red-600',
+    label: 'Needs Attention',
+  },
 };
-
-const objectiveStatusConfig: Record<ProgressStatus, { border: string; progressBg: string; text: string; label: string }> = {
-  'on-track': { border: 'border-gray-200', progressBg: 'bg-green-500', text: 'text-green-600', label: 'On Track' },
-  'at-risk': { border: 'border-yellow-200', progressBg: 'bg-yellow-500', text: 'text-yellow-600', label: 'At Risk' },
-  'needs-attention': { border: 'border-red-300', progressBg: 'bg-red-600', text: 'text-red-600', label: 'Needs Attention' },
-};
-
-const priorityStatusConfig: Record<ProgressStatus, { bgColor: string; textColor: string; label: string }> = {
-  'on-track': { bgColor: 'bg-green-50', textColor: 'text-green-700', label: 'On Track' },
-  'at-risk': { bgColor: 'bg-yellow-50', textColor: 'text-yellow-700', label: 'At Risk' },
-  'needs-attention': { bgColor: 'bg-red-50', textColor: 'text-red-600', label: 'Needs Attention' },
-};
-
-const goalStatusConfig: Record<ProgressStatus, { border: string; progressBg: string; text: string; label: string }> = {
-  'on-track': { border: 'border-gray-200', progressBg: 'bg-green-500', text: 'text-green-600', label: 'On Track' },
-  'at-risk': { border: 'border-yellow-200', progressBg: 'bg-yellow-500', text: 'text-yellow-600', label: 'At Risk' },
-  'needs-attention': { border: 'border-red-300', progressBg: 'bg-red-600', text: 'text-red-600', label: 'Needs Attention' },
-};
-
-// ---------------------------------------------------------------------------
-// Annual Planning Tab Sub-components
-// ---------------------------------------------------------------------------
-
-function PillarCard({ pillar }: { pillar: Pillar }) {
-  const config = pillarStatusConfig[pillar.status];
-  return (
-    <div
-      className={`bg-white rounded-xl shadow-sm border ${config.border} p-5`}
-      role="article"
-      aria-label={`${pillar.name} pillar`}
-    >
-      <h4 className="text-gray-900 font-medium mb-2">{pillar.name}</h4>
-      <p className="text-xs text-gray-500 mb-4">{pillar.target}</p>
-      <div className="mb-4">
-        <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-          <span>Progress</span>
-          <span>{pillar.progress}%</span>
-        </div>
-        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className={`h-full ${config.progressBg} rounded-full transition-all duration-300`}
-            style={{ width: `${pillar.progress}%` }}
-            role="progressbar"
-            aria-valuenow={pillar.progress}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={`${pillar.name} progress: ${pillar.progress}%`}
-          />
-        </div>
-      </div>
-      <div className="flex items-center justify-between text-xs">
-        <span className="text-gray-500">{pillar.initiatives} initiatives</span>
-        <span className={config.text}>{config.label}</span>
-      </div>
-    </div>
-  );
-}
-
-function ObjectiveCard({ objective }: { objective: Objective }) {
-  const config = objectiveStatusConfig[objective.status];
-  const allQuarters: Quarter[] = ['Q1', 'Q2', 'Q3', 'Q4'];
-  return (
-    <div
-      className={`bg-white rounded-xl shadow-sm border ${config.border} hover:border-red-300 transition-colors cursor-pointer p-4`}
-      role="article"
-      aria-label={objective.title}
-      tabIndex={0}
-    >
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex-1">
-          <div className="flex items-center gap-3 mb-2">
-            <h4 className="text-sm text-gray-900">{objective.title}</h4>
-          </div>
-          <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">
-            <span className="flex items-center gap-1">
-              <Users className="w-3 h-3" aria-hidden="true" />
-              {objective.owner}
-            </span>
-            <span className="px-2 py-1 bg-gray-100 rounded text-xs">{objective.category}</span>
-            <span className="flex items-center gap-1">
-              {allQuarters.map((q) => (
-                <span
-                  key={q}
-                  className={`px-2 py-1 rounded text-xs ${
-                    objective.activeQuarters.includes(q)
-                      ? 'bg-red-600 text-white'
-                      : 'bg-gray-50'
-                  }`}
-                >
-                  {q}
-                </span>
-              ))}
-            </span>
-          </div>
-        </div>
-        <div className="ml-6 text-right">
-          <div className="text-2xl text-gray-900 mb-1 tabular-nums">{objective.progress}%</div>
-          <div className={`text-xs ${config.text}`}>{config.label}</div>
-        </div>
-      </div>
-      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-        <div
-          className={`h-full ${config.progressBg} rounded-full transition-all duration-300`}
-          style={{ width: `${objective.progress}%` }}
-          role="progressbar"
-          aria-valuenow={objective.progress}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        />
-      </div>
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Annual Planning Tab
 // ---------------------------------------------------------------------------
 
-function AnnualPlanningTab() {
-  const plan = defaultAnnualPlan;
-  const pillars = defaultPillars;
-  const objectives = defaultObjectives;
-  const totalObjectives = 24;
+const PLAN_TYPE_LABELS: Record<PlanType, string> = {
+  bhag: 'BHAG',
+  '3hag': '3HAG',
+  annual: 'Annual',
+  quarterly: 'Quarterly',
+};
+
+const PLAN_STATUS_STYLES: Record<PlanStatus, { bg: string; text: string; label: string }> = {
+  active: { bg: 'bg-green-50', text: 'text-green-700', label: 'Active' },
+  draft: { bg: 'bg-gray-100', text: 'text-gray-600', label: 'Draft' },
+  completed: { bg: 'bg-blue-50', text: 'text-blue-700', label: 'Completed' },
+  archived: { bg: 'bg-gray-50', text: 'text-gray-400', label: 'Archived' },
+};
+
+function StrategicPlanCard({ plan }: { plan: StrategicPlan }) {
+  const typeLabel = PLAN_TYPE_LABELS[plan.planType];
+  const statusStyle = PLAN_STATUS_STYLES[plan.status];
+  const targetYear = plan.targetDate ? new Date(plan.targetDate).getFullYear() : null;
+  const metrics = (
+    plan.config as { metrics?: { name: string; target: string; current?: string }[] }
+  )?.metrics;
 
   return (
-    <div>
-      {/* Planning Year Header */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-8">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-4">
-          <div>
-            <h2 className="text-gray-900 font-semibold mb-2">{plan.year} Annual Plan</h2>
-            <p className="text-sm text-gray-500">
-              Strategic priorities and objectives for the fiscal year
-            </p>
-          </div>
-          <div className="text-right">
-            <div className="text-xs text-gray-500 mb-1 uppercase">Plan Completion</div>
-            <div className="text-3xl text-gray-900 mb-1 tabular-nums">{plan.completionPercent}%</div>
-            <div className="text-xs text-gray-500">
-              {plan.quartersComplete} of {plan.totalQuarters} quarters complete
-            </div>
-          </div>
-        </div>
-        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-red-600 rounded-full transition-all duration-300"
-            style={{ width: `${plan.completionPercent}%` }}
-            role="progressbar"
-            aria-valuenow={plan.completionPercent}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={`Annual plan progress: ${plan.completionPercent}%`}
-          />
-        </div>
-      </div>
-
-      {/* Strategic Pillars */}
-      <section className="mb-8" aria-labelledby="pillars-heading">
-        <h3 id="pillars-heading" className="text-gray-900 font-semibold mb-4">
-          Strategic Pillars
-        </h3>
-        <div
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
-          role="list"
-          aria-label="Strategic pillars"
-        >
-          {pillars.map((pillar) => (
-            <PillarCard key={pillar.id} pillar={pillar} />
-          ))}
-        </div>
-      </section>
-
-      {/* Annual Objectives */}
-      <section aria-labelledby="objectives-heading">
-        <div className="flex items-center justify-between mb-4">
-          <h3 id="objectives-heading" className="text-gray-900 font-semibold">
-            Annual Objectives
-          </h3>
-          <button className="text-sm text-red-600 hover:text-red-500 transition-colors">
-            View All ({totalObjectives})
-          </button>
-        </div>
-        <div className="space-y-3" role="list" aria-label="Annual objectives">
-          {objectives.map((objective) => (
-            <ObjectiveCard key={objective.id} objective={objective} />
-          ))}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Quarterly Planning Tab Sub-components
-// ---------------------------------------------------------------------------
-
-const QUARTER_OPTIONS = ['Q1 2026', 'Q2 2026', 'Q3 2026', 'Q4 2026'] as const;
-
-function PriorityCard({ priority }: { priority: Priority }) {
-  const [expanded, setExpanded] = useState(false);
-  const config = priorityStatusConfig[priority.status];
-
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4" role="article" aria-label={priority.title}>
-      <div className="flex flex-col sm:flex-row items-start justify-between mb-4 gap-3">
-        <div className="flex-1">
-          <h4 className="text-sm text-gray-900 mb-3">{priority.title}</h4>
-          <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500">
-            <span className="px-2 py-1 bg-gray-100 rounded">{priority.category}</span>
-            <span className="flex items-center gap-1">
-              <Users className="w-3 h-3" aria-hidden="true" />
-              {priority.ownerRole} - {priority.owner}
-            </span>
-            <span className="flex items-center gap-1">
-              <Clock className="w-3 h-3" aria-hidden="true" />
-              {priority.dueDate}
-            </span>
-          </div>
-        </div>
-        <div className="sm:ml-6">
-          <span className={`inline-block px-3 py-1 rounded text-xs ${config.bgColor} ${config.textColor}`}>
-            {config.label}
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5" role="article">
+      <div className="flex items-start justify-between mb-3 gap-3">
+        <div className="flex items-center gap-2">
+          <span className="px-2 py-0.5 bg-red-50 text-red-700 text-xs rounded font-medium">
+            {typeLabel}
           </span>
+          {targetYear && <span className="text-xs text-gray-400">{targetYear}</span>}
         </div>
+        <span className={`px-2 py-0.5 rounded text-xs ${statusStyle.bg} ${statusStyle.text}`}>
+          {statusStyle.label}
+        </span>
       </div>
-
-      {/* Action Items Progress */}
-      <div className="mb-3">
-        <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
-          <span>Action Items</span>
-          <span>{priority.actionsCompleted} of {priority.actionsTotal} complete</span>
-        </div>
-        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-red-600 rounded-full transition-all duration-300"
-            style={{ width: `${(priority.actionsCompleted / priority.actionsTotal) * 100}%` }}
-            role="progressbar"
-            aria-valuenow={priority.actionsCompleted}
-            aria-valuemin={0}
-            aria-valuemax={priority.actionsTotal}
-            aria-label={`Action items progress: ${priority.actionsCompleted} of ${priority.actionsTotal}`}
-          />
-        </div>
-      </div>
-
-      {/* Expandable Action Items */}
-      <button
-        className="flex items-center gap-2 text-xs text-red-600 hover:text-red-500 transition-colors"
-        onClick={() => setExpanded(!expanded)}
-        aria-expanded={expanded}
-        aria-controls={`priority-actions-${priority.id}`}
-      >
-        <span>View action items</span>
-        {expanded ? (
-          <ChevronDown className="w-3 h-3" aria-hidden="true" />
-        ) : (
-          <ChevronRight className="w-3 h-3" aria-hidden="true" />
-        )}
-      </button>
-
-      {expanded && (
-        <div
-          id={`priority-actions-${priority.id}`}
-          className="mt-3 pt-3 border-t border-gray-200 space-y-2"
-        >
-          <p className="text-xs text-gray-500">
-            Action items for this priority would be displayed here.
-          </p>
+      <h4 className="text-gray-900 font-medium mb-2">{plan.name}</h4>
+      {plan.description && (
+        <p className="text-xs text-gray-500 mb-4 line-clamp-2">{plan.description}</p>
+      )}
+      {metrics && metrics.length > 0 && (
+        <div className="grid grid-cols-3 gap-2 pt-3 border-t border-gray-100">
+          {metrics.slice(0, 3).map((m, i) => (
+            <div key={i} className="text-center">
+              <div className="text-xs text-gray-400 mb-1">{m.name}</div>
+              <div className="text-sm font-medium text-gray-900">{m.current ?? '—'}</div>
+              <div className="text-xs text-gray-400">/ {m.target}</div>
+            </div>
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-function ActionItemCard({ item, onToggle }: { item: ActionItem; onToggle?: (id: string, completed: boolean) => void }) {
-  const handleToggle = useCallback(() => {
-    onToggle?.(item.id, !item.completed);
-  }, [item.id, item.completed, onToggle]);
+function AnnualPlanningTab({ tenantId }: { tenantId: string | null }) {
+  const { user } = useAuth();
+  const [showCreatePlan, setShowCreatePlan] = useState(false);
+  const { data: plansData, isLoading } = useStrategicPlans(tenantId);
+
+  const allPlans = plansData?.data ?? [];
+  const visionPlans = allPlans.filter((p) => p.planType === 'bhag' || p.planType === '3hag');
+  const annualPlans = allPlans.filter((p) => p.planType === 'annual');
+  const hasAny = allPlans.length > 0;
+
+  if (isLoading) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+        <p className="text-gray-500">Loading strategic plans…</p>
+      </div>
+    );
+  }
+
+  if (!hasAny) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-10 text-center">
+        <Target className="w-10 h-10 text-gray-300 mx-auto mb-3" aria-hidden="true" />
+        <h3 className="text-gray-900 font-medium mb-2">No strategic plans yet</h3>
+        <p className="text-sm text-gray-500 mb-4">
+          Create your 3HAG, BHAG, or Annual plan to start tracking strategic direction.
+        </p>
+        {(user?.roleLevel ?? 0) >= 70 && (
+          <button
+            onClick={() => setShowCreatePlan(true)}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
+          >
+            <Plus className="w-4 h-4 inline mr-2" aria-hidden="true" />
+            Create Strategic Plan
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
-    <div
-      className={`bg-white rounded-xl shadow-sm border border-gray-200 p-3 flex items-center gap-4 ${item.completed ? 'opacity-50' : ''}`}
-      role="listitem"
-    >
-      <button
-        className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors flex-shrink-0 ${
-          item.completed
-            ? 'bg-red-600 border-red-600'
-            : 'border-gray-200 hover:border-red-600'
-        }`}
-        onClick={handleToggle}
-        aria-label={item.completed ? `Mark "${item.title}" as incomplete` : `Mark "${item.title}" as complete`}
-        aria-pressed={item.completed}
-      >
-        {item.completed && (
-          <CheckCircle2 className="w-4 h-4 text-white" aria-hidden="true" />
-        )}
-      </button>
-      <div className="flex-1 min-w-0">
-        <div className={`text-sm ${item.completed ? 'line-through text-gray-500' : 'text-gray-900'}`}>
-          {item.title}
+    <div>
+      {/* Vision / Long-term Plans */}
+      {visionPlans.length > 0 && (
+        <section className="mb-8" aria-labelledby="vision-heading">
+          <h3 id="vision-heading" className="text-gray-900 font-semibold mb-4">
+            Long-Term Vision
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6" role="list">
+            {visionPlans.map((plan) => (
+              <StrategicPlanCard key={plan.id} plan={plan} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Annual Plans */}
+      {annualPlans.length > 0 && (
+        <section aria-labelledby="annual-heading">
+          <h3 id="annual-heading" className="text-gray-900 font-semibold mb-4">
+            Annual Plans
+          </h3>
+          <div className="space-y-4" role="list">
+            {annualPlans.map((plan) => (
+              <StrategicPlanCard key={plan.id} plan={plan} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Create Strategic Plan button (visible when plans exist) */}
+      {hasAny && (user?.roleLevel ?? 0) >= 70 && (
+        <div className="mt-6">
+          <button
+            onClick={() => setShowCreatePlan(true)}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
+          >
+            <Plus className="w-4 h-4 inline mr-2" aria-hidden="true" />
+            Create Strategic Plan
+          </button>
         </div>
-      </div>
-      <div className="text-xs text-gray-500 hidden sm:block">{item.owner}</div>
-      <div className="flex items-center gap-1 text-xs text-gray-500">
-        <Clock className="w-3 h-3" aria-hidden="true" />
-        {item.dueDate}
-      </div>
+      )}
+
+      {showCreatePlan && (
+        <NewStrategicPlanModal
+          tenantId={tenantId}
+          defaultPlanType="annual"
+          onClose={() => setShowCreatePlan(false)}
+        />
+      )}
     </div>
   );
 }
@@ -877,106 +390,134 @@ function ActionItemCard({ item, onToggle }: { item: ActionItem; onToggle?: (id: 
 // Quarterly Planning Tab
 // ---------------------------------------------------------------------------
 
-function QuarterlyPlanningTab() {
-  const overview = defaultQuarterOverview;
-  const priorities = defaultPriorities;
-  const actionItems = defaultActionItems;
-  const [selectedQuarter, setSelectedQuarter] = useState('Q1 2026');
-  const dateRange = 'January 1 - March 31, 2026';
+function QuarterlyPlanningTab({ tenantId }: { tenantId: string | null }) {
+  const { user } = useAuth();
+  const [showCreatePlan, setShowCreatePlan] = useState(false);
+  const { data: plansData, isLoading } = useStrategicPlans(tenantId, { planType: 'quarterly' });
 
-  const [localActions, setLocalActions] = useState(actionItems);
+  const plans = plansData?.data ?? [];
 
-  const handleActionToggle = useCallback((id: string, completed: boolean) => {
-    setLocalActions((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, completed } : a))
+  if (isLoading) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+        <p className="text-gray-500">Loading quarterly plans…</p>
+      </div>
     );
-  }, []);
+  }
+
+  if (plans.length === 0) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-10 text-center">
+        <Target className="w-10 h-10 text-gray-300 mx-auto mb-3" aria-hidden="true" />
+        <h3 className="text-gray-900 font-medium mb-2">No quarterly plans yet</h3>
+        <p className="text-sm text-gray-500 mb-4">
+          Break your annual plan into quarterly OKRs and priorities.
+        </p>
+        {(user?.roleLevel ?? 0) >= 70 && (
+          <button
+            onClick={() => setShowCreatePlan(true)}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
+          >
+            <Plus className="w-4 h-4 inline mr-2" aria-hidden="true" />
+            Create Quarterly Plan
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div>
-      {/* Quarter Selector */}
-      <div className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <label htmlFor="quarter-select" className="sr-only">Select quarter</label>
-          <select
-            id="quarter-select"
-            value={selectedQuarter}
-            onChange={(e) => setSelectedQuarter(e.target.value)}
-            className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent"
-          >
-            {QUARTER_OPTIONS.map((quarter) => (
-              <option key={quarter} value={quarter}>{quarter}</option>
-            ))}
-          </select>
-          <div className="text-sm text-gray-500">{dateRange}</div>
-        </div>
-        <button className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2">
-          Start Q2 Planning
-        </button>
-      </div>
+      <section aria-labelledby="quarterly-heading">
+        <h3 id="quarterly-heading" className="text-gray-900 font-semibold mb-4">
+          Quarterly Plans
+        </h3>
+        <div className="space-y-4" role="list">
+          {plans.map((plan) => {
+            const config = plan.config as { okrFormat?: boolean; keyResults?: string[] } | null;
+            const keyResults = config?.keyResults ?? [];
+            const statusStyle = PLAN_STATUS_STYLES[plan.status];
+            const startDisplay = plan.startDate
+              ? new Date(plan.startDate).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                })
+              : null;
+            const endDisplay = plan.targetDate
+              ? new Date(plan.targetDate).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })
+              : null;
 
-      {/* Quarter Overview */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 mb-8">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div>
-            <div className="text-xs text-gray-500 mb-2 uppercase">Quarterly Theme</div>
-            <div className="text-sm text-gray-900">{overview.theme}</div>
-          </div>
-          <div>
-            <div className="text-xs text-gray-500 mb-2 uppercase">Priorities</div>
-            <div className="text-sm text-gray-900">{overview.prioritiesActive} Active</div>
-          </div>
-          <div>
-            <div className="text-xs text-gray-500 mb-2 uppercase">Action Items</div>
-            <div className="text-sm text-gray-900">
-              {overview.actionItemsTotal} Total &bull; {overview.actionItemsComplete} Complete
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-gray-500 mb-2 uppercase">Completion</div>
-            <div className="flex items-center gap-2">
-              <div className="flex-1">
-                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-red-600 rounded-full transition-all duration-300"
-                    style={{ width: `${overview.completionPercent}%` }}
-                    role="progressbar"
-                    aria-valuenow={overview.completionPercent}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-label={`Quarter completion: ${overview.completionPercent}%`}
-                  />
+            return (
+              <div
+                key={plan.id}
+                className="bg-white rounded-xl shadow-sm border border-gray-200 p-5"
+                role="article"
+              >
+                <div className="flex items-start justify-between mb-3 gap-3">
+                  <div>
+                    <h4 className="text-gray-900 font-medium">{plan.name}</h4>
+                    {(startDisplay || endDisplay) && (
+                      <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                        <Clock className="w-3 h-3" aria-hidden="true" />
+                        {startDisplay} — {endDisplay}
+                      </p>
+                    )}
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 rounded text-xs shrink-0 ${statusStyle.bg} ${statusStyle.text}`}
+                  >
+                    {statusStyle.label}
+                  </span>
                 </div>
+                {plan.description && (
+                  <p className="text-sm text-gray-500 mb-4">{plan.description}</p>
+                )}
+                {keyResults.length > 0 && (
+                  <div>
+                    <div className="text-xs text-gray-400 mb-2 uppercase">Key Results</div>
+                    <ul className="space-y-1">
+                      {keyResults.map((kr, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+                          <ChevronRight
+                            className="w-3.5 h-3.5 text-red-400 mt-0.5 shrink-0"
+                            aria-hidden="true"
+                          />
+                          {kr}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
-              <span className="text-sm text-gray-900 tabular-nums">{overview.completionPercent}%</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Quarterly Priorities */}
-      <section className="mb-8" aria-labelledby="priorities-heading">
-        <h3 id="priorities-heading" className="text-gray-900 font-semibold mb-4">
-          {selectedQuarter} Priorities
-        </h3>
-        <div className="space-y-4" role="list" aria-label="Quarterly priorities">
-          {priorities.map((priority) => (
-            <PriorityCard key={priority.id} priority={priority} />
-          ))}
+            );
+          })}
         </div>
       </section>
 
-      {/* Weekly Action Items */}
-      <section aria-labelledby="actions-heading">
-        <h3 id="actions-heading" className="text-gray-900 font-semibold mb-4">
-          This Week&apos;s Action Items
-        </h3>
-        <div className="space-y-2" role="list" aria-label="Weekly action items">
-          {localActions.map((item) => (
-            <ActionItemCard key={item.id} item={item} onToggle={handleActionToggle} />
-          ))}
+      {/* Create Quarterly Plan button (visible when plans exist) */}
+      {plans.length > 0 && (user?.roleLevel ?? 0) >= 70 && (
+        <div className="mt-6">
+          <button
+            onClick={() => setShowCreatePlan(true)}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
+          >
+            <Plus className="w-4 h-4 inline mr-2" aria-hidden="true" />
+            Create Quarterly Plan
+          </button>
         </div>
-      </section>
+      )}
+
+      {showCreatePlan && (
+        <NewStrategicPlanModal
+          tenantId={tenantId}
+          defaultPlanType="quarterly"
+          onClose={() => setShowCreatePlan(false)}
+        />
+      )}
     </div>
   );
 }
@@ -1009,28 +550,57 @@ function GoalStatCard({
   );
 }
 
-function GoalCard({ goal }: { goal: Goal }) {
+function GoalCard({
+  goal,
+  onUpdateProgress,
+  onOpenDetail,
+}: {
+  goal: Goal;
+  onUpdateProgress?: (goalId: string, progress: number) => void;
+  onOpenDetail?: (goalId: string) => void;
+}) {
   const config = goalStatusConfig[goal.status];
-  const typeLabels: Record<GoalType, string> = { company: 'Company', team: 'Team', personal: 'Personal' };
+  const typeLabels: Record<GoalType, string> = {
+    company: 'Company',
+    team: 'Team',
+    personal: 'Personal',
+  };
+  const [isEditing, setIsEditing] = useState(false);
+  const [editProgress, setEditProgress] = useState(String(goal.progress));
+
+  const handleProgressSubmit = () => {
+    const val = Math.min(100, Math.max(0, Number(editProgress) || 0));
+    onUpdateProgress?.(goal.id, val);
+    setIsEditing(false);
+  };
 
   return (
     <div
-      className={`bg-white rounded-xl shadow-sm border ${config.border} hover:border-red-300 transition-colors cursor-pointer p-5`}
+      className={`bg-white rounded-xl shadow-sm border ${config.border} hover:border-red-300 transition-colors p-5`}
       role="article"
       aria-label={goal.title}
-      tabIndex={0}
     >
       <div className="flex flex-col sm:flex-row items-start justify-between mb-4 gap-3">
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-2">
-            <h4 className="text-sm text-gray-900">{goal.title}</h4>
+            {onOpenDetail ? (
+              <button
+                onClick={() => onOpenDetail(goal.id)}
+                className="text-sm text-gray-900 font-medium hover:text-red-600 transition-colors text-left"
+              >
+                {goal.title}
+              </button>
+            ) : (
+              <h4 className="text-sm text-gray-900">{goal.title}</h4>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 mb-3">
             <span className="px-2 py-1 bg-gray-100 rounded">{typeLabels[goal.type]}</span>
             <span className="px-2 py-1 bg-gray-100 rounded">{goal.category}</span>
             <span className="flex items-center gap-1">
               <Users className="w-3 h-3" aria-hidden="true" />
-              {goal.ownerRole} - {goal.owner}
+              {goal.ownerRole ? `${goal.ownerRole} - ` : ''}
+              {goal.owner}
             </span>
             <span className="flex items-center gap-1">
               <Clock className="w-3 h-3" aria-hidden="true" />
@@ -1041,12 +611,49 @@ function GoalCard({ goal }: { goal: Goal }) {
             <div className="text-xs text-red-600">Scorecard: {goal.scorecardLink}</div>
           )}
         </div>
-        <div className="sm:ml-6 text-right">
-          <div className="text-2xl text-gray-900 mb-1 tabular-nums">{goal.progress}%</div>
-          <div className={`text-xs ${config.text} mb-2`}>{config.label}</div>
-          <div className="text-xs text-gray-500">
-            {goal.currentValue} / {goal.targetValue}
-          </div>
+        <div className="sm:ml-6 text-right shrink-0">
+          {isEditing ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                max={100}
+                className="w-20 px-2 py-1 border border-gray-200 rounded text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-600/50"
+                value={editProgress}
+                onChange={(e) => setEditProgress(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleProgressSubmit();
+                  if (e.key === 'Escape') setIsEditing(false);
+                }}
+                onBlur={handleProgressSubmit}
+                autoFocus
+                aria-label="Edit progress percentage"
+              />
+              <span className="text-sm text-gray-500">%</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 justify-end">
+              <div>
+                <div className="text-2xl text-gray-900 mb-1 tabular-nums">{goal.progress}%</div>
+                <div className={`text-xs ${config.text} mb-2`}>{config.label}</div>
+                <div className="text-xs text-gray-500">
+                  {goal.currentValue} / {goal.targetValue}
+                </div>
+              </div>
+              {onUpdateProgress && (
+                <button
+                  onClick={() => {
+                    setEditProgress(String(goal.progress));
+                    setIsEditing(true);
+                  }}
+                  className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                  aria-label="Edit progress"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -1065,66 +672,465 @@ function GoalCard({ goal }: { goal: Goal }) {
 }
 
 // ---------------------------------------------------------------------------
+// Goal Edit Modal
+// ---------------------------------------------------------------------------
+
+function GoalEditModal({
+  goal,
+  tenantId,
+  onClose,
+}: {
+  goal: PlanningGoal;
+  tenantId: string | null;
+  onClose: () => void;
+}) {
+  const updateGoal = useUpdateGoal(tenantId);
+  const deleteGoal = useDeleteGoal(tenantId);
+
+  const [title, setTitle] = useState(goal.title);
+  const [description, setDescription] = useState(goal.description ?? '');
+  const [status, setStatus] = useState<GoalStatus>(goal.status);
+  const [category, setCategory] = useState<GoalCategory>(goal.category);
+  const [priority, setPriority] = useState<GoalPriority>(goal.priority);
+  const [startDate, setStartDate] = useState(goal.startDate?.split('T')[0] ?? '');
+  const [targetDate, setTargetDate] = useState(goal.targetDate?.split('T')[0] ?? '');
+  const [progress, setProgress] = useState(String(goal.progress));
+  const [successMetrics, setSuccessMetrics] = useState(goal.successMetrics ?? '');
+  const [actionStepInput, setActionStepInput] = useState('');
+  const [actionSteps, setActionSteps] = useState<string[]>(goal.actionSteps ?? []);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const isSaving = updateGoal.isPending;
+  const isDeleting = deleteGoal.isPending;
+
+  function addStep() {
+    const trimmed = actionStepInput.trim();
+    if (trimmed && !actionSteps.includes(trimmed)) {
+      setActionSteps([...actionSteps, trimmed]);
+    }
+    setActionStepInput('');
+  }
+
+  async function handleSave() {
+    if (!title.trim()) {
+      setError('Title is required.');
+      return;
+    }
+    setError(null);
+    try {
+      await updateGoal.mutateAsync({
+        goalId: goal.id,
+        data: {
+          title: title.trim(),
+          description: description.trim() || undefined,
+          status,
+          category,
+          priority,
+          startDate: startDate || undefined,
+          targetDate: targetDate || undefined,
+          progress: Math.min(100, Math.max(0, Number(progress) || 0)),
+          successMetrics: successMetrics.trim() || undefined,
+          actionSteps,
+        },
+      });
+      onClose();
+    } catch {
+      setError('Failed to save. Please try again.');
+    }
+  }
+
+  async function handleDelete() {
+    try {
+      await deleteGoal.mutateAsync(goal.id);
+      onClose();
+    } catch {
+      setError('Failed to delete. Please try again.');
+    }
+  }
+
+  const inputCls =
+    'w-full text-sm border border-border rounded-lg px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-accent/30';
+  const labelCls = 'text-sm font-medium text-sidebar-foreground block mb-1.5';
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+      onClick={onClose}
+    >
+      <div
+        className="bg-card rounded-2xl border border-border w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-border">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-red-50 rounded-lg">
+              <Target className="w-5 h-5 text-accent" />
+            </div>
+            <h2 className="font-semibold text-sidebar-foreground">Edit Goal</h2>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-muted rounded-lg transition-colors">
+            <X className="w-5 h-5 text-muted-foreground" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-5 space-y-4">
+          {error && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-red-50 rounded-lg text-sm text-red-700">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Title */}
+          <div>
+            <label className={labelCls}>
+              Title <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className={inputCls}
+              placeholder="Goal title"
+            />
+          </div>
+
+          {/* Status / Category / Priority */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className={labelCls}>Status</label>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as GoalStatus)}
+                className={inputCls}
+              >
+                <option value="draft">Draft</option>
+                <option value="active">Active</option>
+                <option value="completed">Completed</option>
+                <option value="on_hold">On Hold</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Category</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as GoalCategory)}
+                className={inputCls}
+              >
+                <option value="professional">Professional</option>
+                <option value="personal">Personal</option>
+                <option value="leadership">Leadership</option>
+                <option value="strategic">Strategic</option>
+                <option value="performance">Performance</option>
+                <option value="development">Development</option>
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Priority</label>
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as GoalPriority)}
+                className={inputCls}
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="critical">Critical</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Progress / Start Date / Target Date */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className={labelCls}>Progress (%)</label>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                value={progress}
+                onChange={(e) => setProgress(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Start Date</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+            <div>
+              <label className={labelCls}>Target Date</label>
+              <input
+                type="date"
+                value={targetDate}
+                onChange={(e) => setTargetDate(e.target.value)}
+                className={inputCls}
+              />
+            </div>
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className={labelCls}>Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              className={`${inputCls} resize-none`}
+              placeholder="Describe this goal..."
+            />
+          </div>
+
+          {/* Success Metrics */}
+          <div>
+            <label className={labelCls}>Success Metrics</label>
+            <textarea
+              value={successMetrics}
+              onChange={(e) => setSuccessMetrics(e.target.value)}
+              rows={2}
+              className={`${inputCls} resize-none`}
+              placeholder="How will you measure success?"
+            />
+          </div>
+
+          {/* Action Steps */}
+          <div>
+            <label className={labelCls}>Action Steps</label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {actionSteps.map((step) => (
+                <span
+                  key={step}
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-red-50 text-accent rounded-lg text-xs"
+                >
+                  {step}
+                  <button
+                    onClick={() => setActionSteps(actionSteps.filter((s) => s !== step))}
+                    className="hover:text-red-700 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+              {actionSteps.length === 0 && (
+                <span className="text-xs text-muted-foreground italic">No steps added yet</span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={actionStepInput}
+                onChange={(e) => setActionStepInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addStep();
+                  }
+                }}
+                placeholder="Type a step and press Enter"
+                className="flex-1 text-sm border border-border rounded-lg px-3 py-2 bg-background focus:outline-none focus:ring-2 focus:ring-accent/30"
+              />
+              <button
+                onClick={addStep}
+                className="px-3 py-2 border border-border rounded-lg text-sm hover:bg-muted transition-colors"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between gap-3 px-5 py-4 border-t border-border">
+          {confirmDelete ? (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-red-700">Delete this goal?</span>
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 disabled:opacity-50 flex items-center gap-1"
+              >
+                {isDeleting && <Loader2 className="w-3 h-3 animate-spin" />}
+                Confirm Delete
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="px-3 py-1.5 text-muted-foreground hover:text-foreground text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="flex items-center gap-2 px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg text-sm transition-colors"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete
+            </button>
+          )}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="flex items-center gap-2 px-5 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
+            >
+              {isSaving && <Loader2 className="w-4 h-4 animate-spin" />}
+              Save Changes
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Goals Tab
 // ---------------------------------------------------------------------------
 
 type FilterTab = 'all' | 'my' | 'team' | 'company';
 
-function GoalsTab() {
-  const stats = defaultGoalStats;
-  const goals = defaultGoals;
+function GoalsTab({ tenantId }: { tenantId: string | null }) {
+  const { user } = useAuth();
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
+  const [editGoalId, setEditGoalId] = useState<string | null>(null);
+  const updateGoal = useUpdateGoal(tenantId);
+
+  const handleUpdateProgress = useCallback(
+    async (goalId: string, progress: number) => {
+      try {
+        await updateGoal.mutateAsync({ goalId, data: { progress } });
+      } catch {
+        // silently handle
+      }
+    },
+    [updateGoal]
+  );
+
+  const categoryForFilter: Record<FilterTab, GoalCategory | undefined> = {
+    all: undefined,
+    my: undefined,
+    team: 'leadership',
+    company: 'strategic',
+  };
+
+  const { data: goalsData, isLoading: goalsLoading } = useGoals(tenantId, {
+    userId: activeFilter === 'my' ? (user?.id ?? undefined) : undefined,
+    category: categoryForFilter[activeFilter],
+  });
+
+  const { data: summary } = usePlanningSummary(tenantId);
+
+  const apiGoals = goalsData?.data ?? [];
+  const summaryGoals = summary?.goals;
+
+  // Map API goals to display format
+  const displayGoals: Goal[] = apiGoals.map((g: PlanningGoal) => {
+    const statusMap: Record<string, ProgressStatus> = {
+      active: 'on-track',
+      on_hold: 'at-risk',
+      draft: 'needs-attention',
+      completed: 'on-track',
+      cancelled: 'needs-attention',
+    };
+    return {
+      id: g.id,
+      title: g.title,
+      type: 'personal' as GoalType,
+      category: g.category.charAt(0).toUpperCase() + g.category.slice(1),
+      owner: g.ownerName ?? 'Unknown',
+      ownerRole: '',
+      dueDate: g.targetDate
+        ? new Date(g.targetDate).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+          })
+        : 'No due date',
+      progress: g.progress,
+      currentValue: `${g.progress}%`,
+      targetValue: '100%',
+      status: statusMap[g.status] ?? 'needs-attention',
+    };
+  });
+
+  const totalGoals = goalsData?.meta.total ?? summaryGoals?.total ?? 0;
+  const activeGoals = summaryGoals?.active ?? 0;
+  const completedGoals = summaryGoals?.completed ?? 0;
+  const draftGoals = summaryGoals?.draft ?? 0;
 
   const filterTabs: { id: FilterTab; label: string; count: number }[] = [
-    { id: 'all', label: 'All Goals', count: stats.total },
-    { id: 'my', label: 'My Goals', count: 8 },
-    { id: 'team', label: 'Team Goals', count: 10 },
-    { id: 'company', label: 'Company Goals', count: 6 },
+    { id: 'all', label: 'All Goals', count: totalGoals },
+    { id: 'my', label: 'My Goals', count: totalGoals },
+    { id: 'team', label: 'Team Goals', count: totalGoals },
+    { id: 'company', label: 'Company Goals', count: totalGoals },
   ];
-
-  const filteredGoals = goals.filter((goal) => {
-    if (activeFilter === 'all') return true;
-    if (activeFilter === 'my') return goal.owner === 'You';
-    if (activeFilter === 'team') return goal.type === 'team';
-    if (activeFilter === 'company') return goal.type === 'company';
-    return true;
-  });
 
   return (
     <div>
       {/* Goals Summary Stats */}
-      <div className="mb-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" role="region" aria-label="Goals summary statistics">
+      <div
+        className="mb-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+        role="region"
+        aria-label="Goals summary statistics"
+      >
         <GoalStatCard
           label="Total Goals"
-          value={stats.total}
-          subText={`+${stats.newThisQuarter} this quarter`}
+          value={totalGoals}
+          subText={`${activeGoals} active`}
           subTextColor="text-green-600"
         />
         <GoalStatCard
-          label="On Track"
-          value={stats.onTrack}
-          subText={`${Math.round((stats.onTrack / stats.total) * 100)}% of total`}
+          label="Active"
+          value={activeGoals}
+          subText={
+            totalGoals > 0
+              ? `${Math.round((activeGoals / totalGoals) * 100)}% of total`
+              : '0% of total'
+          }
           borderColor="border-green-200"
           valueColor="text-green-600"
         />
         <GoalStatCard
-          label="At Risk"
-          value={stats.atRisk}
-          subText={`${Math.round((stats.atRisk / stats.total) * 100)}% of total`}
+          label="Completed"
+          value={completedGoals}
+          subText={
+            totalGoals > 0
+              ? `${Math.round((completedGoals / totalGoals) * 100)}% of total`
+              : '0% of total'
+          }
           borderColor="border-yellow-200"
           valueColor="text-yellow-600"
         />
         <GoalStatCard
-          label="Needs Attention"
-          value={stats.needsAttention}
-          subText={`${Math.round((stats.needsAttention / stats.total) * 100)}% of total`}
+          label="Draft / On Hold"
+          value={draftGoals + (summaryGoals?.onHold ?? 0)}
+          subText="needs attention"
           borderColor="border-red-600"
           valueColor="text-red-600"
         />
       </div>
 
       {/* Filter Tabs */}
-      <div className="mb-6 flex flex-wrap items-center gap-2" role="tablist" aria-label="Filter goals">
+      <div
+        className="mb-6 flex flex-wrap items-center gap-2"
+        role="tablist"
+        aria-label="Filter goals"
+      >
         {filterTabs.map((tab) => (
           <button
             key={tab.id}
@@ -1138,7 +1144,7 @@ function GoalsTab() {
             }`}
             onClick={() => setActiveFilter(tab.id)}
           >
-            {tab.label} ({tab.count})
+            {tab.label}
           </button>
         ))}
       </div>
@@ -1150,15 +1156,42 @@ function GoalsTab() {
         aria-label={filterTabs.find((t) => t.id === activeFilter)?.label}
         className="space-y-4"
       >
-        {filteredGoals.map((goal) => (
-          <GoalCard key={goal.id} goal={goal} />
-        ))}
-        {filteredGoals.length === 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 text-center">
-            <p className="text-gray-500">No goals found for this filter.</p>
+        {goalsLoading && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+            <p className="text-gray-500">Loading goals...</p>
+          </div>
+        )}
+        {!goalsLoading &&
+          displayGoals.map((goal) => (
+            <GoalCard
+              key={goal.id}
+              goal={goal}
+              onUpdateProgress={handleUpdateProgress}
+              onOpenDetail={(id) => setEditGoalId(id)}
+            />
+          ))}
+        {!goalsLoading && displayGoals.length === 0 && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+            <p className="text-gray-500 mb-2">No goals yet.</p>
+            <p className="text-sm text-gray-400">
+              Click &quot;New Goal&quot; to create your first goal.
+            </p>
           </div>
         )}
       </div>
+
+      {/* Goal Edit Modal */}
+      {editGoalId &&
+        (() => {
+          const planningGoal = apiGoals.find((g) => g.id === editGoalId);
+          return planningGoal ? (
+            <GoalEditModal
+              goal={planningGoal}
+              tenantId={tenantId}
+              onClose={() => setEditGoalId(null)}
+            />
+          ) : null;
+        })()}
     </div>
   );
 }
@@ -1166,8 +1199,6 @@ function GoalsTab() {
 // ---------------------------------------------------------------------------
 // Metrics Tab Sub-components
 // ---------------------------------------------------------------------------
-
-const PERIOD_OPTIONS = ['Q1 2026', 'Q4 2025', 'Q3 2025'] as const;
 
 const iconMap: Record<string, React.ReactNode> = {
   DollarSign: <DollarSign className="w-5 h-5 text-red-600" aria-hidden="true" />,
@@ -1181,11 +1212,15 @@ function MetricCard({ metric }: { metric: KPIMetric }) {
     metric.changeDirection === 'up'
       ? 'text-green-600'
       : metric.changeDirection === 'down'
-      ? 'text-red-600'
-      : 'text-gray-500';
+        ? 'text-red-600'
+        : 'text-gray-500';
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4" role="article" aria-label={`${metric.name} metric`}>
+    <div
+      className="bg-white rounded-xl shadow-sm border border-gray-200 p-4"
+      role="article"
+      aria-label={`${metric.name} metric`}
+    >
       <div className="text-xs text-gray-500 mb-2">{metric.name}</div>
       <div className="text-2xl text-gray-900 mb-2 tabular-nums">{metric.value}</div>
       <div className="flex items-center justify-between text-xs mb-3">
@@ -1224,9 +1259,83 @@ function CategorySection({ category }: { category: KPICategory }) {
 // Metrics Tab
 // ---------------------------------------------------------------------------
 
-function MetricsTab() {
-  const categories = defaultKPICategories;
-  const [selectedPeriod, setSelectedPeriod] = useState('Q1 2026');
+/** Map category name to icon key for CategorySection */
+function categoryToIcon(name: string): string {
+  const lc = name.toLowerCase();
+  if (
+    lc.includes('financial') ||
+    lc.includes('finance') ||
+    lc.includes('revenue') ||
+    lc.includes('profit')
+  )
+    return 'DollarSign';
+  if (
+    lc.includes('operational') ||
+    lc.includes('delivery') ||
+    lc.includes('engineering') ||
+    lc.includes('product')
+  )
+    return 'Factory';
+  if (
+    lc.includes('people') ||
+    lc.includes('culture') ||
+    lc.includes('team') ||
+    lc.includes('talent')
+  )
+    return 'Users';
+  return 'Award';
+}
+
+/** Map a MetricCategory from the scorecard API to the KPICategory shape used by CategorySection */
+function mapMetricCategory(cat: MetricCategory, idx: number): KPICategory {
+  return {
+    id: `cat-${idx}`,
+    name: cat.category,
+    icon: categoryToIcon(cat.category),
+    columns: cat.metrics.length >= 4 ? 4 : 3,
+    metrics: cat.metrics.map((m: ScorecardMetric) => {
+      // invertTrend=1 means "down is good" — flip the colour direction for the UI
+      const raw: 'up' | 'down' | 'neutral' = m.trend;
+      const changeDirection: 'up' | 'down' | 'neutral' = m.invertTrend
+        ? raw === 'up'
+          ? 'down'
+          : raw === 'down'
+            ? 'up'
+            : 'neutral'
+        : raw;
+      return {
+        id: m.id,
+        name: m.name,
+        value: m.actualValue || '—',
+        target: m.targetValue || '—',
+        change: m.changeLabel ?? '',
+        changeDirection,
+        unit: m.period || undefined,
+      };
+    }),
+  };
+}
+
+function MetricsTab({ tenantId }: { tenantId: string | null }) {
+  // Load available periods; fall back to static list while loading
+  const { data: periodsData } = useScorecardPeriods(tenantId);
+  const availablePeriods =
+    periodsData && periodsData.length > 0 ? periodsData : ['Q1-2026', 'Q4-2025', 'Q3-2025'];
+
+  const [selectedPeriod, setSelectedPeriod] = useState<string>('');
+  // Once periods load, select the first (most recent) if none selected
+  const activePeriod = selectedPeriod || availablePeriods[0];
+
+  const { data: scorecard, isLoading } = useScorecard(tenantId, activePeriod);
+
+  const categories: KPICategory[] = scorecard?.metricCategories
+    ? scorecard.metricCategories
+        .filter((cat) => cat.metrics.length > 0)
+        .map((cat, idx) => mapMetricCategory(cat, idx))
+    : [];
+
+  // Human-readable: "Q1-2026" → "Q1 2026"
+  const displayPeriod = (p: string) => p.replace('-', ' ');
 
   return (
     <div>
@@ -1235,25 +1344,47 @@ function MetricsTab() {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-4">
           <h3 className="text-gray-900 font-semibold">KPI Performance Dashboard</h3>
           <div className="flex items-center gap-3">
-            <label htmlFor="kpi-period-select" className="sr-only">Select period</label>
+            <label htmlFor="kpi-period-select" className="sr-only">
+              Select period
+            </label>
             <select
               id="kpi-period-select"
-              value={selectedPeriod}
+              value={activePeriod}
               onChange={(e) => setSelectedPeriod(e.target.value)}
               className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent"
             >
-              {PERIOD_OPTIONS.map((period) => (
-                <option key={period} value={period}>{period}</option>
+              {availablePeriods.map((period) => (
+                <option key={period} value={period}>
+                  {displayPeriod(period)}
+                </option>
               ))}
             </select>
           </div>
         </div>
       </div>
 
+      {/* Loading */}
+      {isLoading && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+          <p className="text-gray-500">Loading metrics…</p>
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!isLoading && categories.length === 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-10 text-center">
+          <TrendingUp className="w-10 h-10 text-gray-300 mx-auto mb-3" aria-hidden="true" />
+          <h3 className="text-gray-900 font-medium mb-2">No KPI data for this period</h3>
+          <p className="text-sm text-gray-500">
+            Metrics will appear here once scorecard items are set up for{' '}
+            {displayPeriod(activePeriod)}.
+          </p>
+        </div>
+      )}
+
       {/* KPI Categories */}
-      {categories.map((category) => (
-        <CategorySection key={category.id} category={category} />
-      ))}
+      {!isLoading &&
+        categories.map((category) => <CategorySection key={category.id} category={category} />)}
     </div>
   );
 }
@@ -1388,7 +1519,9 @@ function ModalStep1({
           >
             <option value="">Select type...</option>
             {goalTypeOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
             ))}
           </select>
         </div>
@@ -1404,7 +1537,9 @@ function ModalStep1({
           >
             <option value="">Select category...</option>
             {goalCategoryOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
             ))}
           </select>
         </div>
@@ -1422,7 +1557,9 @@ function ModalStep1({
           onChange={(e) => onChange('owner', e.target.value)}
         >
           {goalOwnerOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
           ))}
         </select>
       </div>
@@ -1504,9 +1641,7 @@ function ModalStep2({
   const progressPercent =
     formData.currentValue && formData.targetValue
       ? Math.round(
-          ((parseFloat(formData.currentValue) || 0) /
-            (parseFloat(formData.targetValue) || 1)) *
-            100
+          ((parseFloat(formData.currentValue) || 0) / (parseFloat(formData.targetValue) || 1)) * 100
         )
       : 0;
 
@@ -1587,7 +1722,10 @@ function ModalStep2({
       {formData.currentValue && formData.targetValue && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <TrendingUp className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" aria-hidden="true" />
+            <TrendingUp
+              className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5"
+              aria-hidden="true"
+            />
             <div className="flex-1">
               <h4 className="text-sm text-gray-900 mb-1">Progress Preview</h4>
               <p className="text-xs text-gray-500 mb-3">
@@ -1598,7 +1736,9 @@ function ModalStep2({
                 <div className="flex items-center gap-3 mb-2">
                   <div className="text-2xl text-gray-900 tabular-nums">{progressPercent}%</div>
                   <div className="text-xs text-gray-500">
-                    {formData.currentValue}{formData.currentUnit} &rarr; {formData.targetValue}{formData.targetUnit}
+                    {formData.currentValue}
+                    {formData.currentUnit} &rarr; {formData.targetValue}
+                    {formData.targetUnit}
                   </div>
                 </div>
                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -1620,7 +1760,10 @@ function ModalStep2({
 
       {/* Measurement Frequency */}
       <div>
-        <label htmlFor="measurement-frequency" className="block text-xs text-gray-500 mb-2 uppercase">
+        <label
+          htmlFor="measurement-frequency"
+          className="block text-xs text-gray-500 mb-2 uppercase"
+        >
           Measurement Frequency <span className="text-red-600">*</span>
         </label>
         <select
@@ -1630,7 +1773,9 @@ function ModalStep2({
           onChange={(e) => onChange('measurementFrequency', e.target.value)}
         >
           {measurementFrequencyOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
           ))}
         </select>
         <div className="text-xs text-gray-500 mt-2">
@@ -1686,10 +1831,12 @@ function ModalStep3({
   formData,
   onChange,
   scorecardOptions,
+  annualPlanOptions,
 }: {
   formData: GoalFormData;
   onChange: (field: keyof GoalFormData, value: unknown) => void;
   scorecardOptions: ScorecardOption[];
+  annualPlanOptions: { value: string; label: string }[];
 }) {
   return (
     <div className="space-y-6">
@@ -1758,8 +1905,10 @@ function ModalStep3({
           value={formData.annualPlanLink}
           onChange={(e) => onChange('annualPlanLink', e.target.value)}
         >
-          {annualPlanLinkOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          {annualPlanOptions.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
           ))}
         </select>
       </div>
@@ -1776,7 +1925,9 @@ function ModalStep3({
           onChange={(e) => onChange('programLink', e.target.value)}
         >
           {programLinkOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
           ))}
         </select>
       </div>
@@ -1836,7 +1987,10 @@ function ModalStep3({
 
       {/* Accountability Partner */}
       <div>
-        <label htmlFor="accountability-partner" className="block text-xs text-gray-500 mb-3 uppercase">
+        <label
+          htmlFor="accountability-partner"
+          className="block text-xs text-gray-500 mb-3 uppercase"
+        >
           Accountability Partner (Optional)
         </label>
         <select
@@ -1846,7 +2000,9 @@ function ModalStep3({
           onChange={(e) => onChange('accountabilityPartner', e.target.value)}
         >
           {accountabilityPartnerOptions.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
           ))}
         </select>
         <div className="text-xs text-gray-500 mt-2">
@@ -1890,7 +2046,7 @@ function ModalStep3({
             <span className="text-gray-500">Linked to:</span>
             <span className="text-gray-900">
               {formData.scorecardLink
-                ? `Scorecard: ${defaultScorecardOptions.find((o) => o.id === formData.scorecardLink)?.name}`
+                ? `Scorecard: ${scorecardOptions.find((o) => o.id === formData.scorecardLink)?.name ?? formData.scorecardLink}`
                 : 'None'}
             </span>
           </div>
@@ -1907,12 +2063,38 @@ function ModalStep3({
 function NewGoalModal({
   isOpen,
   onClose,
+  tenantId,
 }: {
   isOpen: boolean;
   onClose: () => void;
+  tenantId: string | null;
 }) {
   const suggestions = defaultGoalSuggestions;
-  const scorecardOptions = defaultScorecardOptions;
+  const createGoal = useCreateGoal(tenantId);
+  const { data: scorecardData } = useScorecard(tenantId);
+  const { data: annualPlansData } = useStrategicPlans(tenantId);
+
+  const scorecardOptions: ScorecardOption[] = (scorecardData?.items ?? []).map((item) => {
+    const statusMap: Record<string, ProgressStatus> = {
+      on_track: 'on-track',
+      at_risk: 'at-risk',
+      needs_attention: 'needs-attention',
+    };
+    return {
+      id: item.id,
+      name: item.title,
+      description: item.description ?? '',
+      score: item.score,
+      status: (statusMap[item.status] ?? 'on-track') as ProgressStatus,
+    };
+  });
+
+  const annualPlanOptions: { value: string; label: string }[] = [
+    { value: 'none', label: 'No link' },
+    ...(annualPlansData?.data ?? [])
+      .filter((p) => p.planType === 'annual' || p.planType === 'bhag' || p.planType === '3hag')
+      .map((p) => ({ value: p.id, label: p.name })),
+  ];
 
   const [currentStep, setCurrentStep] = useState(1);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -1972,18 +2154,75 @@ function NewGoalModal({
     if (currentStep > 1) setCurrentStep(currentStep - 1);
   }, [currentStep]);
 
-  const handleContinue = useCallback(() => {
+  const handleContinue = useCallback(async () => {
     if (currentStep < 3) {
       setCurrentStep(currentStep + 1);
     } else {
-      // Create goal action
-      onClose();
+      // Create goal via API
+      if (!formData.statement.trim()) return;
+      const validCategories = [
+        'professional',
+        'personal',
+        'leadership',
+        'strategic',
+        'performance',
+        'development',
+      ];
+      const category = validCategories.includes(formData.category)
+        ? (formData.category as GoalCategory)
+        : 'professional';
+      const priorityMap: Record<string, 'low' | 'medium' | 'high'> = {
+        company: 'high',
+        team: 'medium',
+        personal: 'low',
+      };
+      try {
+        await createGoal.mutateAsync({
+          title: formData.statement,
+          description: formData.statement,
+          category,
+          priority: priorityMap[formData.type] ?? 'medium',
+          targetDate: formData.targetDate || undefined,
+          startDate: formData.startDate || undefined,
+          reviewFrequency: formData.measurementFrequency || 'monthly',
+          successMetrics: formData.targetValue
+            ? `${formData.currentValue}${formData.currentUnit} → ${formData.targetValue}${formData.targetUnit}`
+            : undefined,
+          strategicPlanId:
+            formData.annualPlanLink && formData.annualPlanLink !== 'none'
+              ? formData.annualPlanLink
+              : undefined,
+        });
+        onClose();
+        setCurrentStep(1);
+        setFormData((prev) => ({ ...prev, statement: '', category: '', targetDate: '' }));
+      } catch {
+        // error handled by mutation
+      }
     }
-  }, [currentStep, onClose]);
+  }, [currentStep, formData, createGoal, onClose]);
 
-  const handleSaveDraft = useCallback(() => {
+  const handleSaveDraft = useCallback(async () => {
+    if (formData.statement.trim()) {
+      const validCategories = [
+        'professional',
+        'personal',
+        'leadership',
+        'strategic',
+        'performance',
+        'development',
+      ];
+      const category = validCategories.includes(formData.category)
+        ? (formData.category as GoalCategory)
+        : 'professional';
+      try {
+        await createGoal.mutateAsync({ title: formData.statement, category });
+      } catch {
+        // error handled silently for draft save
+      }
+    }
     onClose();
-  }, [onClose]);
+  }, [formData, createGoal, onClose]);
 
   if (!isOpen) return null;
 
@@ -2051,6 +2290,7 @@ function NewGoalModal({
               formData={formData}
               onChange={handleChange}
               scorecardOptions={scorecardOptions}
+              annualPlanOptions={annualPlanOptions}
             />
           )}
         </div>
@@ -2086,6 +2326,185 @@ function NewGoalModal({
 }
 
 // ---------------------------------------------------------------------------
+// New Strategic Plan Modal
+// ---------------------------------------------------------------------------
+
+function NewStrategicPlanModal({
+  tenantId,
+  defaultPlanType,
+  onClose,
+}: {
+  tenantId: string | null;
+  defaultPlanType: PlanType;
+  onClose: () => void;
+}) {
+  const createPlan = useCreateStrategicPlan(tenantId);
+  const [formData, setFormData] = useState({
+    name: '',
+    planType: defaultPlanType,
+    description: '',
+    startDate: '',
+    targetDate: '',
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async () => {
+    if (!formData.name.trim()) {
+      setError('Name is required');
+      return;
+    }
+    try {
+      await createPlan.mutateAsync({
+        name: formData.name.trim(),
+        planType: formData.planType as PlanType,
+        description: formData.description || undefined,
+        startDate: formData.startDate || undefined,
+        targetDate: formData.targetDate || undefined,
+      });
+      onClose();
+    } catch {
+      setError('Failed to create plan. Please try again.');
+    }
+  };
+
+  const PLAN_TYPE_OPTIONS: { value: PlanType; label: string }[] = [
+    { value: 'annual', label: 'Annual Plan' },
+    { value: 'quarterly', label: 'Quarterly Plan' },
+    { value: '3hag', label: '3HAG (3-Year Highly Achievable Goal)' },
+    { value: 'bhag', label: 'BHAG (Big Hairy Audacious Goal)' },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <div
+        className="relative bg-white border border-gray-200 rounded-lg shadow-2xl w-full max-w-lg mx-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="plan-modal-title"
+      >
+        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200">
+          <h2 id="plan-modal-title" className="text-gray-900 font-semibold">
+            Create Strategic Plan
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          {error && (
+            <div className="px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <div>
+            <label htmlFor="plan-name" className="block text-xs text-gray-500 mb-2 uppercase">
+              Plan Name <span className="text-red-600">*</span>
+            </label>
+            <input
+              id="plan-name"
+              type="text"
+              className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-600/50"
+              placeholder="e.g., 2026 Annual Operating Plan"
+              value={formData.name}
+              onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="plan-type" className="block text-xs text-gray-500 mb-2 uppercase">
+              Plan Type <span className="text-red-600">*</span>
+            </label>
+            <select
+              id="plan-type"
+              className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-600/50"
+              value={formData.planType}
+              onChange={(e) => setFormData((p) => ({ ...p, planType: e.target.value as PlanType }))}
+            >
+              {PLAN_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label
+              htmlFor="plan-description"
+              className="block text-xs text-gray-500 mb-2 uppercase"
+            >
+              Description (Optional)
+            </label>
+            <textarea
+              id="plan-description"
+              className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 resize-none focus:outline-none focus:ring-2 focus:ring-red-600/50"
+              rows={2}
+              placeholder="Brief description of this plan's objectives…"
+              value={formData.description}
+              onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="plan-start" className="block text-xs text-gray-500 mb-2 uppercase">
+                Start Date
+              </label>
+              <input
+                id="plan-start"
+                type="date"
+                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-600/50"
+                value={formData.startDate}
+                onChange={(e) => setFormData((p) => ({ ...p, startDate: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label htmlFor="plan-target" className="block text-xs text-gray-500 mb-2 uppercase">
+                Target Date
+              </label>
+              <input
+                id="plan-target"
+                type="date"
+                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-600/50"
+                value={formData.targetDate}
+                onChange={(e) => setFormData((p) => ({ ...p, targetDate: e.target.value }))}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-lg">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-gray-500 hover:text-gray-900 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={createPlan.isPending}
+            className="px-6 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2"
+          >
+            {createPlan.isPending ? 'Creating…' : 'Create Plan'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Tab configuration
 // ---------------------------------------------------------------------------
 
@@ -2098,10 +2517,22 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
-  { id: 'annual', label: 'Annual Planning', icon: <Calendar className="w-4 h-4" aria-hidden="true" /> },
-  { id: 'quarterly', label: 'Quarterly Planning', icon: <Target className="w-4 h-4" aria-hidden="true" /> },
+  {
+    id: 'annual',
+    label: 'Annual Planning',
+    icon: <Calendar className="w-4 h-4" aria-hidden="true" />,
+  },
+  {
+    id: 'quarterly',
+    label: 'Quarterly Planning',
+    icon: <Target className="w-4 h-4" aria-hidden="true" />,
+  },
   { id: 'goals', label: 'Goals', icon: <CheckCircle2 className="w-4 h-4" aria-hidden="true" /> },
-  { id: 'metrics', label: 'Metrics & KPIs', icon: <TrendingUp className="w-4 h-4" aria-hidden="true" /> },
+  {
+    id: 'metrics',
+    label: 'Metrics & KPIs',
+    icon: <TrendingUp className="w-4 h-4" aria-hidden="true" />,
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -2109,19 +2540,31 @@ const TABS: Tab[] = [
 // ---------------------------------------------------------------------------
 
 export default function PlanningGoalsPage() {
+  const { user } = useAuth();
+  const isAgencyUser = !!(user?.agencyId && !user?.tenantId);
+  const { data: tenants } = useTenants();
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isAgencyUser && tenants?.length && !selectedTenantId) {
+      setSelectedTenantId(tenants[0].id);
+    }
+  }, [isAgencyUser, tenants, selectedTenantId]);
+
+  const tenantId = isAgencyUser ? selectedTenantId : (user?.tenantId ?? null);
   const [activeTab, setActiveTab] = useState<TabId>('annual');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const renderTabContent = () => {
     switch (activeTab) {
       case 'annual':
-        return <AnnualPlanningTab />;
+        return <AnnualPlanningTab tenantId={tenantId} />;
       case 'quarterly':
-        return <QuarterlyPlanningTab />;
+        return <QuarterlyPlanningTab tenantId={tenantId} />;
       case 'goals':
-        return <GoalsTab />;
+        return <GoalsTab tenantId={tenantId} />;
       case 'metrics':
-        return <MetricsTab />;
+        return <MetricsTab tenantId={tenantId} />;
       default:
         return null;
     }
@@ -2141,6 +2584,20 @@ export default function PlanningGoalsPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {isAgencyUser && tenants && tenants.length > 0 && (
+              <select
+                value={selectedTenantId ?? ''}
+                onChange={(e) => setSelectedTenantId(e.target.value)}
+                className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-transparent"
+                aria-label="Select client"
+              >
+                {tenants.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            )}
             <button className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-900 hover:bg-gray-50 transition-colors focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2">
               <Filter className="w-4 h-4 inline mr-2" aria-hidden="true" />
               Filter
@@ -2181,11 +2638,7 @@ export default function PlanningGoalsPage() {
       </nav>
 
       {/* Tab Content */}
-      <div
-        id={`tabpanel-${activeTab}`}
-        role="tabpanel"
-        aria-labelledby={`tab-${activeTab}`}
-      >
+      <div id={`tabpanel-${activeTab}`} role="tabpanel" aria-labelledby={`tab-${activeTab}`}>
         {renderTabContent()}
       </div>
 
@@ -2193,6 +2646,7 @@ export default function PlanningGoalsPage() {
       <NewGoalModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+        tenantId={tenantId}
       />
     </div>
   );

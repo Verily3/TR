@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { eq, and, isNull, gt } from 'drizzle-orm';
+import { eq, and, isNull, gt, desc } from 'drizzle-orm';
 import { verify, hash } from 'argon2';
 import crypto from 'node:crypto';
 import { db, schema } from '@tr/db';
@@ -12,13 +12,16 @@ import type { LoginResponse, RefreshResponse } from '@tr/shared';
 import { sendPasswordReset } from '../lib/email.js';
 import { env } from '../lib/env.js';
 
-const { users, impersonationSessions } = schema;
+const { users, impersonationSessions, sessions } = schema;
 
 export const authRoutes = new Hono();
 
 // Login schema
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z
+    .string()
+    .email()
+    .transform((v) => v.toLowerCase().trim()),
   password: z.string().min(1),
 });
 
@@ -56,21 +59,22 @@ authRoutes.post('/login', zValidator('json', loginSchema), async (c) => {
   // Verify password
   const validPassword = await verify(user.passwordHash, password);
   if (!validPassword) {
+    console.warn(`[AUTH] Failed login attempt for: ${email}`);
     throw new UnauthorizedError('Invalid email or password');
   }
 
   // Get user permissions
-  const userWithPermissions = await sessionManager.getUserWithPermissions(
-    user.id
-  );
+  const userWithPermissions = await sessionManager.getUserWithPermissions(user.id);
   if (!userWithPermissions) {
     throw new NotFoundError('User permissions');
   }
 
   // Create session
+  // Note: X-Forwarded-For may be spoofed unless running behind a trusted reverse proxy.
+  // We take only the first (leftmost) IP from the header.
   const session = await sessionManager.createSession(user.id, {
     userAgent: c.req.header('User-Agent'),
-    ipAddress: c.req.header('X-Forwarded-For') || c.req.header('X-Real-IP'),
+    ipAddress: c.req.header('X-Forwarded-For')?.split(',')[0].trim() ?? c.req.header('X-Real-IP'),
   });
 
   // Generate tokens
@@ -86,10 +90,7 @@ authRoutes.post('/login', zValidator('json', loginSchema), async (c) => {
   });
 
   // Update last login
-  await db
-    .update(users)
-    .set({ lastLoginAt: new Date() })
-    .where(eq(users.id, user.id));
+  await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
 
   const response: LoginResponse = {
     accessToken,
@@ -124,9 +125,7 @@ authRoutes.post('/refresh', zValidator('json', refreshSchema), async (c) => {
   }
 
   // Get user with permissions
-  const userWithPermissions = await sessionManager.getUserWithPermissions(
-    session.userId
-  );
+  const userWithPermissions = await sessionManager.getUserWithPermissions(session.userId);
   if (!userWithPermissions) {
     throw new NotFoundError('User');
   }
@@ -143,8 +142,12 @@ authRoutes.post('/refresh', zValidator('json', refreshSchema), async (c) => {
     permissions: userWithPermissions.permissions,
   });
 
+  // Rotate the refresh token — old token is now invalid
+  const newRefreshToken = await sessionManager.rotateSession(session.sessionId);
+
   const response: RefreshResponse = {
     accessToken,
+    refreshToken: newRefreshToken,
     expiresIn: 15 * 60,
   };
 
@@ -194,10 +197,7 @@ authRoutes.get('/me', async (c) => {
   let targetUserId: string | null = null;
 
   if (impersonationToken) {
-    const tokenHash = crypto
-      .createHash('sha256')
-      .update(impersonationToken)
-      .digest('hex');
+    const tokenHash = crypto.createHash('sha256').update(impersonationToken).digest('hex');
 
     const [session] = await db
       .select({ targetUserId: impersonationSessions.targetUserId })
@@ -221,19 +221,13 @@ authRoutes.get('/me', async (c) => {
   // Get user data - target user if impersonating, admin otherwise
   const userId = targetUserId ?? payload.sub;
 
-  const [user] = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
 
   if (!user) {
     throw new NotFoundError('User');
   }
 
-  const userWithPermissions = await sessionManager.getUserWithPermissions(
-    user.id
-  );
+  const userWithPermissions = await sessionManager.getUserWithPermissions(user.id);
 
   return c.json({
     data: {
@@ -258,7 +252,10 @@ authRoutes.get('/me', async (c) => {
 // ─── Password Reset ───────────────────────────────────────────────────────────
 
 const forgotPasswordSchema = z.object({
-  email: z.string().email(),
+  email: z
+    .string()
+    .email()
+    .transform((v) => v.toLowerCase().trim()),
 });
 
 /**
@@ -275,7 +272,7 @@ authRoutes.post('/forgot-password', zValidator('json', forgotPasswordSchema), as
     .limit(1);
 
   if (user && user.status === 'active') {
-    const token = crypto.randomUUID();
+    const token = crypto.randomBytes(32).toString('hex'); // 256-bit token
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
     await db
@@ -295,9 +292,138 @@ authRoutes.post('/forgot-password', zValidator('json', forgotPasswordSchema), as
   return c.json({ data: { success: true } });
 });
 
+// ─── Active Sessions ──────────────────────────────────────────────────────────
+
+/**
+ * GET /api/auth/sessions
+ * List active sessions for the authenticated user.
+ * JWT verified manually (auth routes mount before global authMiddleware).
+ */
+authRoutes.get('/sessions', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader?.startsWith('Bearer '))
+    throw new UnauthorizedError('Missing authorization header');
+
+  const payload = await jwtService.verifyAccessToken(authHeader.slice(7));
+  if (!payload) throw new UnauthorizedError('Invalid or expired token');
+
+  const currentSessionId = payload.sid;
+
+  const activeSessions = await db
+    .select({
+      id: sessions.id,
+      userAgent: sessions.userAgent,
+      ipAddress: sessions.ipAddress,
+      createdAt: sessions.createdAt,
+      lastActiveAt: sessions.lastActiveAt,
+      expiresAt: sessions.expiresAt,
+    })
+    .from(sessions)
+    .where(
+      and(
+        eq(sessions.userId, payload.sub),
+        isNull(sessions.revokedAt),
+        gt(sessions.expiresAt, new Date())
+      )
+    )
+    .orderBy(desc(sessions.lastActiveAt));
+
+  return c.json({
+    data: activeSessions.map((s) => ({
+      ...s,
+      isCurrent: s.id === currentSessionId,
+    })),
+  });
+});
+
+/**
+ * DELETE /api/auth/sessions/:sessionId
+ * Revoke a specific session owned by the authenticated user.
+ */
+authRoutes.delete('/sessions/:sessionId', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader?.startsWith('Bearer '))
+    throw new UnauthorizedError('Missing authorization header');
+
+  const payload = await jwtService.verifyAccessToken(authHeader.slice(7));
+  if (!payload) throw new UnauthorizedError('Invalid or expired token');
+
+  const { sessionId } = c.req.param();
+
+  if (sessionId === payload.sid) {
+    throw new BadRequestError('Cannot revoke current session. Use /logout instead.');
+  }
+
+  const [session] = await db
+    .select({ userId: sessions.userId, revokedAt: sessions.revokedAt })
+    .from(sessions)
+    .where(eq(sessions.id, sessionId))
+    .limit(1);
+
+  if (!session || session.userId !== payload.sub) {
+    throw new NotFoundError('Session');
+  }
+
+  if (session.revokedAt) {
+    throw new BadRequestError('Session is already revoked');
+  }
+
+  await sessionManager.revokeSession(sessionId, 'user_revoked');
+
+  return c.json({ data: { success: true } });
+});
+
+// ─── Change Password ───────────────────────────────────────────────────────────
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(12, 'Password must be at least 12 characters'),
+});
+
+/**
+ * POST /api/auth/change-password
+ * Verify current password and set a new one.
+ * Revokes all other sessions on success.
+ */
+authRoutes.post('/change-password', zValidator('json', changePasswordSchema), async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader?.startsWith('Bearer '))
+    throw new UnauthorizedError('Missing authorization header');
+
+  const payload = await jwtService.verifyAccessToken(authHeader.slice(7));
+  if (!payload) throw new UnauthorizedError('Invalid or expired token');
+
+  const { currentPassword, newPassword } = c.req.valid('json');
+
+  const [user] = await db
+    .select()
+    .from(users)
+    .where(and(eq(users.id, payload.sub), isNull(users.deletedAt)))
+    .limit(1);
+
+  if (!user) throw new NotFoundError('User');
+  if (!user.passwordHash)
+    throw new BadRequestError('Password login not available for this account');
+
+  const valid = await verify(user.passwordHash, currentPassword);
+  if (!valid) throw new UnauthorizedError('Current password is incorrect');
+
+  const newPasswordHash = await hash(newPassword);
+
+  await db
+    .update(users)
+    .set({ passwordHash: newPasswordHash, updatedAt: new Date() })
+    .where(eq(users.id, user.id));
+
+  // Revoke all OTHER sessions (keep current one active)
+  await sessionManager.revokeAllUserSessions(user.id, payload.sid);
+
+  return c.json({ data: { success: true } });
+});
+
 const resetPasswordSchema = z.object({
   token: z.string().min(1),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  password: z.string().min(12, 'Password must be at least 12 characters'),
 });
 
 /**

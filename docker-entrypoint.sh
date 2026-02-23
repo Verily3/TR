@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-echo "=== Transformation OS Starting ==="
+echo "=== Results Tracking System Starting ==="
 
 # Optional: Run database migrations before startup
 if [ "$RUN_MIGRATIONS" = "true" ]; then

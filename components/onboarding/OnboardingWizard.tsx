@@ -112,7 +112,7 @@ export function OnboardingWizard({
               <Sparkles className="w-10 h-10 text-accent" />
             </div>
             <h2 className="text-2xl font-bold text-sidebar-foreground mb-3">
-              Welcome to Transformation OS
+              Welcome to Results Tracking System
             </h2>
             <p className="text-muted-foreground max-w-md mx-auto mb-8">
               We're thrilled to have you! In the next few minutes, we'll help you set up your account and discover what's possible.

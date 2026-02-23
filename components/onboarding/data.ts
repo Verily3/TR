@@ -9,7 +9,7 @@ export const defaultOnboardingSteps: OnboardingStep[] = [
   {
     id: "welcome",
     type: "welcome",
-    title: "Welcome to Transformation OS",
+    title: "Welcome to Results Tracking System",
     description: "Let's get you started with a quick overview of what you can accomplish",
     icon: "Sparkles",
     status: "pending",

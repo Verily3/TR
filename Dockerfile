@@ -1,5 +1,5 @@
 # ==============================================================================
-# Transformation OS — Multi-stage Docker Build
+# Results Tracking System — Multi-stage Docker Build
 # Produces a single container running both Hono API and Next.js Web for Cloud Run
 # ==============================================================================
 
@@ -91,6 +91,10 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends dumb-init curl && \
     rm -rf /var/lib/apt/lists/*
 
+# Create non-root user for security
+RUN groupadd --system --gid 1001 nodejs \
+    && useradd --system --uid 1001 --gid nodejs nodejs
+
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -123,12 +127,22 @@ RUN rm -rf node_modules/@tr && \
     ln -s ../../packages/shared node_modules/@tr/shared && \
     ln -s ../../packages/db node_modules/@tr/db
 
-# 5) Copy entrypoint script
+# 5) Create uploads directory for file storage
+RUN mkdir -p /app/uploads
+
+# 6) Copy entrypoint script
 COPY docker-entrypoint.sh ./
-RUN chmod +x docker-entrypoint.sh
+RUN chmod +x docker-entrypoint.sh && chown -R nodejs:nodejs /app
+
+# Switch to non-root user
+USER nodejs
 
 # Cloud Run sets PORT env var (default 8080)
 EXPOSE 8080
+
+# Health check — verifies the app is accepting requests
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
 
 # Use dumb-init for proper signal handling (SIGTERM from Cloud Run)
 ENTRYPOINT ["dumb-init", "--"]

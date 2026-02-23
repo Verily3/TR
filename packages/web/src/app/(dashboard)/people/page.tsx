@@ -17,7 +17,13 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
-import { useUsers, type TenantUser } from '@/hooks/api/useUsers';
+import {
+  useUsers,
+  useDepartments,
+  useCreateUser,
+  type TenantUser,
+  type CreateUserInput,
+} from '@/hooks/api/useUsers';
 
 // ============================================================================
 // Types
@@ -73,10 +79,7 @@ interface PeopleStats {
 // Status & Role Configuration
 // ============================================================================
 
-const employmentStatusConfig: Record<
-  string,
-  { label: string; bg: string; text: string }
-> = {
+const employmentStatusConfig: Record<string, { label: string; bg: string; text: string }> = {
   active: { label: 'Active', bg: 'bg-green-100', text: 'text-green-700' },
   on_leave: { label: 'On Leave', bg: 'bg-yellow-100', text: 'text-yellow-700' },
   terminated: { label: 'Terminated', bg: 'bg-red-100', text: 'text-red-700' },
@@ -89,393 +92,6 @@ const filterOptions: { id: FilterStatus; label: string }[] = [
   { id: 'on_leave', label: 'On Leave' },
   { id: 'contractor', label: 'Contractors' },
 ];
-
-// ============================================================================
-// Mock Data
-// ============================================================================
-
-const mockDepartments: Department[] = [
-  { id: 'dept1', name: 'Executive', description: 'Executive leadership team', memberCount: 3 },
-  { id: 'dept2', name: 'Engineering', description: 'Product development and engineering', headId: 'p3', memberCount: 12 },
-  { id: 'dept3', name: 'Sales', description: 'Sales and business development', headId: 'p4', memberCount: 8 },
-  { id: 'dept4', name: 'Marketing', description: 'Marketing and communications', headId: 'p5', memberCount: 6 },
-  { id: 'dept5', name: 'Human Resources', description: 'People operations and HR', headId: 'p6', memberCount: 4 },
-  { id: 'dept6', name: 'Finance', description: 'Finance and accounting', headId: 'p7', memberCount: 5 },
-];
-
-const mockPeople: Person[] = [
-  {
-    id: 'p1',
-    name: 'James Wilson',
-    email: 'james.wilson@company.com',
-    role: 'CEO',
-    title: 'Chief Executive Officer',
-    department: 'Executive',
-    departmentId: 'dept1',
-    employmentStatus: 'active',
-    userRole: 'admin',
-    startDate: '2018-03-15',
-    location: 'San Francisco, CA',
-    phone: '+1 (555) 100-0001',
-    directReports: 5,
-    skills: ['Leadership', 'Strategy', 'Business Development'],
-    bio: 'Visionary leader with 20+ years of experience in technology and business transformation.',
-  },
-  {
-    id: 'p2',
-    name: 'Sarah Chen',
-    email: 'sarah.chen@company.com',
-    role: 'COO',
-    title: 'Chief Operating Officer',
-    department: 'Executive',
-    departmentId: 'dept1',
-    managerId: 'p1',
-    managerName: 'James Wilson',
-    employmentStatus: 'active',
-    userRole: 'admin',
-    startDate: '2019-06-01',
-    location: 'San Francisco, CA',
-    phone: '+1 (555) 100-0002',
-    directReports: 4,
-    skills: ['Operations', 'Process Optimization', 'Team Building'],
-  },
-  {
-    id: 'p3',
-    name: 'Michael Rodriguez',
-    email: 'michael.rodriguez@company.com',
-    role: 'VP Engineering',
-    title: 'Vice President of Engineering',
-    department: 'Engineering',
-    departmentId: 'dept2',
-    managerId: 'p1',
-    managerName: 'James Wilson',
-    employmentStatus: 'active',
-    userRole: 'admin',
-    startDate: '2019-01-15',
-    location: 'San Francisco, CA',
-    phone: '+1 (555) 100-0003',
-    directReports: 4,
-    skills: ['Software Architecture', 'Team Leadership', 'Agile'],
-  },
-  {
-    id: 'p4',
-    name: 'Emily Thompson',
-    email: 'emily.thompson@company.com',
-    role: 'VP Sales',
-    title: 'Vice President of Sales',
-    department: 'Sales',
-    departmentId: 'dept3',
-    managerId: 'p2',
-    managerName: 'Sarah Chen',
-    employmentStatus: 'active',
-    userRole: 'manager',
-    startDate: '2020-02-01',
-    location: 'New York, NY',
-    phone: '+1 (555) 100-0004',
-    directReports: 3,
-    skills: ['Sales Strategy', 'Enterprise Sales', 'Negotiation'],
-  },
-  {
-    id: 'p5',
-    name: 'David Kim',
-    email: 'david.kim@company.com',
-    role: 'VP Marketing',
-    title: 'Vice President of Marketing',
-    department: 'Marketing',
-    departmentId: 'dept4',
-    managerId: 'p2',
-    managerName: 'Sarah Chen',
-    employmentStatus: 'active',
-    userRole: 'manager',
-    startDate: '2020-05-15',
-    location: 'San Francisco, CA',
-    phone: '+1 (555) 100-0005',
-    directReports: 2,
-    skills: ['Brand Strategy', 'Digital Marketing', 'Content'],
-  },
-  {
-    id: 'p6',
-    name: 'Amanda Foster',
-    email: 'amanda.foster@company.com',
-    role: 'HR Director',
-    title: 'Director of Human Resources',
-    department: 'Human Resources',
-    departmentId: 'dept5',
-    managerId: 'p2',
-    managerName: 'Sarah Chen',
-    employmentStatus: 'active',
-    userRole: 'manager',
-    startDate: '2019-09-01',
-    location: 'San Francisco, CA',
-    phone: '+1 (555) 100-0006',
-    directReports: 3,
-    skills: ['Talent Acquisition', 'Employee Relations', 'HR Strategy'],
-  },
-  {
-    id: 'p7',
-    name: 'Robert Martinez',
-    email: 'robert.martinez@company.com',
-    role: 'CFO',
-    title: 'Chief Financial Officer',
-    department: 'Finance',
-    departmentId: 'dept6',
-    managerId: 'p1',
-    managerName: 'James Wilson',
-    employmentStatus: 'active',
-    userRole: 'admin',
-    startDate: '2019-04-01',
-    location: 'San Francisco, CA',
-    phone: '+1 (555) 100-0007',
-    directReports: 2,
-    skills: ['Financial Planning', 'M&A', 'Investor Relations'],
-  },
-  {
-    id: 'p8',
-    name: 'Jennifer Lee',
-    email: 'jennifer.lee@company.com',
-    role: 'Engineering Manager',
-    title: 'Engineering Manager - Platform',
-    department: 'Engineering',
-    departmentId: 'dept2',
-    team: 'Platform Team',
-    teamId: 'team1',
-    managerId: 'p3',
-    managerName: 'Michael Rodriguez',
-    employmentStatus: 'active',
-    userRole: 'manager',
-    startDate: '2020-03-15',
-    location: 'San Francisco, CA',
-    directReports: 4,
-    skills: ['Backend Development', 'System Design', 'Python', 'Go'],
-  },
-  {
-    id: 'p9',
-    name: 'Alex Johnson',
-    email: 'alex.johnson@company.com',
-    role: 'Senior Engineer',
-    title: 'Senior Software Engineer',
-    department: 'Engineering',
-    departmentId: 'dept2',
-    team: 'Platform Team',
-    teamId: 'team1',
-    managerId: 'p8',
-    managerName: 'Jennifer Lee',
-    employmentStatus: 'active',
-    userRole: 'employee',
-    startDate: '2021-01-10',
-    location: 'Austin, TX',
-    skills: ['React', 'TypeScript', 'Node.js'],
-  },
-  {
-    id: 'p10',
-    name: 'Maria Garcia',
-    email: 'maria.garcia@company.com',
-    role: 'Software Engineer',
-    title: 'Software Engineer II',
-    department: 'Engineering',
-    departmentId: 'dept2',
-    team: 'Platform Team',
-    teamId: 'team1',
-    managerId: 'p8',
-    managerName: 'Jennifer Lee',
-    employmentStatus: 'active',
-    userRole: 'employee',
-    startDate: '2022-06-01',
-    location: 'Remote',
-    skills: ['Python', 'AWS', 'Kubernetes'],
-  },
-  {
-    id: 'p11',
-    name: 'Chris Taylor',
-    email: 'chris.taylor@company.com',
-    role: 'Junior Engineer',
-    title: 'Software Engineer I',
-    department: 'Engineering',
-    departmentId: 'dept2',
-    team: 'Platform Team',
-    teamId: 'team1',
-    managerId: 'p8',
-    managerName: 'Jennifer Lee',
-    employmentStatus: 'active',
-    userRole: 'employee',
-    startDate: '2024-01-15',
-    location: 'San Francisco, CA',
-    skills: ['JavaScript', 'React', 'SQL'],
-  },
-  {
-    id: 'p12',
-    name: 'Kevin Patel',
-    email: 'kevin.patel@company.com',
-    role: 'Engineering Manager',
-    title: 'Engineering Manager - Mobile',
-    department: 'Engineering',
-    departmentId: 'dept2',
-    team: 'Mobile Team',
-    teamId: 'team2',
-    managerId: 'p3',
-    managerName: 'Michael Rodriguez',
-    employmentStatus: 'active',
-    userRole: 'manager',
-    startDate: '2020-08-01',
-    location: 'San Francisco, CA',
-    directReports: 3,
-    skills: ['iOS', 'Android', 'React Native', 'Flutter'],
-  },
-  {
-    id: 'p13',
-    name: 'Lisa Wang',
-    email: 'lisa.wang@company.com',
-    role: 'iOS Developer',
-    title: 'Senior iOS Developer',
-    department: 'Engineering',
-    departmentId: 'dept2',
-    team: 'Mobile Team',
-    teamId: 'team2',
-    managerId: 'p12',
-    managerName: 'Kevin Patel',
-    employmentStatus: 'active',
-    userRole: 'employee',
-    startDate: '2021-04-01',
-    location: 'Seattle, WA',
-    skills: ['Swift', 'iOS', 'UIKit', 'SwiftUI'],
-  },
-  {
-    id: 'p14',
-    name: 'Tom Anderson',
-    email: 'tom.anderson@company.com',
-    role: 'Android Developer',
-    title: 'Android Developer',
-    department: 'Engineering',
-    departmentId: 'dept2',
-    team: 'Mobile Team',
-    teamId: 'team2',
-    managerId: 'p12',
-    managerName: 'Kevin Patel',
-    employmentStatus: 'on_leave',
-    userRole: 'employee',
-    startDate: '2022-02-15',
-    location: 'Remote',
-    skills: ['Kotlin', 'Android', 'Jetpack Compose'],
-  },
-  {
-    id: 'p15',
-    name: 'Rachel Green',
-    email: 'rachel.green@company.com',
-    role: 'Sales Manager',
-    title: 'Enterprise Sales Manager',
-    department: 'Sales',
-    departmentId: 'dept3',
-    team: 'Enterprise Sales',
-    teamId: 'team3',
-    managerId: 'p4',
-    managerName: 'Emily Thompson',
-    employmentStatus: 'active',
-    userRole: 'manager',
-    startDate: '2021-03-01',
-    location: 'New York, NY',
-    directReports: 2,
-    skills: ['Enterprise Sales', 'Account Management', 'CRM'],
-  },
-  {
-    id: 'p16',
-    name: 'Mark Stevens',
-    email: 'mark.stevens@company.com',
-    role: 'Account Executive',
-    title: 'Senior Account Executive',
-    department: 'Sales',
-    departmentId: 'dept3',
-    team: 'Enterprise Sales',
-    teamId: 'team3',
-    managerId: 'p15',
-    managerName: 'Rachel Green',
-    employmentStatus: 'active',
-    userRole: 'employee',
-    startDate: '2021-09-01',
-    location: 'Chicago, IL',
-    skills: ['B2B Sales', 'Negotiation', 'Salesforce'],
-  },
-  {
-    id: 'p17',
-    name: 'Nicole Brown',
-    email: 'nicole.brown@company.com',
-    role: 'SDR',
-    title: 'Sales Development Representative',
-    department: 'Sales',
-    departmentId: 'dept3',
-    team: 'Enterprise Sales',
-    teamId: 'team3',
-    managerId: 'p15',
-    managerName: 'Rachel Green',
-    employmentStatus: 'active',
-    userRole: 'employee',
-    startDate: '2023-06-01',
-    location: 'New York, NY',
-    skills: ['Lead Generation', 'Cold Calling', 'Email Outreach'],
-  },
-  {
-    id: 'p18',
-    name: 'Sophie Turner',
-    email: 'sophie.turner@company.com',
-    role: 'Marketing Manager',
-    title: 'Growth Marketing Manager',
-    department: 'Marketing',
-    departmentId: 'dept4',
-    team: 'Growth Marketing',
-    teamId: 'team4',
-    managerId: 'p5',
-    managerName: 'David Kim',
-    employmentStatus: 'active',
-    userRole: 'manager',
-    startDate: '2021-07-01',
-    location: 'San Francisco, CA',
-    directReports: 1,
-    skills: ['Growth Hacking', 'Analytics', 'SEO/SEM'],
-  },
-  {
-    id: 'p19',
-    name: 'Daniel Park',
-    email: 'daniel.park@company.com',
-    role: 'Content Specialist',
-    title: 'Content Marketing Specialist',
-    department: 'Marketing',
-    departmentId: 'dept4',
-    team: 'Growth Marketing',
-    teamId: 'team4',
-    managerId: 'p18',
-    managerName: 'Sophie Turner',
-    employmentStatus: 'active',
-    userRole: 'employee',
-    startDate: '2022-11-01',
-    location: 'Remote',
-    skills: ['Content Writing', 'SEO', 'Social Media'],
-  },
-  {
-    id: 'p20',
-    name: 'Sam Mitchell',
-    email: 'sam.mitchell@contractor.com',
-    role: 'Contractor',
-    title: 'UX Design Contractor',
-    department: 'Engineering',
-    departmentId: 'dept2',
-    managerId: 'p3',
-    managerName: 'Michael Rodriguez',
-    employmentStatus: 'contractor',
-    userRole: 'contractor',
-    startDate: '2024-09-01',
-    location: 'Remote',
-    skills: ['UX Design', 'Figma', 'User Research'],
-  },
-];
-
-const mockStats: PeopleStats = {
-  totalPeople: 20,
-  activeEmployees: 18,
-  onLeave: 1,
-  contractors: 1,
-  newThisMonth: 2,
-  departments: 6,
-  teams: 4,
-};
 
 // ============================================================================
 // Helper Functions
@@ -500,12 +116,20 @@ function mapApiUsersToPeople(apiUsers: TenantUser[]): Person[] {
     title: u.title || u.roleName || 'Team Member',
     department: u.department || 'General',
     departmentId: u.department?.toLowerCase().replace(/\s+/g, '-') || 'general',
-    employmentStatus: u.status === 'active' ? 'active' : u.status === 'suspended' ? 'terminated' : 'active' as EmploymentStatus,
-    userRole: (u.roleSlug === 'tenant_admin' || u.roleSlug === 'agency_owner' || u.roleSlug === 'agency_admin')
-      ? 'admin'
-      : u.roleSlug === 'facilitator'
-        ? 'manager'
-        : 'employee' as UserRole,
+    employmentStatus:
+      u.status === 'active'
+        ? 'active'
+        : u.status === 'suspended'
+          ? 'terminated'
+          : ('active' as EmploymentStatus),
+    userRole:
+      u.roleSlug === 'tenant_admin' ||
+      u.roleSlug === 'agency_owner' ||
+      u.roleSlug === 'agency_admin'
+        ? 'admin'
+        : u.roleSlug === 'facilitator'
+          ? 'manager'
+          : ('employee' as UserRole),
     startDate: u.createdAt,
     location: undefined,
     phone: undefined,
@@ -519,14 +143,9 @@ function mapApiUsersToPeople(apiUsers: TenantUser[]): Person[] {
 // PersonCard Component
 // ============================================================================
 
-function PersonCard({
-  person,
-  variant = 'grid',
-}: {
-  person: Person;
-  variant?: 'grid' | 'list';
-}) {
-  const statusConfig = employmentStatusConfig[person.employmentStatus] || employmentStatusConfig.active;
+function PersonCard({ person, variant = 'grid' }: { person: Person; variant?: 'grid' | 'list' }) {
+  const statusConfig =
+    employmentStatusConfig[person.employmentStatus] || employmentStatusConfig.active;
 
   if (variant === 'list') {
     return (
@@ -541,9 +160,7 @@ function PersonCard({
             {/* Basic Info */}
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-medium text-gray-900">
-                  {person.name}
-                </span>
+                <span className="font-medium text-gray-900">{person.name}</span>
                 <span
                   className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.text}`}
                 >
@@ -599,9 +216,7 @@ function PersonCard({
 
         {/* Name & Status */}
         <div className="flex items-center gap-2 mb-1">
-          <span className="font-medium text-gray-900">
-            {person.name}
-          </span>
+          <span className="font-medium text-gray-900">{person.name}</span>
         </div>
         <span
           className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.text} mb-2`}
@@ -642,9 +257,7 @@ function PersonCard({
       {/* Footer */}
       {(person.directReports || person.managerName) && (
         <div className="mt-4 pt-4 border-t border-gray-200 flex items-center justify-between text-xs text-gray-500">
-          {person.managerName && (
-            <span>Reports to: {person.managerName}</span>
-          )}
+          {person.managerName && <span>Reports to: {person.managerName}</span>}
           {person.directReports != null && person.directReports > 0 && (
             <span>{person.directReports} reports</span>
           )}
@@ -668,6 +281,7 @@ export default function PeoplePage() {
 
   // Attempt to load real user data from the API
   const { data: apiResponse, isLoading } = useUsers(user?.tenantId, { limit: 100 });
+  const { data: apiDepts } = useDepartments(user?.tenantId);
 
   // Map API users to Person[] or fall back to mock data
   const people: Person[] = useMemo(() => {
@@ -675,54 +289,50 @@ export default function PeoplePage() {
     if (apiUsers && apiUsers.length > 0) {
       return mapApiUsersToPeople(apiUsers);
     }
-    return mockPeople;
+    return [];
   }, [apiResponse]);
 
-  // Derive departments from people data
+  // Derive departments — prefer API list, fall back to computing from loaded people
   const departments: Department[] = useMemo(() => {
-    if (apiResponse?.data && apiResponse.data.length > 0) {
-      const deptMap = new Map<string, number>();
-      people.forEach((p) => {
-        deptMap.set(p.department, (deptMap.get(p.department) || 0) + 1);
-      });
-      return Array.from(deptMap.entries()).map(([name, count]) => ({
+    const deptMap = new Map<string, number>();
+    people.forEach((p) => deptMap.set(p.department, (deptMap.get(p.department) || 0) + 1));
+
+    const srcNames = apiDepts?.filter(Boolean) ?? [];
+    if (srcNames.length > 0) {
+      return srcNames.map((name) => ({
         id: name.toLowerCase().replace(/\s+/g, '-'),
         name,
-        memberCount: count,
+        memberCount: deptMap.get(name) ?? 0,
       }));
     }
-    return mockDepartments;
-  }, [apiResponse, people]);
+    // No API dept list yet — compute from loaded people
+    return Array.from(deptMap.entries()).map(([name, count]) => ({
+      id: name.toLowerCase().replace(/\s+/g, '-'),
+      name,
+      memberCount: count,
+    }));
+  }, [apiDepts, people]);
 
   // Compute stats from people data
   const stats: PeopleStats = useMemo(() => {
-    if (apiResponse?.data && apiResponse.data.length > 0) {
-      const deptSet = new Set(people.map((p) => p.department));
-      const teamSet = new Set(people.map((p) => p.team).filter(Boolean));
-      return {
-        totalPeople: people.length,
-        activeEmployees: people.filter((p) => p.employmentStatus === 'active').length,
-        onLeave: people.filter((p) => p.employmentStatus === 'on_leave').length,
-        contractors: people.filter((p) => p.employmentStatus === 'contractor').length,
-        newThisMonth: 0,
-        departments: deptSet.size,
-        teams: teamSet.size,
-      };
-    }
-    return mockStats;
-  }, [apiResponse, people]);
+    const deptSet = new Set(people.map((p) => p.department));
+    const teamSet = new Set(people.map((p) => p.team).filter(Boolean));
+    return {
+      totalPeople: people.length,
+      activeEmployees: people.filter((p) => p.employmentStatus === 'active').length,
+      onLeave: people.filter((p) => p.employmentStatus === 'on_leave').length,
+      contractors: people.filter((p) => p.employmentStatus === 'contractor').length,
+      newThisMonth: 0,
+      departments: deptSet.size,
+      teams: teamSet.size,
+    };
+  }, [people]);
 
   // Filtering logic
   const filteredPeople = useMemo(() => {
     return people
-      .filter((p) =>
-        activeFilter === 'all' ? true : p.employmentStatus === activeFilter
-      )
-      .filter((p) =>
-        selectedDepartment === 'all'
-          ? true
-          : p.departmentId === selectedDepartment
-      )
+      .filter((p) => (activeFilter === 'all' ? true : p.employmentStatus === activeFilter))
+      .filter((p) => (selectedDepartment === 'all' ? true : p.departmentId === selectedDepartment))
       .filter((p) => {
         if (!searchTerm) return true;
         const q = searchTerm.toLowerCase();
@@ -762,9 +372,7 @@ export default function PeoplePage() {
       {/* Page Header */}
       <header className="mb-6 lg:mb-8 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-1 sm:mb-2">
-            People
-          </h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-1 sm:mb-2">People</h1>
           <p className="text-sm sm:text-base text-gray-500">
             Manage your team members, view org structure, and track roles
           </p>
@@ -813,9 +421,7 @@ export default function PeoplePage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-4">
           <div className="flex items-center gap-2 sm:gap-3 mb-1 sm:mb-2">
             <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
-            <span className="text-xl sm:text-2xl font-medium text-gray-900">
-              {stats.teams}
-            </span>
+            <span className="text-xl sm:text-2xl font-medium text-gray-900">{stats.teams}</span>
           </div>
           <div className="text-xs sm:text-sm text-gray-500">Teams</div>
         </div>
@@ -887,9 +493,7 @@ export default function PeoplePage() {
             <button
               onClick={() => setViewMode('grid')}
               className={`p-2 rounded transition-colors ${
-                viewMode === 'grid'
-                  ? 'bg-red-600 text-white'
-                  : 'text-gray-700 hover:bg-white'
+                viewMode === 'grid' ? 'bg-red-600 text-white' : 'text-gray-700 hover:bg-white'
               }`}
             >
               <Grid3X3 className="w-4 h-4" />
@@ -897,9 +501,7 @@ export default function PeoplePage() {
             <button
               onClick={() => setViewMode('list')}
               className={`p-2 rounded transition-colors ${
-                viewMode === 'list'
-                  ? 'bg-red-600 text-white'
-                  : 'text-gray-700 hover:bg-white'
+                viewMode === 'list' ? 'bg-red-600 text-white' : 'text-gray-700 hover:bg-white'
               }`}
             >
               <List className="w-4 h-4" />
@@ -918,21 +520,13 @@ export default function PeoplePage() {
         viewMode === 'grid' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {filteredPeople.map((person) => (
-              <PersonCard
-                key={person.id}
-                person={person}
-                variant="grid"
-              />
+              <PersonCard key={person.id} person={person} variant="grid" />
             ))}
           </div>
         ) : (
           <div className="space-y-2">
             {filteredPeople.map((person) => (
-              <PersonCard
-                key={person.id}
-                person={person}
-                variant="list"
-              />
+              <PersonCard key={person.id} person={person} variant="list" />
             ))}
           </div>
         )
@@ -961,6 +555,7 @@ export default function PeoplePage() {
       {/* Add Person Modal */}
       {showAddModal && (
         <AddPersonModal
+          tenantId={user?.tenantId ?? null}
           departments={departments}
           onClose={() => setShowAddModal(false)}
         />
@@ -974,28 +569,45 @@ export default function PeoplePage() {
 // ============================================================================
 
 function AddPersonModal({
+  tenantId,
   departments,
   onClose,
 }: {
+  tenantId: string | null;
   departments: Department[];
   onClose: () => void;
 }) {
   const [formData, setFormData] = useState({
-    name: '',
+    firstName: '',
+    lastName: '',
     email: '',
-    phone: '',
     title: '',
-    departmentId: '',
-    location: '',
-    startDate: '',
-    employmentStatus: 'active',
-    userRole: 'employee',
+    department: '',
+    role: 'learner' as CreateUserInput['role'],
+    managerId: '',
   });
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // In a real implementation, this would call the useCreateUser mutation
-    onClose();
+  const createUser = useCreateUser(tenantId ?? undefined);
+  const { data: usersResp } = useUsers(tenantId ?? undefined, { limit: 100 });
+  const managerOptions = usersResp?.data ?? [];
+
+  const handleSubmit = async () => {
+    setError(null);
+    try {
+      await createUser.mutateAsync({
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        title: formData.title || undefined,
+        department: formData.department || undefined,
+        role: formData.role,
+        managerId: formData.managerId || null,
+      });
+      onClose();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create user. Please try again.');
+    }
   };
 
   return (
@@ -1003,45 +615,65 @@ function AddPersonModal({
       <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">
-            Add New Person
-          </h2>
+          <h2 className="text-xl font-semibold text-gray-900">Add New Person</h2>
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-auto p-6">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleSubmit();
+          }}
+          className="flex-1 overflow-auto p-6"
+        >
           <div className="space-y-6">
+            {error && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                {error}
+              </div>
+            )}
+
             {/* Basic Info */}
             <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-4">
-                Basic Information
-              </h3>
+              <h3 className="text-sm font-medium text-gray-900 mb-4">Basic Information</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-gray-500 mb-2">
-                    Full Name *
-                  </label>
+                  <label className="block text-sm text-gray-500 mb-2">First Name *</label>
                   <input
                     type="text"
                     required
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="John Doe"
+                    value={formData.firstName}
+                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                    placeholder="John"
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-500 mb-2">
-                    Email Address *
-                  </label>
+                  <label className="block text-sm text-gray-500 mb-2">Last Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.lastName}
+                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                    placeholder="Doe"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-sm text-gray-500 mb-2">Email Address *</label>
                   <input
                     type="email"
                     required
@@ -1051,46 +683,17 @@ function AddPersonModal({
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm text-gray-500 mb-2">
-                    Phone Number
-                  </label>
-                  <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="+1 (555) 000-0000"
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-500 mb-2">
-                    Location
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    placeholder="San Francisco, CA"
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  />
-                </div>
               </div>
             </div>
 
             {/* Role & Department */}
             <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-4">
-                Role & Department
-              </h3>
+              <h3 className="text-sm font-medium text-gray-900 mb-4">Role & Department</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-gray-500 mb-2">
-                    Job Title *
-                  </label>
+                  <label className="block text-sm text-gray-500 mb-2">Job Title</label>
                   <input
                     type="text"
-                    required
                     value={formData.title}
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                     placeholder="Software Engineer"
@@ -1098,71 +701,50 @@ function AddPersonModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-500 mb-2">
-                    Department *
-                  </label>
+                  <label className="block text-sm text-gray-500 mb-2">Department</label>
                   <select
-                    required
-                    value={formData.departmentId}
-                    onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
+                    value={formData.department}
+                    onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 appearance-none"
                   >
                     <option value="">Select department</option>
                     {departments.map((dept) => (
-                      <option key={dept.id} value={dept.id}>
+                      <option key={dept.id} value={dept.name}>
                         {dept.name}
                       </option>
                     ))}
                   </select>
                 </div>
-              </div>
-            </div>
-
-            {/* Employment Details */}
-            <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-4">
-                Employment Details
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm text-gray-500 mb-2">
-                    Start Date *
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={formData.startDate}
-                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-500 mb-2">
-                    Employment Status
-                  </label>
+                  <label className="block text-sm text-gray-500 mb-2">Platform Role *</label>
                   <select
-                    value={formData.employmentStatus}
-                    onChange={(e) => setFormData({ ...formData, employmentStatus: e.target.value })}
+                    required
+                    value={formData.role}
+                    onChange={(e) =>
+                      setFormData({ ...formData, role: e.target.value as CreateUserInput['role'] })
+                    }
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 appearance-none"
                   >
-                    <option value="active">Active</option>
-                    <option value="contractor">Contractor</option>
-                    <option value="on_leave">On Leave</option>
+                    <option value="learner">Learner</option>
+                    <option value="mentor">Mentor</option>
+                    <option value="facilitator">Facilitator</option>
+                    <option value="tenant_admin">Admin</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-500 mb-2">
-                    User Role
-                  </label>
+                  <label className="block text-sm text-gray-500 mb-2">Manager</label>
                   <select
-                    value={formData.userRole}
-                    onChange={(e) => setFormData({ ...formData, userRole: e.target.value })}
+                    value={formData.managerId}
+                    onChange={(e) => setFormData({ ...formData, managerId: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 appearance-none"
                   >
-                    <option value="employee">Employee</option>
-                    <option value="manager">Manager</option>
-                    <option value="admin">Admin</option>
-                    <option value="contractor">Contractor</option>
+                    <option value="">No manager</option>
+                    {managerOptions.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.firstName} {u.lastName}
+                        {u.title ? ` — ${u.title}` : ''}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -1180,10 +762,38 @@ function AddPersonModal({
             Cancel
           </button>
           <button
+            type="button"
             onClick={handleSubmit}
-            className="px-6 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
+            disabled={createUser.isPending}
+            className="px-6 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors disabled:opacity-60 flex items-center gap-2"
           >
-            Add Person
+            {createUser.isPending ? (
+              <>
+                <svg
+                  className="animate-spin h-4 w-4"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 22 6.477 22 12h-4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+                Adding...
+              </>
+            ) : (
+              'Add Person'
+            )}
           </button>
         </div>
       </div>

@@ -13,6 +13,7 @@ dist/
 .env.local
 .env.*.local
 *.env
+.env.docker
 
 # IDE
 .idea/
@@ -20,9 +21,13 @@ dist/
 *.swp
 *.swo
 
+# Claude Code local settings
+.claude/settings.local.json
+
 # OS
 .DS_Store
 Thumbs.db
+nul
 
 # Logs
 *.log
@@ -38,6 +43,18 @@ coverage/
 
 # Uploads
 uploads/
+
+# Generated reports
+report*.pdf
+
+# Screenshots
+screenshots/
+
+# Claude scratchpad temp files
+C\357\200\272*
+
+# Make project files
+*.make
 
 # Misc
 *.pem

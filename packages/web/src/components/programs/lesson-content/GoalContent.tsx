@@ -45,11 +45,8 @@ export const GoalContent = memo(function GoalContent({
   const metricsGuidance = content?.metricsGuidance;
   const actionStepsGuidance = content?.actionStepsGuidance;
 
-  const handleChange = useCallback((
-    field: keyof GoalFormData,
-    value: string
-  ) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  const handleChange = useCallback((field: keyof GoalFormData, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
   }, []);
 
   const handleSubmit = useCallback(() => {
@@ -69,10 +66,22 @@ export const GoalContent = memo(function GoalContent({
       <h3 className="text-lg font-semibold text-sidebar-foreground mb-3">
         {lessonTitle || 'Set Your Goal for This Period'}
       </h3>
+      {content?.introduction &&
+        (isHtmlContent(content.introduction) ? (
+          <div
+            className="text-muted-foreground mb-4 text-sm sm:text-base prose prose-sm max-w-none prose-p:text-muted-foreground"
+            dangerouslySetInnerHTML={{ __html: content.introduction }}
+          />
+        ) : (
+          <p className="text-muted-foreground mb-4 text-sm sm:text-base">{content.introduction}</p>
+        ))}
       {(() => {
         const promptText = content?.goalPrompt || DEFAULT_INSTRUCTIONS;
         return isHtmlContent(promptText) ? (
-          <div className="text-muted-foreground mb-6 text-sm sm:text-base prose prose-sm max-w-none prose-p:text-muted-foreground" dangerouslySetInnerHTML={{ __html: promptText }} />
+          <div
+            className="text-muted-foreground mb-6 text-sm sm:text-base prose prose-sm max-w-none prose-p:text-muted-foreground"
+            dangerouslySetInnerHTML={{ __html: promptText }}
+          />
         ) : (
           <p className="text-muted-foreground mb-6 text-sm sm:text-base">{promptText}</p>
         );
@@ -174,7 +183,9 @@ export const GoalContent = memo(function GoalContent({
             <select
               id={`${baseId}-frequency`}
               value={formData.reviewFrequency}
-              onChange={(e) => handleChange('reviewFrequency', e.target.value as GoalFormData['reviewFrequency'])}
+              onChange={(e) =>
+                handleChange('reviewFrequency', e.target.value as GoalFormData['reviewFrequency'])
+              }
               className="w-full p-3 bg-card border border-border rounded-lg text-sidebar-foreground focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent transition-shadow text-sm"
             >
               <option value="weekly">Weekly</option>

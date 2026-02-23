@@ -1,5 +1,5 @@
 /**
- * Auth-related types for Transformation OS
+ * Auth-related types for Results Tracking System
  */
 
 /**
@@ -101,6 +101,7 @@ export interface RefreshRequest {
  */
 export interface RefreshResponse {
   accessToken: string;
+  refreshToken: string; // New rotated refresh token — client must replace the old one
   expiresIn: number;
 }
 

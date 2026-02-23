@@ -1,4 +1,4 @@
-// Transformation OS - Shared Package
+// Results Tracking System - Shared Package
 // Export all types and constants
 
 export * from './types/index.js';

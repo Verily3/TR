@@ -23,3 +23,6 @@ export * from './mentoring';
 
 // Survey tables
 export * from './surveys';
+
+// Scorecard tables
+export * from './scorecard';

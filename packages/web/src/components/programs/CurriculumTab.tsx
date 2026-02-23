@@ -107,35 +107,83 @@ type AddMenuKey =
 // Maps add-menu keys to their DB contentType and default lesson title.
 // Multiple menu entries can share the same DB contentType (e.g. Reading + Video = lesson).
 const ADD_MENU_MAP: Record<AddMenuKey, { contentType: ContentType; defaultTitle: string }> = {
-  lesson:           { contentType: 'lesson',      defaultTitle: 'New Reading'            },
-  video:            { contentType: 'lesson',      defaultTitle: 'New Video'              },
-  key_concepts:     { contentType: 'lesson',      defaultTitle: 'Key Concepts'           },
-  quiz:             { contentType: 'quiz',        defaultTitle: 'New Quiz'               },
-  assignment:       { contentType: 'assignment',  defaultTitle: 'New Assignment'         },
-  food_for_thought: { contentType: 'assignment',  defaultTitle: 'Food for Thought'       },
-  text_form:        { contentType: 'text_form',   defaultTitle: 'New Text Form'          },
-  most_useful_idea: { contentType: 'text_form',   defaultTitle: 'Most Useful Idea'       },
-  how_you_used:     { contentType: 'text_form',   defaultTitle: 'How You Used This Idea' },
-  goal:             { contentType: 'goal',        defaultTitle: 'New Goal'               },
-  survey:           { contentType: 'survey',      defaultTitle: 'New Survey'             },
+  lesson: { contentType: 'lesson', defaultTitle: 'New Reading' },
+  video: { contentType: 'lesson', defaultTitle: 'New Video' },
+  key_concepts: { contentType: 'lesson', defaultTitle: 'Key Concepts' },
+  quiz: { contentType: 'quiz', defaultTitle: 'New Quiz' },
+  assignment: { contentType: 'assignment', defaultTitle: 'New Assignment' },
+  food_for_thought: { contentType: 'assignment', defaultTitle: 'Food for Thought' },
+  text_form: { contentType: 'text_form', defaultTitle: 'New Text Form' },
+  most_useful_idea: { contentType: 'text_form', defaultTitle: 'Most Useful Idea' },
+  how_you_used: { contentType: 'text_form', defaultTitle: 'How You Used This Idea' },
+  goal: { contentType: 'goal', defaultTitle: 'New Goal' },
+  survey: { contentType: 'survey', defaultTitle: 'New Survey' },
 };
 
 // Add menu config — displayed in the "Add lesson" dropdown in the builder.
-const ADD_MENU_CONFIG: { key: AddMenuKey; icon: React.ComponentType<{ className?: string }>; label: string; color: string; group: string }[] = [
+const ADD_MENU_CONFIG: {
+  key: AddMenuKey;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  color: string;
+  group: string;
+}[] = [
   // Content
-  { key: 'lesson',           icon: BookOpen,     label: 'Reading',              color: 'text-blue-600',   group: 'Content'      },
-  { key: 'video',            icon: Video,        label: 'Video',                color: 'text-indigo-600', group: 'Content'      },
-  { key: 'key_concepts',     icon: Layers,       label: 'Key Concepts',         color: 'text-violet-600', group: 'Content'      },
-  { key: 'quiz',             icon: HelpCircle,   label: 'Quiz',                 color: 'text-purple-600', group: 'Content'      },
+  { key: 'lesson', icon: BookOpen, label: 'Reading', color: 'text-blue-600', group: 'Content' },
+  { key: 'video', icon: Video, label: 'Video', color: 'text-indigo-600', group: 'Content' },
+  {
+    key: 'key_concepts',
+    icon: Layers,
+    label: 'Key Concepts',
+    color: 'text-violet-600',
+    group: 'Content',
+  },
+  { key: 'quiz', icon: HelpCircle, label: 'Quiz', color: 'text-purple-600', group: 'Content' },
   // Reflections
-  { key: 'most_useful_idea', icon: Lightbulb,    label: 'Most Useful Idea',     color: 'text-amber-600',  group: 'Reflection'   },
-  { key: 'how_you_used',     icon: GraduationCap,label: 'How You Used This Idea', color: 'text-teal-600', group: 'Reflection'   },
-  { key: 'text_form',        icon: FileText,     label: 'Text Form',            color: 'text-cyan-600',   group: 'Reflection'   },
+  {
+    key: 'most_useful_idea',
+    icon: Lightbulb,
+    label: 'Most Useful Idea',
+    color: 'text-amber-600',
+    group: 'Reflection',
+  },
+  {
+    key: 'how_you_used',
+    icon: GraduationCap,
+    label: 'How You Used This Idea',
+    color: 'text-teal-600',
+    group: 'Reflection',
+  },
+  {
+    key: 'text_form',
+    icon: FileText,
+    label: 'Text Form',
+    color: 'text-cyan-600',
+    group: 'Reflection',
+  },
   // Activities
-  { key: 'assignment',       icon: ClipboardList,label: 'Assignment',           color: 'text-orange-600', group: 'Activity'     },
-  { key: 'food_for_thought', icon: Brain,        label: 'Food for Thought',     color: 'text-rose-600',   group: 'Activity'     },
-  { key: 'goal',             icon: Target,       label: 'Goal',                 color: 'text-yellow-600', group: 'Activity'     },
-  { key: 'survey',          icon: ClipboardCheck, label: 'Survey',             color: 'text-teal-600',   group: 'Activity'     },
+  {
+    key: 'assignment',
+    icon: ClipboardList,
+    label: 'Assignment',
+    color: 'text-orange-600',
+    group: 'Activity',
+  },
+  {
+    key: 'food_for_thought',
+    icon: Brain,
+    label: 'Food for Thought',
+    color: 'text-rose-600',
+    group: 'Activity',
+  },
+  { key: 'goal', icon: Target, label: 'Goal', color: 'text-yellow-600', group: 'Activity' },
+  {
+    key: 'survey',
+    icon: ClipboardCheck,
+    label: 'Survey',
+    color: 'text-teal-600',
+    group: 'Activity',
+  },
 ];
 
 // ============================================
@@ -188,7 +236,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
   const [editContentType, setEditContentType] = useState<ContentType>('lesson');
   const [editContent, setEditContent] = useState<LessonContent>({});
   const [editVisibleTo, setEditVisibleTo] = useState<VisibilitySettings>({
-    learner: true, mentor: true, facilitator: true,
+    learner: true,
+    mentor: true,
+    facilitator: true,
   });
   const [editDuration, setEditDuration] = useState<number | ''>('');
   const [editPoints, setEditPoints] = useState<number | ''>('');
@@ -210,8 +260,16 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
   const tenantCreateModule = useCreateModule(tenantId, program.id);
   const tenantUpdateModule = useUpdateModule(tenantId, program.id);
   const tenantDeleteModule = useDeleteModule(tenantId, program.id);
-  const tenantUpdateLesson = useUpdateLesson(tenantId, program.id, selectedLessonModuleId || undefined);
-  const tenantDeleteLesson = useDeleteLesson(tenantId, program.id, selectedLessonModuleId || undefined);
+  const tenantUpdateLesson = useUpdateLesson(
+    tenantId,
+    program.id,
+    selectedLessonModuleId || undefined
+  );
+  const tenantDeleteLesson = useDeleteLesson(
+    tenantId,
+    program.id,
+    selectedLessonModuleId || undefined
+  );
 
   const agencyCreateModule = useCreateAgencyModule(program.id);
   const agencyUpdateModule = useUpdateAgencyModule(program.id);
@@ -253,7 +311,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
   useEffect(() => {
     if (program?.modules && Object.keys(expandedModules).length === 0) {
       const expanded: Record<string, boolean> = {};
-      program.modules.forEach((m) => { expanded[m.id] = true; });
+      program.modules.forEach((m) => {
+        expanded[m.id] = true;
+      });
       setExpandedModules(expanded);
     }
   }, [program?.modules]);
@@ -265,7 +325,10 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
       if (mod) {
         const updated = mod.lessons?.find((l) => l.id === selectedLesson.id);
         if (updated) setSelectedLesson(updated);
-        else { setSelectedLesson(null); setSelectedLessonModuleId(null); }
+        else {
+          setSelectedLesson(null);
+          setSelectedLessonModuleId(null);
+        }
       }
     }
   }, [program, selectedLessonModuleId, selectedLesson?.id]);
@@ -306,7 +369,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
         setRoleContentStore({ learner: {}, mentor: {}, facilitator: {} });
       }
 
-      setEditVisibleTo(selectedLesson.visibleTo || { learner: true, mentor: true, facilitator: true });
+      setEditVisibleTo(
+        selectedLesson.visibleTo || { learner: true, mentor: true, facilitator: true }
+      );
       setEditDuration(selectedLesson.durationMinutes ?? '');
       setEditPoints(selectedLesson.points ?? '');
       setEditApprovalRequired(selectedLesson.approvalRequired || 'none');
@@ -346,30 +411,36 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
   };
 
   const handleAddModule = () => {
-    createModule.mutate({ title: 'New Module' }, {
-      onSuccess: (data: unknown) => {
-        const newModule = data as { id?: string };
-        if (newModule?.id) {
-          setSelectedModuleId(newModule.id);
-          setSelectedLesson(null);
-          setSelectedLessonModuleId(null);
-          setExpandedModules((prev) => ({ ...prev, [newModule.id!]: true }));
-        }
-      },
-    });
+    createModule.mutate(
+      { title: 'New Module' },
+      {
+        onSuccess: (data: unknown) => {
+          const newModule = data as { id?: string };
+          if (newModule?.id) {
+            setSelectedModuleId(newModule.id);
+            setSelectedLesson(null);
+            setSelectedLessonModuleId(null);
+            setExpandedModules((prev) => ({ ...prev, [newModule.id!]: true }));
+          }
+        },
+      }
+    );
   };
 
   const handleAddEvent = () => {
-    createModule.mutate({ title: 'New Event', type: 'event' }, {
-      onSuccess: (data: unknown) => {
-        const newEvent = data as { id?: string };
-        if (newEvent?.id) {
-          setSelectedModuleId(newEvent.id);
-          setSelectedLesson(null);
-          setSelectedLessonModuleId(null);
-        }
-      },
-    });
+    createModule.mutate(
+      { title: 'New Event', type: 'event' },
+      {
+        onSuccess: (data: unknown) => {
+          const newEvent = data as { id?: string };
+          if (newEvent?.id) {
+            setSelectedModuleId(newEvent.id);
+            setSelectedLesson(null);
+            setSelectedLessonModuleId(null);
+          }
+        },
+      }
+    );
   };
 
   const handleSaveEvent = (input: UpdateModuleInput) => {
@@ -491,16 +562,14 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
   const handleRoleTabChange = (newRole: EnrollmentRole) => {
     if (newRole === activeRoleTab) return;
     // Save current editContent to store for the current tab
-    setRoleContentStore(prev => ({ ...prev, [activeRoleTab]: editContent }));
+    setRoleContentStore((prev) => ({ ...prev, [activeRoleTab]: editContent }));
     // Load new role's content
     setEditContent(roleContentStore[newRole]);
     setActiveRoleTab(newRole);
   };
 
   const handleCopyFromRole = (sourceRole: EnrollmentRole) => {
-    const sourceContent = sourceRole === activeRoleTab
-      ? editContent
-      : roleContentStore[sourceRole];
+    const sourceContent = sourceRole === activeRoleTab ? editContent : roleContentStore[sourceRole];
     setEditContent({ ...sourceContent });
   };
 
@@ -513,12 +582,11 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
           <div className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Introduction</label>
-              <textarea
+              <RichTextEditor
                 value={editContent.introduction || ''}
-                onChange={(e) => setEditContent({ ...editContent, introduction: e.target.value })}
-                rows={4}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none resize-none bg-gray-50"
+                onChange={(html) => setEditContent({ ...editContent, introduction: html })}
                 placeholder="Introduce the lesson and its importance..."
+                minHeight={120}
               />
             </div>
 
@@ -526,18 +594,14 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">Video Source</label>
               <div className="grid grid-cols-2 gap-3 mb-4">
-                <div
-                  className="flex flex-col items-center gap-2 p-4 border-2 border-gray-200 rounded-lg text-center opacity-50 cursor-not-allowed"
-                >
+                <div className="flex flex-col items-center gap-2 p-4 border-2 border-gray-200 rounded-lg text-center opacity-50 cursor-not-allowed">
                   <Upload className="w-5 h-5 text-gray-400" />
                   <div>
                     <p className="text-sm font-medium text-gray-900">Upload Video</p>
                     <p className="text-xs text-gray-500">MP4, MOV up to 500MB</p>
                   </div>
                 </div>
-                <div
-                  className="flex flex-col items-center gap-2 p-4 border-2 border-red-500 bg-red-50/50 rounded-lg text-center cursor-default"
-                >
+                <div className="flex flex-col items-center gap-2 p-4 border-2 border-red-500 bg-red-50/50 rounded-lg text-center cursor-default">
                   <Link className="w-5 h-5 text-red-500" />
                   <div>
                     <p className="text-sm font-medium text-gray-900">Embed URL</p>
@@ -555,34 +619,35 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                   placeholder="https://www.youtube.com/watch?v=... or https://vimeo.com/..."
                 />
                 {/* Live Video Preview */}
-                {editContent.videoUrl && (() => {
-                  const embedUrl = getEmbedUrl(editContent.videoUrl);
-                  const provider = getVideoProvider(editContent.videoUrl);
-                  if (embedUrl && provider) {
+                {editContent.videoUrl &&
+                  (() => {
+                    const embedUrl = getEmbedUrl(editContent.videoUrl);
+                    const provider = getVideoProvider(editContent.videoUrl);
+                    if (embedUrl && provider) {
+                      return (
+                        <div className="mt-3 rounded-lg overflow-hidden border border-gray-200">
+                          <div className="aspect-video bg-black">
+                            <iframe
+                              src={embedUrl}
+                              className="w-full h-full"
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                              title="Video preview"
+                            />
+                          </div>
+                          <div className="px-3 py-1.5 bg-gray-50 border-t border-gray-200 flex items-center gap-2">
+                            <Video className="w-3.5 h-3.5 text-gray-400" />
+                            <span className="text-xs text-gray-500 capitalize">{provider}</span>
+                          </div>
+                        </div>
+                      );
+                    }
                     return (
-                      <div className="mt-3 rounded-lg overflow-hidden border border-gray-200">
-                        <div className="aspect-video bg-black">
-                          <iframe
-                            src={embedUrl}
-                            className="w-full h-full"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                            title="Video preview"
-                          />
-                        </div>
-                        <div className="px-3 py-1.5 bg-gray-50 border-t border-gray-200 flex items-center gap-2">
-                          <Video className="w-3.5 h-3.5 text-gray-400" />
-                          <span className="text-xs text-gray-500 capitalize">{provider}</span>
-                        </div>
-                      </div>
+                      <p className="text-xs text-amber-600 mt-1.5">
+                        Could not recognize video URL. Paste a YouTube or Vimeo link.
+                      </p>
                     );
-                  }
-                  return (
-                    <p className="text-xs text-amber-600 mt-1.5">
-                      Could not recognize video URL. Paste a YouTube or Vimeo link.
-                    </p>
-                  );
-                })()}
+                  })()}
               </div>
             </div>
 
@@ -628,7 +693,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                       />
                       <button
                         onClick={() => {
-                          const concepts = (editContent.keyConcepts || []).filter((_, idx) => idx !== i);
+                          const concepts = (editContent.keyConcepts || []).filter(
+                            (_, idx) => idx !== i
+                          );
                           setEditContent({ ...editContent, keyConcepts: concepts });
                         }}
                         className="p-2.5 text-gray-400 hover:text-red-600 transition-colors border-b border-l border-gray-200"
@@ -654,12 +721,11 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Key Takeaway</label>
-              <textarea
+              <RichTextEditor
                 value={editContent.keyTakeaway || ''}
-                onChange={(e) => setEditContent({ ...editContent, keyTakeaway: e.target.value })}
-                rows={3}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none resize-none bg-gray-50"
+                onChange={(html) => setEditContent({ ...editContent, keyTakeaway: html })}
                 placeholder="Summarize the main insight or action from this reading..."
+                minHeight={100}
               />
             </div>
 
@@ -686,29 +752,34 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
           <div className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Introduction</label>
-              <textarea
+              <RichTextEditor
                 value={editContent.introduction || ''}
-                onChange={(e) => setEditContent({ ...editContent, introduction: e.target.value })}
-                rows={4}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none resize-none bg-gray-50"
+                onChange={(html) => setEditContent({ ...editContent, introduction: html })}
                 placeholder="Introduce the lesson and its importance..."
+                minHeight={120}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Assignment Instructions</label>
-              <textarea
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Assignment Instructions
+              </label>
+              <RichTextEditor
                 value={editContent.instructions || ''}
-                onChange={(e) => setEditContent({ ...editContent, instructions: e.target.value })}
-                rows={6}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none resize-none bg-gray-50"
+                onChange={(html) => setEditContent({ ...editContent, instructions: html })}
                 placeholder="Describe what learners need to do for this assignment..."
+                minHeight={160}
               />
             </div>
             <div>
               <div className="flex items-center justify-between mb-3">
                 <label className="text-sm font-medium text-gray-700">Assignment Questions</label>
                 <button
-                  onClick={() => setEditContent({ ...editContent, questions: [...(editContent.questions || []), ''] })}
+                  onClick={() =>
+                    setEditContent({
+                      ...editContent,
+                      questions: [...(editContent.questions || []), ''],
+                    })
+                  }
                   className="text-sm text-red-600 hover:text-red-700 font-medium"
                 >
                   + Add Question
@@ -728,7 +799,12 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                     className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
                   />
                   <button
-                    onClick={() => setEditContent({ ...editContent, questions: (editContent.questions || []).filter((_, idx) => idx !== i) })}
+                    onClick={() =>
+                      setEditContent({
+                        ...editContent,
+                        questions: (editContent.questions || []).filter((_, idx) => idx !== i),
+                      })
+                    }
                     className="p-1 text-gray-400 hover:text-red-600 transition-colors"
                   >
                     <X className="w-4 h-4" />
@@ -737,18 +813,61 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               ))}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">Submission Types</label>
-              <p className="text-xs text-gray-500 mb-3">Select which submission methods learners can use for this assignment.</p>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Submission Types
+              </label>
+              <p className="text-xs text-gray-500 mb-3">
+                Select which submission methods learners can use for this assignment.
+              </p>
               <div className="grid grid-cols-2 gap-2">
-                {([
-                  { value: 'text', label: 'Text Entry', desc: 'Written response in a text box', icon: Type },
-                  { value: 'file_upload', label: 'File Upload', desc: 'Upload PDF, Word, or other files', icon: Upload },
-                  { value: 'url', label: 'URL / Link', desc: 'Submit a link to external work', icon: Link },
-                  { value: 'video', label: 'Video', desc: 'Record or upload a video response', icon: Video },
-                  { value: 'presentation', label: 'Presentation', desc: 'Upload slides (PPT, PDF)', icon: Presentation },
-                  { value: 'spreadsheet', label: 'Spreadsheet', desc: 'Upload Excel or CSV files', icon: Table },
-                ] as { value: string; label: string; desc: string; icon: React.ComponentType<{ className?: string }> }[]).map((opt) => {
-                  const selected = (editContent.submissionTypes || []).includes(opt.value as 'text');
+                {(
+                  [
+                    {
+                      value: 'text',
+                      label: 'Text Entry',
+                      desc: 'Written response in a text box',
+                      icon: Type,
+                    },
+                    {
+                      value: 'file_upload',
+                      label: 'File Upload',
+                      desc: 'Upload PDF, Word, or other files',
+                      icon: Upload,
+                    },
+                    {
+                      value: 'url',
+                      label: 'URL / Link',
+                      desc: 'Submit a link to external work',
+                      icon: Link,
+                    },
+                    {
+                      value: 'video',
+                      label: 'Video',
+                      desc: 'Record or upload a video response',
+                      icon: Video,
+                    },
+                    {
+                      value: 'presentation',
+                      label: 'Presentation',
+                      desc: 'Upload slides (PPT, PDF)',
+                      icon: Presentation,
+                    },
+                    {
+                      value: 'spreadsheet',
+                      label: 'Spreadsheet',
+                      desc: 'Upload Excel or CSV files',
+                      icon: Table,
+                    },
+                  ] as {
+                    value: string;
+                    label: string;
+                    desc: string;
+                    icon: React.ComponentType<{ className?: string }>;
+                  }[]
+                ).map((opt) => {
+                  const selected = (editContent.submissionTypes || []).includes(
+                    opt.value as 'text'
+                  );
                   const OptIcon = opt.icon;
                   return (
                     <button
@@ -767,7 +886,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                           : 'border-gray-200 hover:border-gray-300'
                       }`}
                     >
-                      <OptIcon className={`w-4 h-4 mt-0.5 shrink-0 ${selected ? 'text-red-500' : 'text-gray-400'}`} />
+                      <OptIcon
+                        className={`w-4 h-4 mt-0.5 shrink-0 ${selected ? 'text-red-500' : 'text-gray-400'}`}
+                      />
                       <div>
                         <p className="text-sm font-medium text-gray-900">{opt.label}</p>
                         <p className="text-xs text-gray-500 mt-0.5">{opt.desc}</p>
@@ -780,22 +901,39 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
             {(editContent.submissionTypes || []).includes('file_upload') && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Max File Size (MB)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Max File Size (MB)
+                  </label>
                   <input
                     type="number"
                     value={editContent.maxFileSize || ''}
-                    onChange={(e) => setEditContent({ ...editContent, maxFileSize: e.target.value === '' ? undefined : Number(e.target.value) })}
+                    onChange={(e) =>
+                      setEditContent({
+                        ...editContent,
+                        maxFileSize: e.target.value === '' ? undefined : Number(e.target.value),
+                      })
+                    }
                     min={1}
                     className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
                     placeholder="e.g., 25"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Allowed File Types</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Allowed File Types
+                  </label>
                   <input
                     type="text"
                     value={(editContent.allowedFileTypes || []).join(', ')}
-                    onChange={(e) => setEditContent({ ...editContent, allowedFileTypes: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+                    onChange={(e) =>
+                      setEditContent({
+                        ...editContent,
+                        allowedFileTypes: e.target.value
+                          .split(',')
+                          .map((s) => s.trim())
+                          .filter(Boolean),
+                      })
+                    }
                     className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
                     placeholder="e.g., .pdf, .docx, .pptx"
                   />
@@ -822,12 +960,7 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
         );
 
       case 'quiz':
-        return (
-          <QuizEditor
-            content={editContent}
-            onChange={(updated) => setEditContent(updated)}
-          />
-        );
+        return <QuizEditor content={editContent} onChange={(updated) => setEditContent(updated)} />;
 
       case 'survey':
         return (
@@ -842,7 +975,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Survey ID (optional)</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">
+                Survey ID (optional)
+              </label>
               <input
                 type="text"
                 value={(editContent as { surveyId?: string })?.surveyId ?? ''}
@@ -862,16 +997,17 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
           <div className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Introduction</label>
-              <textarea
+              <RichTextEditor
                 value={editContent.introduction || ''}
-                onChange={(e) => setEditContent({ ...editContent, introduction: e.target.value })}
-                rows={4}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none resize-none bg-gray-50"
-                placeholder="Introduce the lesson and its importance..."
+                onChange={(html) => setEditContent({ ...editContent, introduction: html })}
+                placeholder="Introduce the goal-setting activity..."
+                minHeight={120}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Goal Statement Template</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Goal Statement Template
+              </label>
               <textarea
                 value={editContent.goalPrompt || ''}
                 onChange={(e) => setEditContent({ ...editContent, goalPrompt: e.target.value })}
@@ -881,20 +1017,36 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Success Metric Guidance</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Success Metric Guidance
+              </label>
               <textarea
                 value={editContent.metricsGuidance || ''}
-                onChange={(e) => setEditContent({ ...editContent, metricsGuidance: e.target.value, requireMetrics: !!e.target.value.trim() })}
+                onChange={(e) =>
+                  setEditContent({
+                    ...editContent,
+                    metricsGuidance: e.target.value,
+                    requireMetrics: !!e.target.value.trim(),
+                  })
+                }
                 rows={4}
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none resize-none bg-gray-50"
                 placeholder="How will learners measure success? (e.g., Number of 1-on-1s conducted, feedback score, etc.)"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Action Steps Template</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Action Steps Template
+              </label>
               <textarea
                 value={editContent.actionStepsGuidance || ''}
-                onChange={(e) => setEditContent({ ...editContent, actionStepsGuidance: e.target.value, requireActionSteps: !!e.target.value.trim() })}
+                onChange={(e) =>
+                  setEditContent({
+                    ...editContent,
+                    actionStepsGuidance: e.target.value,
+                    requireActionSteps: !!e.target.value.trim(),
+                  })
+                }
                 rows={4}
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none resize-none bg-gray-50"
                 placeholder="Guide learners on breaking down their goal into specific actions..."
@@ -924,12 +1076,11 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
           <div className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Introduction</label>
-              <textarea
+              <RichTextEditor
                 value={editContent.introduction || ''}
-                onChange={(e) => setEditContent({ ...editContent, introduction: e.target.value })}
-                rows={4}
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none resize-none bg-gray-50"
-                placeholder="Introduce the lesson and its importance..."
+                onChange={(html) => setEditContent({ ...editContent, introduction: html })}
+                placeholder="Introduce the reflection activity..."
+                minHeight={120}
               />
             </div>
             <div>
@@ -949,7 +1100,12 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               <div className="flex items-center justify-between mb-3">
                 <label className="text-sm font-medium text-gray-700">Reflection Prompts</label>
                 <button
-                  onClick={() => setEditContent({ ...editContent, reflectionPrompts: [...(editContent.reflectionPrompts || []), ''] })}
+                  onClick={() =>
+                    setEditContent({
+                      ...editContent,
+                      reflectionPrompts: [...(editContent.reflectionPrompts || []), ''],
+                    })
+                  }
                   className="text-sm text-red-600 hover:text-red-700 font-medium"
                 >
                   + Add Prompt
@@ -969,7 +1125,14 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                     placeholder={`Reflection prompt ${i + 1}...`}
                   />
                   <button
-                    onClick={() => setEditContent({ ...editContent, reflectionPrompts: (editContent.reflectionPrompts || []).filter((_, idx) => idx !== i) })}
+                    onClick={() =>
+                      setEditContent({
+                        ...editContent,
+                        reflectionPrompts: (editContent.reflectionPrompts || []).filter(
+                          (_, idx) => idx !== i
+                        ),
+                      })
+                    }
                     className="p-2 text-gray-400 hover:text-red-600 transition-colors mt-1"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -979,22 +1142,36 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Min Length (characters)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Min Length (characters)
+                </label>
                 <input
                   type="number"
                   value={editContent.minLength || ''}
-                  onChange={(e) => setEditContent({ ...editContent, minLength: e.target.value === '' ? undefined : Number(e.target.value) })}
+                  onChange={(e) =>
+                    setEditContent({
+                      ...editContent,
+                      minLength: e.target.value === '' ? undefined : Number(e.target.value),
+                    })
+                  }
                   min={0}
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
                   placeholder="e.g., 50"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Max Length (characters)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Max Length (characters)
+                </label>
                 <input
                   type="number"
                   value={editContent.maxLength || ''}
-                  onChange={(e) => setEditContent({ ...editContent, maxLength: e.target.value === '' ? undefined : Number(e.target.value) })}
+                  onChange={(e) =>
+                    setEditContent({
+                      ...editContent,
+                      maxLength: e.target.value === '' ? undefined : Number(e.target.value),
+                    })
+                  }
                   min={0}
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
                   placeholder="e.g., 500"
@@ -1097,10 +1274,16 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                     }`}
                   >
                     <span className="p-0.5 w-5" />
-                    <Calendar className={`w-4 h-4 shrink-0 ${isModSelected ? 'text-blue-500' : 'text-blue-400'}`} />
+                    <Calendar
+                      className={`w-4 h-4 shrink-0 ${isModSelected ? 'text-blue-500' : 'text-blue-400'}`}
+                    />
                     <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-500 leading-none mb-0.5">Event</p>
-                      <p className={`text-sm font-medium truncate ${isModSelected ? 'text-blue-600' : 'text-gray-900'}`}>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-500 leading-none mb-0.5">
+                        Event
+                      </p>
+                      <p
+                        className={`text-sm font-medium truncate ${isModSelected ? 'text-blue-600' : 'text-gray-900'}`}
+                      >
                         {mod.title}
                       </p>
                       {mod.eventConfig?.date && (
@@ -1125,7 +1308,12 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                     role="button"
                     tabIndex={0}
                     onClick={(e) => handleToggleModule(e, mod.id)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleToggleModule(e as unknown as React.MouseEvent, mod.id); } }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleToggleModule(e as unknown as React.MouseEvent, mod.id);
+                      }
+                    }}
                     className="p-0.5 text-gray-400 hover:text-gray-600"
                   >
                     {isExpanded ? (
@@ -1134,13 +1322,18 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                       <ChevronRight className="w-4 h-4" />
                     )}
                   </span>
-                  <FolderOpen className={`w-4 h-4 shrink-0 ${isModSelected ? 'text-red-500' : 'text-gray-400'}`} />
+                  <FolderOpen
+                    className={`w-4 h-4 shrink-0 ${isModSelected ? 'text-red-500' : 'text-gray-400'}`}
+                  />
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium truncate ${isModSelected ? 'text-red-600' : 'text-gray-900'}`}>
+                    <p
+                      className={`text-sm font-medium truncate ${isModSelected ? 'text-red-600' : 'text-gray-900'}`}
+                    >
                       {mod.title}
                     </p>
                     <p className="text-xs text-gray-400">
-                      {sortedLessons.length} lesson{sortedLessons.length !== 1 ? 's' : ''} &bull; {modulePoints} pts
+                      {sortedLessons.length} lesson{sortedLessons.length !== 1 ? 's' : ''} &bull;{' '}
+                      {modulePoints} pts
                     </p>
                   </div>
                 </button>
@@ -1149,8 +1342,11 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                 {isExpanded && (
                   <>
                     {sortedLessons.map((lesson) => {
-                      const isVideo = lesson.contentType === 'lesson' && !!(lesson.content as LessonContent)?.videoUrl;
-                      const typeConfig = CONTENT_TYPE_CONFIG[lesson.contentType] || CONTENT_TYPE_CONFIG.lesson!;
+                      const isVideo =
+                        lesson.contentType === 'lesson' &&
+                        !!(lesson.content as LessonContent)?.videoUrl;
+                      const typeConfig =
+                        CONTENT_TYPE_CONFIG[lesson.contentType] || CONTENT_TYPE_CONFIG.lesson!;
                       const TypeIcon = isVideo ? Video : typeConfig!.icon;
                       const isLessonSelected = selectedLesson?.id === lesson.id;
 
@@ -1162,14 +1358,16 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                             isLessonSelected ? 'bg-red-50' : 'hover:bg-gray-50'
                           }`}
                         >
-                          <TypeIcon className={`w-4 h-4 shrink-0 ${isLessonSelected ? 'text-red-500' : typeConfig!.color}`} />
+                          <TypeIcon
+                            className={`w-4 h-4 shrink-0 ${isLessonSelected ? 'text-red-500' : typeConfig!.color}`}
+                          />
                           <div className="flex-1 min-w-0">
-                            <p className={`text-sm truncate ${isLessonSelected ? 'text-red-600 font-medium' : 'text-gray-700'}`}>
+                            <p
+                              className={`text-sm truncate ${isLessonSelected ? 'text-red-600 font-medium' : 'text-gray-700'}`}
+                            >
                               {lesson.title}
                             </p>
-                            <p className="text-xs text-gray-400">
-                              {lesson.points} pts
-                            </p>
+                            <p className="text-xs text-gray-400">{lesson.points} pts</p>
                           </div>
                         </button>
                       );
@@ -1195,7 +1393,10 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                       </button>
                       {showAddLessonMenu && selectedModuleId === mod.id && (
                         <>
-                          <div className="fixed inset-0 z-10" onClick={() => setShowAddLessonMenu(false)} />
+                          <div
+                            className="fixed inset-0 z-10"
+                            onClick={() => setShowAddLessonMenu(false)}
+                          />
                           <div className="absolute left-12 top-full mt-0.5 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20 max-h-80 overflow-y-auto">
                             {(['Content', 'Reflection', 'Activity'] as const).map((group) => {
                               const items = ADD_MENU_CONFIG.filter((c) => c.group === group);
@@ -1271,14 +1472,20 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
                   {(() => {
-                    const isVideo = selectedLesson.contentType === 'lesson' && !!(selectedLesson.content as LessonContent)?.videoUrl;
-                    const TypeIcon = isVideo ? Video : (CONTENT_TYPE_CONFIG[selectedLesson.contentType]?.icon || BookOpen);
+                    const isVideo =
+                      selectedLesson.contentType === 'lesson' &&
+                      !!(selectedLesson.content as LessonContent)?.videoUrl;
+                    const TypeIcon = isVideo
+                      ? Video
+                      : CONTENT_TYPE_CONFIG[selectedLesson.contentType]?.icon || BookOpen;
                     return <TypeIcon className="w-5 h-5 text-red-600" />;
                   })()}
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Edit Lesson</h2>
-                  <p className="text-sm text-gray-500">Configure lesson content and role-specific settings</p>
+                  <p className="text-sm text-gray-500">
+                    Configure lesson content and role-specific settings
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -1332,7 +1539,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               <h3 className="text-base font-semibold text-gray-900 mb-4">Lesson Settings</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Lesson Title</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Lesson Title
+                  </label>
                   <input
                     type="text"
                     value={editTitle}
@@ -1342,14 +1551,18 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Lesson Type</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Lesson Type
+                  </label>
                   <select
                     value={editContentType}
                     onChange={(e) => setEditContentType(e.target.value as ContentType)}
                     className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
                   >
                     {Object.entries(CONTENT_TYPE_CONFIG).map(([key, config]) => (
-                      <option key={key} value={key}>{config!.label}</option>
+                      <option key={key} value={key}>
+                        {config!.label}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -1358,24 +1571,32 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                   <input
                     type="number"
                     value={editPoints}
-                    onChange={(e) => setEditPoints(e.target.value === '' ? '' : Number(e.target.value))}
+                    onChange={(e) =>
+                      setEditPoints(e.target.value === '' ? '' : Number(e.target.value))
+                    }
                     min={0}
                     className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
                     placeholder="0"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Estimated Duration</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Estimated Duration
+                  </label>
                   <div className="relative">
                     <input
                       type="number"
                       value={editDuration}
-                      onChange={(e) => setEditDuration(e.target.value === '' ? '' : Number(e.target.value))}
+                      onChange={(e) =>
+                        setEditDuration(e.target.value === '' ? '' : Number(e.target.value))
+                      }
                       min={0}
                       className="w-full px-4 py-2.5 pr-12 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
                       placeholder="0"
                     />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400">min</span>
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400">
+                      min
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1391,12 +1612,26 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                 Require mentor or facilitator approval before this lesson is marked as complete.
               </p>
               <div className="grid grid-cols-2 gap-3">
-                {([
-                  { value: 'none', label: 'No Approval', desc: 'Learner completes on their own' },
-                  { value: 'mentor', label: 'Mentor Approval', desc: 'Mentor must approve completion' },
-                  { value: 'facilitator', label: 'Facilitator Approval', desc: 'Facilitator must approve completion' },
-                  { value: 'both', label: 'Both Required', desc: 'Both mentor and facilitator must approve' },
-                ] as { value: ApprovalRequired; label: string; desc: string }[]).map((opt) => (
+                {(
+                  [
+                    { value: 'none', label: 'No Approval', desc: 'Learner completes on their own' },
+                    {
+                      value: 'mentor',
+                      label: 'Mentor Approval',
+                      desc: 'Mentor must approve completion',
+                    },
+                    {
+                      value: 'facilitator',
+                      label: 'Facilitator Approval',
+                      desc: 'Facilitator must approve completion',
+                    },
+                    {
+                      value: 'both',
+                      label: 'Both Required',
+                      desc: 'Both mentor and facilitator must approve',
+                    },
+                  ] as { value: ApprovalRequired; label: string; desc: string }[]
+                ).map((opt) => (
                   <button
                     key={opt.value}
                     onClick={() => setEditApprovalRequired(opt.value)}
@@ -1406,10 +1641,14 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
-                    <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                      editApprovalRequired === opt.value ? 'border-red-500' : 'border-gray-300'
-                    }`}>
-                      {editApprovalRequired === opt.value && <div className="w-2 h-2 rounded-full bg-red-500" />}
+                    <div
+                      className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                        editApprovalRequired === opt.value ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                    >
+                      {editApprovalRequired === opt.value && (
+                        <div className="w-2 h-2 rounded-full bg-red-500" />
+                      )}
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-900">{opt.label}</p>
@@ -1435,14 +1674,20 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
-                  <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                    contentMode === 'shared' ? 'border-red-500' : 'border-gray-300'
-                  }`}>
-                    {contentMode === 'shared' && <div className="w-2 h-2 rounded-full bg-red-500" />}
+                  <div
+                    className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      contentMode === 'shared' ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                  >
+                    {contentMode === 'shared' && (
+                      <div className="w-2 h-2 rounded-full bg-red-500" />
+                    )}
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-900">Shared Content</p>
-                    <p className="text-xs text-gray-500 mt-0.5">All roles (Learners, Mentors, Facilitators) see the same lesson content</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      All roles (Learners, Mentors, Facilitators) see the same lesson content
+                    </p>
                   </div>
                 </button>
                 <button
@@ -1453,14 +1698,21 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
-                  <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                    contentMode === 'role-specific' ? 'border-red-500' : 'border-gray-300'
-                  }`}>
-                    {contentMode === 'role-specific' && <div className="w-2 h-2 rounded-full bg-red-500" />}
+                  <div
+                    className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                      contentMode === 'role-specific' ? 'border-red-500' : 'border-gray-300'
+                    }`}
+                  >
+                    {contentMode === 'role-specific' && (
+                      <div className="w-2 h-2 rounded-full bg-red-500" />
+                    )}
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-900">Role-Specific Content</p>
-                    <p className="text-xs text-gray-500 mt-0.5">Customize lesson content separately for each role (ideal for mentor meetings, facilitated sessions)</p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Customize lesson content separately for each role (ideal for mentor meetings,
+                      facilitated sessions)
+                    </p>
                   </div>
                 </button>
               </div>
@@ -1468,14 +1720,18 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                 <div className="flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
                   <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5 shrink-0" />
                   <p className="text-xs text-yellow-800">
-                    <span className="font-medium">Role-Specific Mode Active:</span> You&apos;re now customizing content for each role. Use the tabs below to edit content for Learners, Mentors, and Facilitators separately.
+                    <span className="font-medium">Role-Specific Mode Active:</span> You&apos;re now
+                    customizing content for each role. Use the tabs below to edit content for
+                    Learners, Mentors, and Facilitators separately.
                   </p>
                 </div>
               ) : (
                 <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg px-4 py-3">
                   <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
                   <p className="text-xs text-blue-800">
-                    <span className="font-medium">Best Practice:</span> Most lessons use shared content (readings, videos, assignments). Use role-specific only when different participants need completely different materials.
+                    <span className="font-medium">Best Practice:</span> Most lessons use shared
+                    content (readings, videos, assignments). Use role-specific only when different
+                    participants need completely different materials.
                   </p>
                 </div>
               )}
@@ -1486,11 +1742,19 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 {/* Role tabs */}
                 <div className="flex items-center gap-1 border-b border-gray-200 mb-4">
-                  {([
-                    { role: 'learner' as EnrollmentRole, label: 'Learner Content', icon: GraduationCap },
+                  {[
+                    {
+                      role: 'learner' as EnrollmentRole,
+                      label: 'Learner Content',
+                      icon: GraduationCap,
+                    },
                     { role: 'mentor' as EnrollmentRole, label: 'Mentor Content', icon: Users },
-                    { role: 'facilitator' as EnrollmentRole, label: 'Facilitator Content', icon: ShieldCheck },
-                  ]).map((tab) => (
+                    {
+                      role: 'facilitator' as EnrollmentRole,
+                      label: 'Facilitator Content',
+                      icon: ShieldCheck,
+                    },
+                  ].map((tab) => (
                     <button
                       key={tab.role}
                       onClick={() => handleRoleTabChange(tab.role)}
@@ -1560,7 +1824,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <Link className="w-5 h-5 text-gray-500" />
-                  <h3 className="text-base font-semibold text-gray-900">Resources &amp; Attachments</h3>
+                  <h3 className="text-base font-semibold text-gray-900">
+                    Resources &amp; Attachments
+                  </h3>
                 </div>
                 <button
                   onClick={() => {
@@ -1581,7 +1847,10 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               {(editContent.resources || []).length > 0 ? (
                 <div className="space-y-3">
                   {(editContent.resources || []).map((res, i) => (
-                    <div key={i} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                    <div
+                      key={i}
+                      className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100"
+                    >
                       <div className="flex-1 space-y-2">
                         <input
                           type="text"
@@ -1610,7 +1879,15 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                             value={res.type || 'link'}
                             onChange={(e) => {
                               const resources = [...(editContent.resources || [])];
-                              resources[i] = { ...resources[i], type: e.target.value as 'pdf' | 'doc' | 'video' | 'link' | 'spreadsheet' };
+                              resources[i] = {
+                                ...resources[i],
+                                type: e.target.value as
+                                  | 'pdf'
+                                  | 'doc'
+                                  | 'video'
+                                  | 'link'
+                                  | 'spreadsheet',
+                              };
                               setEditContent({ ...editContent, resources });
                             }}
                             className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-white w-32"
@@ -1623,37 +1900,41 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                           </select>
                         </div>
                         {/* Video preview for video-type resources */}
-                        {res.type === 'video' && res.url && (() => {
-                          const embedUrl = getEmbedUrl(res.url);
-                          const provider = getVideoProvider(res.url);
-                          if (embedUrl && provider) {
-                            return (
-                              <div className="mt-2 rounded-lg overflow-hidden border border-gray-200">
-                                <div className="aspect-video bg-black">
-                                  <iframe
-                                    src={embedUrl}
-                                    className="w-full h-full"
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                    allowFullScreen
-                                    title={res.title || 'Video preview'}
-                                  />
+                        {res.type === 'video' &&
+                          res.url &&
+                          (() => {
+                            const embedUrl = getEmbedUrl(res.url);
+                            const provider = getVideoProvider(res.url);
+                            if (embedUrl && provider) {
+                              return (
+                                <div className="mt-2 rounded-lg overflow-hidden border border-gray-200">
+                                  <div className="aspect-video bg-black">
+                                    <iframe
+                                      src={embedUrl}
+                                      className="w-full h-full"
+                                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                      allowFullScreen
+                                      title={res.title || 'Video preview'}
+                                    />
+                                  </div>
+                                  <div className="px-3 py-1.5 bg-gray-50 border-t border-gray-200 flex items-center gap-2">
+                                    <Video className="w-3.5 h-3.5 text-gray-400" />
+                                    <span className="text-xs text-gray-500 capitalize">
+                                      {provider}
+                                    </span>
+                                  </div>
                                 </div>
-                                <div className="px-3 py-1.5 bg-gray-50 border-t border-gray-200 flex items-center gap-2">
-                                  <Video className="w-3.5 h-3.5 text-gray-400" />
-                                  <span className="text-xs text-gray-500 capitalize">{provider}</span>
-                                </div>
-                              </div>
-                            );
-                          }
-                          if (res.url) {
-                            return (
-                              <p className="text-xs text-amber-600 mt-1.5">
-                                Could not recognize video URL. Paste a YouTube or Vimeo link.
-                              </p>
-                            );
-                          }
-                          return null;
-                        })()}
+                              );
+                            }
+                            if (res.url) {
+                              return (
+                                <p className="text-xs text-amber-600 mt-1.5">
+                                  Could not recognize video URL. Paste a YouTube or Vimeo link.
+                                </p>
+                              );
+                            }
+                            return null;
+                          })()}
                       </div>
                       <button
                         onClick={() => {
@@ -1671,7 +1952,8 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                 </div>
               ) : (
                 <div className="text-center py-6 text-sm text-gray-400 border border-dashed border-gray-200 rounded-lg">
-                  No resources added yet. Click &quot;+ Add Resource&quot; to attach worksheets, links, or files.
+                  No resources added yet. Click &quot;+ Add Resource&quot; to attach worksheets,
+                  links, or files.
                 </div>
               )}
             </div>
@@ -1680,7 +1962,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
             <TaskEditor
               tasks={selectedLesson.tasks || []}
               onCreateTask={(input: CreateTaskInput) => createTask.mutate(input)}
-              onUpdateTask={(taskId: string, input: UpdateTaskInput) => updateTask.mutate({ taskId, input })}
+              onUpdateTask={(taskId: string, input: UpdateTaskInput) =>
+                updateTask.mutate({ taskId, input })
+              }
               onDeleteTask={(taskId: string) => deleteTask.mutate(taskId)}
               isCreating={createTask.isPending}
             />
@@ -1701,7 +1985,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-900">Visible to Learners</p>
-                      <p className="text-xs text-gray-500">Learners will see this lesson in their program</p>
+                      <p className="text-xs text-gray-500">
+                        Learners will see this lesson in their program
+                      </p>
                     </div>
                   </div>
                   <ToggleSwitch
@@ -1718,7 +2004,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-900">Visible to Mentors</p>
-                      <p className="text-xs text-gray-500">Mentors will see this lesson for coaching preparation</p>
+                      <p className="text-xs text-gray-500">
+                        Mentors will see this lesson for coaching preparation
+                      </p>
                     </div>
                   </div>
                   <ToggleSwitch
@@ -1735,7 +2023,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-900">Visible to Facilitators</p>
-                      <p className="text-xs text-gray-500">Facilitators will see this lesson for session planning</p>
+                      <p className="text-xs text-gray-500">
+                        Facilitators will see this lesson for session planning
+                      </p>
                     </div>
                   </div>
                   <ToggleSwitch
@@ -1748,7 +2038,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               {/* Best Practice */}
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <p className="text-xs text-gray-500 italic">
-                  <span className="font-medium">Best Practice:</span> Most lessons are visible to all roles. Hide lessons from specific roles only when the content is truly irrelevant (e.g., hide learner prep materials from facilitators).
+                  <span className="font-medium">Best Practice:</span> Most lessons are visible to
+                  all roles. Hide lessons from specific roles only when the content is truly
+                  irrelevant (e.g., hide learner prep materials from facilitators).
                 </p>
               </div>
             </div>
@@ -1800,7 +2092,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               <h3 className="text-base font-semibold text-gray-900 mb-4">Module Information</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Module Title</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Module Title
+                  </label>
                   <input
                     type="text"
                     value={editModuleTitle}
@@ -1810,7 +2104,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Description</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Description
+                  </label>
                   <textarea
                     value={editModuleDescription}
                     onChange={(e) => setEditModuleDescription(e.target.value)}
@@ -1846,7 +2142,6 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                 </div>
               </div>
             </div>
-
           </div>
         ) : (
           /* --- Empty State --- */
@@ -1857,7 +2152,8 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">Structure & Content</h3>
               <p className="text-sm text-gray-500 mb-4">
-                Select a module from the left panel to configure its settings, or click a lesson to edit its content.
+                Select a module from the left panel to configure its settings, or click a lesson to
+                edit its content.
               </p>
             </div>
           </div>

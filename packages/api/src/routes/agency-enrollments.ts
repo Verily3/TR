@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { eq, and, or, isNull, sql, desc } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 import { hash } from 'argon2';
 import crypto from 'node:crypto';
 import { db, schema } from '@tr/db';
@@ -31,15 +32,21 @@ const createEnrollmentSchema = z.object({
 });
 
 const bulkEnrollSchema = z.object({
-  participants: z.array(
-    z.object({
-      email: z.string().email(),
-      firstName: z.string().min(1).max(100),
-      lastName: z.string().min(1).max(100),
-      role: z.enum(['learner', 'mentor', 'facilitator']).default('learner'),
-      tenantId: z.string().uuid().optional(),
-    })
-  ).min(1).max(500),
+  participants: z
+    .array(
+      z.object({
+        email: z
+          .string()
+          .email()
+          .transform((v) => v.toLowerCase().trim()),
+        firstName: z.string().min(1).max(100),
+        lastName: z.string().min(1).max(100),
+        role: z.enum(['learner', 'mentor', 'facilitator']).default('learner'),
+        tenantId: z.string().uuid().optional(),
+      })
+    )
+    .min(1)
+    .max(500),
 });
 
 /**
@@ -50,11 +57,7 @@ async function verifyAgencyProgram(programId: string, agencyId: string) {
     .select()
     .from(programs)
     .where(
-      and(
-        eq(programs.id, programId),
-        eq(programs.agencyId, agencyId),
-        isNull(programs.deletedAt)
-      )
+      and(eq(programs.id, programId), eq(programs.agencyId, agencyId), isNull(programs.deletedAt))
     )
     .limit(1);
 
@@ -80,7 +83,7 @@ agencyEnrollmentsRoutes.get(
 
     await verifyAgencyProgram(programId, user.agencyId!);
 
-    const conditions: unknown[] = [eq(enrollments.programId, programId)];
+    const conditions: SQL<unknown>[] = [eq(enrollments.programId, programId)];
 
     if (role) {
       conditions.push(eq(enrollments.role, role));
@@ -109,13 +112,13 @@ agencyEnrollmentsRoutes.get(
 
     if (search) {
       // Need the user join for search filtering
-      const [{ count }] = await countQuery.where(and(...(conditions as any[])));
+      const [{ count }] = await countQuery.where(and(...conditions));
       var total = Number(count);
     } else {
       const [{ count }] = await db
         .select({ count: sql<number>`count(*)` })
         .from(enrollments)
-        .where(and(...(conditions as any[])));
+        .where(and(...conditions));
       var total = Number(count);
     }
 
@@ -145,7 +148,7 @@ agencyEnrollmentsRoutes.get(
       .from(enrollments)
       .innerJoin(users, eq(enrollments.userId, users.id))
       .leftJoin(tenants, eq(enrollments.tenantId, tenants.id))
-      .where(and(...(conditions as any[])))
+      .where(and(...conditions))
       .orderBy(desc(enrollments.enrolledAt))
       .limit(limit)
       .offset((page - 1) * limit);
@@ -180,11 +183,7 @@ agencyEnrollmentsRoutes.post(
     const program = await verifyAgencyProgram(programId, user.agencyId!);
 
     // Verify user exists and belongs to this agency's scope
-    const [enrollUser] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
+    const [enrollUser] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
 
     if (!enrollUser) {
       throw new NotFoundError('User', userId);
@@ -198,12 +197,7 @@ agencyEnrollmentsRoutes.post(
       const [userTenant] = await db
         .select()
         .from(tenants)
-        .where(
-          and(
-            eq(tenants.id, enrollUser.tenantId),
-            eq(tenants.agencyId, user.agencyId!)
-          )
-        )
+        .where(and(eq(tenants.id, enrollUser.tenantId), eq(tenants.agencyId, user.agencyId!)))
         .limit(1);
 
       if (!userTenant) {
@@ -215,12 +209,7 @@ agencyEnrollmentsRoutes.post(
     const [existing] = await db
       .select()
       .from(enrollments)
-      .where(
-        and(
-          eq(enrollments.programId, programId),
-          eq(enrollments.userId, userId)
-        )
-      )
+      .where(and(eq(enrollments.programId, programId), eq(enrollments.userId, userId)))
       .limit(1);
 
     if (existing) {
@@ -232,12 +221,7 @@ agencyEnrollmentsRoutes.post(
       const [{ enrollmentCount }] = await db
         .select({ enrollmentCount: sql<number>`count(*)` })
         .from(enrollments)
-        .where(
-          and(
-            eq(enrollments.programId, programId),
-            eq(enrollments.role, 'learner')
-          )
-        );
+        .where(and(eq(enrollments.programId, programId), eq(enrollments.role, 'learner')));
 
       if (Number(enrollmentCount) >= program.config.maxCapacity) {
         throw new BadRequestError('Program has reached maximum capacity');
@@ -275,19 +259,22 @@ agencyEnrollmentsRoutes.post(
     await verifyAgencyProgram(programId, user.agencyId!);
 
     // Validate all tenantIds belong to this agency
-    const tenantIds = [...new Set(participants.filter(p => p.tenantId).map(p => p.tenantId!))];
+    const tenantIds = [...new Set(participants.filter((p) => p.tenantId).map((p) => p.tenantId!))];
     if (tenantIds.length > 0) {
       const validTenants = await db
         .select({ id: tenants.id })
         .from(tenants)
         .where(
           and(
-            sql`${tenants.id} IN (${sql.join(tenantIds.map(id => sql`${id}`), sql`, `)})`,
+            sql`${tenants.id} IN (${sql.join(
+              tenantIds.map((id) => sql`${id}`),
+              sql`, `
+            )})`,
             eq(tenants.agencyId, user.agencyId!)
           )
         );
 
-      const validTenantIds = new Set(validTenants.map(t => t.id));
+      const validTenantIds = new Set(validTenants.map((t) => t.id));
       for (const tid of tenantIds) {
         if (!validTenantIds.has(tid)) {
           throw new BadRequestError(`Tenant ${tid} does not belong to this agency`);
@@ -317,9 +304,7 @@ agencyEnrollmentsRoutes.post(
               eq(users.email, participant.email),
               or(
                 eq(users.agencyId, user.agencyId!),
-                participant.tenantId
-                  ? eq(users.tenantId, participant.tenantId)
-                  : sql`FALSE`
+                participant.tenantId ? eq(users.tenantId, participant.tenantId) : sql`FALSE`
               )
             )
           )
@@ -331,12 +316,7 @@ agencyEnrollmentsRoutes.post(
             .select({ user: users })
             .from(users)
             .innerJoin(tenants, eq(users.tenantId, tenants.id))
-            .where(
-              and(
-                eq(users.email, participant.email),
-                eq(tenants.agencyId, user.agencyId!)
-              )
-            )
+            .where(and(eq(users.email, participant.email), eq(tenants.agencyId, user.agencyId!)))
             .limit(1);
 
           if (userWithTenant.length > 0) {
@@ -379,12 +359,7 @@ agencyEnrollmentsRoutes.post(
         const [existing] = await db
           .select()
           .from(enrollments)
-          .where(
-            and(
-              eq(enrollments.programId, programId),
-              eq(enrollments.userId, enrollUserId)
-            )
-          )
+          .where(and(eq(enrollments.programId, programId), eq(enrollments.userId, enrollUserId)))
           .limit(1);
 
         if (existing) {
@@ -417,12 +392,15 @@ agencyEnrollmentsRoutes.post(
       }
     }
 
-    return c.json({
-      data: {
-        results,
-        summary: { enrolled, created, errors, total: participants.length },
+    return c.json(
+      {
+        data: {
+          results,
+          summary: { enrolled, created, errors, total: participants.length },
+        },
       },
-    }, 201);
+      201
+    );
   }
 );
 
@@ -445,12 +423,7 @@ agencyEnrollmentsRoutes.delete(
     const [existing] = await db
       .select()
       .from(enrollments)
-      .where(
-        and(
-          eq(enrollments.id, enrollmentId),
-          eq(enrollments.programId, programId)
-        )
-      )
+      .where(and(eq(enrollments.id, enrollmentId), eq(enrollments.programId, programId)))
       .limit(1);
 
     if (!existing) {
