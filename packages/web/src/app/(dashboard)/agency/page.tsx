@@ -581,14 +581,12 @@ function PeopleTab() {
             <option value="learner">Learner</option>
           </select>
         </div>
-        {activeTenantId && selectedTenant !== 'agency' && (
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors whitespace-nowrap"
-          >
-            + Add User
-          </button>
-        )}
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors whitespace-nowrap"
+        >
+          + Add User
+        </button>
       </div>
 
       {/* Users Table */}
@@ -677,14 +675,16 @@ function PeopleTab() {
         </div>
       )}
 
-      {activeTenantId && (
-        <CreateUserModal
-          open={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
-          tenantId={activeTenantId}
-          tenantName={tenants?.find((t) => t.id === activeTenantId)?.name}
-        />
-      )}
+      <CreateUserModal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        tenantId={
+          selectedTenant !== 'all' && selectedTenant !== 'agency' ? activeTenantId : undefined
+        }
+        tenantName={
+          activeTenantId ? tenants?.find((t) => t.id === activeTenantId)?.name : undefined
+        }
+      />
 
       {changeRoleUser && (
         <ChangeRoleModal

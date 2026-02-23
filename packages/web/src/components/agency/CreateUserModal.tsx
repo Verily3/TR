@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCreateUser } from '@/hooks/api/useUsers';
+import { useTenants } from '@/hooks/api/useTenants';
 
 interface CreateUserModalProps {
   open: boolean;
   onClose: () => void;
-  tenantId: string;
+  tenantId?: string;
   tenantName?: string;
 }
 
@@ -18,19 +19,34 @@ const ROLES = [
 ] as const;
 
 export function CreateUserModal({ open, onClose, tenantId, tenantName }: CreateUserModalProps) {
+  const { data: tenants } = useTenants();
+  const [selectedTenantId, setSelectedTenantId] = useState(tenantId || '');
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'learner' | 'mentor' | 'facilitator' | 'tenant_admin'>('learner');
+  const [role, setRole] = useState<'learner' | 'mentor' | 'facilitator' | 'tenant_admin'>(
+    'learner'
+  );
   const [title, setTitle] = useState('');
   const [department, setDepartment] = useState('');
-  const createUser = useCreateUser(tenantId);
+  const createUser = useCreateUser(selectedTenantId || undefined);
+
+  // Sync pre-selected tenant when prop changes (e.g., parent dropdown changes)
+  useEffect(() => {
+    if (tenantId) setSelectedTenantId(tenantId);
+  }, [tenantId]);
 
   if (!open) return null;
 
+  const selectedTenantName =
+    tenantName && selectedTenantId === tenantId
+      ? tenantName
+      : tenants?.find((t) => t.id === selectedTenantId)?.name;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedTenantId) return;
     try {
       await createUser.mutateAsync({
         email,
@@ -60,10 +76,29 @@ export function CreateUserModal({ open, onClose, tenantId, tenantName }: CreateU
       <div className="relative bg-white rounded-xl shadow-lg w-full max-w-md mx-4 p-6 max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-semibold text-gray-900">Add User</h2>
         <p className="mt-1 text-sm text-gray-500">
-          Add a new user{tenantName ? ` to ${tenantName}` : ''}.
+          Add a new user{selectedTenantName ? ` to ${selectedTenantName}` : ''}.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Company <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={selectedTenantId}
+              onChange={(e) => setSelectedTenantId(e.target.value)}
+              required
+              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
+            >
+              <option value="">Select a company...</option>
+              {tenants?.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-700">
@@ -127,7 +162,9 @@ export function CreateUserModal({ open, onClose, tenantId, tenantName }: CreateU
               className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
             >
               {ROLES.map((r) => (
-                <option key={r.value} value={r.value}>{r.label}</option>
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
               ))}
             </select>
           </div>
@@ -169,7 +206,9 @@ export function CreateUserModal({ open, onClose, tenantId, tenantName }: CreateU
             </button>
             <button
               type="submit"
-              disabled={createUser.isPending || !email || !firstName || !lastName}
+              disabled={
+                createUser.isPending || !selectedTenantId || !email || !firstName || !lastName
+              }
               className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
             >
               {createUser.isPending ? 'Adding...' : 'Add User'}
