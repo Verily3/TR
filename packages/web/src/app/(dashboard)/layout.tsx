@@ -13,17 +13,26 @@ import { useOnboardingPath } from '@/hooks/api/useOnboarding';
  * Redirects new (non-agency) users to /onboarding if they haven't started yet.
  * Only fires once per session — React Query caches the result.
  */
-function OnboardingGate({ userId, isAgencyUser }: { userId: string; isAgencyUser: boolean }) {
+function OnboardingGate({
+  userId,
+  isAgencyUser,
+  isImpersonating,
+}: {
+  userId: string;
+  isAgencyUser: boolean;
+  isImpersonating: boolean;
+}) {
   const router = useRouter();
   const { data: pathData } = useOnboardingPath();
 
   useEffect(() => {
     if (isAgencyUser) return;
+    if (isImpersonating) return;
     if (!pathData) return;
     if (pathData.status === 'not_started') {
       router.push('/onboarding');
     }
-  }, [pathData, isAgencyUser, router, userId]);
+  }, [pathData, isAgencyUser, isImpersonating, router, userId]);
 
   return null;
 }
@@ -70,7 +79,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen bg-white">
-      <OnboardingGate userId={user.id} isAgencyUser={isAgencyUser} />
+      <OnboardingGate
+        userId={user.id}
+        isAgencyUser={isAgencyUser}
+        isImpersonating={!!user.isImpersonating}
+      />
       <ImpersonationBanner />
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="lg:pl-64">

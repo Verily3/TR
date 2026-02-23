@@ -24,6 +24,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
+import { ImpersonationBanner } from '@/components/layout/impersonation-banner';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -201,6 +202,10 @@ export default function OnboardingPage() {
     }
     // Agency users don't do personal onboarding
     if (!authLoading && user?.agencyId && !user?.tenantId) {
+      router.replace('/dashboard');
+    }
+    // Impersonating users skip onboarding — redirect back to dashboard
+    if (!authLoading && user?.isImpersonating) {
       router.replace('/dashboard');
     }
   }, [authLoading, user, router]);
@@ -689,6 +694,7 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
+      <ImpersonationBanner />
       {/* Top bar */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-border">
         <div className="flex items-center gap-2">

@@ -41,9 +41,11 @@ export function ImpersonationBanner() {
     }
 
     try {
+      const accessToken = localStorage.getItem('accessToken');
       const response = await fetch(`${API_URL}/api/admin/impersonate/status`, {
         headers: {
           'X-Impersonation-Token': token,
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
       });
 
@@ -72,10 +74,12 @@ export function ImpersonationBanner() {
 
     setIsEnding(true);
     try {
+      const accessToken = localStorage.getItem('accessToken');
       await fetch(`${API_URL}/api/admin/impersonate/end`, {
         method: 'POST',
         headers: {
           'X-Impersonation-Token': token,
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
       });
 
@@ -108,12 +112,7 @@ export function ImpersonationBanner() {
   return (
     <div className="bg-amber-500 text-amber-950 px-4 py-2 flex items-center justify-between">
       <div className="flex items-center gap-2">
-        <svg
-          className="h-4 w-4"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -125,15 +124,11 @@ export function ImpersonationBanner() {
           Viewing as <strong>{targetName}</strong>
         </span>
         {status.session?.reason && (
-          <span className="text-sm opacity-75">
-            ({status.session.reason})
-          </span>
+          <span className="text-sm opacity-75">({status.session.reason})</span>
         )}
       </div>
       <div className="flex items-center gap-4">
-        <span className="text-xs opacity-75">
-          Logged in as {adminName}
-        </span>
+        <span className="text-xs opacity-75">Logged in as {adminName}</span>
         <button
           onClick={handleEndImpersonation}
           disabled={isEnding}
