@@ -30,7 +30,8 @@
     "db:seed": "tsx --env-file=.env src/seed.ts && tsx --env-file=.env src/seed-leadershift.ts",
     "db:seed-leadershift": "tsx --env-file=.env src/seed-leadershift.ts",
     "db:seed-all": "tsx --env-file=.env src/seed.ts && tsx --env-file=.env src/seed-leadershift.ts",
-    "db:migrate-avatars": "tsx --env-file=.env src/scripts/migrate-avatars.ts"
+    "db:migrate-avatars": "tsx --env-file=.env src/scripts/migrate-avatars.ts",
+    "db:seed-production": "tsx --env-file=.env src/seed-production.ts"
   },
   "dependencies": {
     "@tr/shared": "workspace:*",
