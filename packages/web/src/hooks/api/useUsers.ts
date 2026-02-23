@@ -16,6 +16,7 @@ export interface TenantUser {
   roleSlug: string | null;
   roleName: string | null;
   roleLevel: number | null;
+  roles: { slug: string; name: string; level: number }[] | null;
 }
 
 export interface TenantUserDetail extends TenantUser {
@@ -24,10 +25,13 @@ export interface TenantUserDetail extends TenantUser {
   managerId: string | null;
   metadata: Record<string, unknown>;
   roles: {
-    roleId: string;
-    roleName: string;
-    roleSlug: string;
-    roleLevel: number;
+    slug: string;
+    name: string;
+    level: number;
+    roleId?: string;
+    roleName?: string;
+    roleSlug?: string;
+    roleLevel?: number;
   }[];
 }
 
@@ -38,7 +42,7 @@ export interface CreateUserInput {
   password?: string;
   title?: string;
   department?: string;
-  role: 'learner' | 'mentor' | 'facilitator' | 'tenant_admin';
+  roles: ('learner' | 'mentor' | 'facilitator' | 'tenant_admin')[];
   managerId?: string | null;
 }
 
@@ -52,7 +56,7 @@ export interface UpdateUserInput {
 }
 
 export interface ChangeRoleInput {
-  role: 'learner' | 'mentor' | 'facilitator' | 'tenant_admin';
+  roles: ('learner' | 'mentor' | 'facilitator' | 'tenant_admin')[];
 }
 
 export interface UsersListParams {
@@ -152,14 +156,21 @@ export function useChangeUserRole(tenantId: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ userId, role }: { userId: string; role: ChangeRoleInput['role'] }) => {
+    mutationFn: async ({ userId, roles }: { userId: string; roles: ChangeRoleInput['roles'] }) => {
       const response = (await api.put<{
         userId: string;
         roleSlug: string;
         roleName: string;
         roleLevel: number;
-      }>(`/api/users/tenants/${tenantId}/${userId}/role`, { role })) as unknown as {
-        data: { userId: string; roleSlug: string; roleName: string; roleLevel: number };
+        roles: { slug: string; name: string; level: number }[];
+      }>(`/api/users/tenants/${tenantId}/${userId}/role`, { roles })) as unknown as {
+        data: {
+          userId: string;
+          roleSlug: string;
+          roleName: string;
+          roleLevel: number;
+          roles: { slug: string; name: string; level: number }[];
+        };
       };
       return response.data;
     },

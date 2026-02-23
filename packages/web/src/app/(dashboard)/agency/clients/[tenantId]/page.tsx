@@ -28,7 +28,7 @@ export default function ClientDetailPage() {
   const [changeRoleUser, setChangeRoleUser] = useState<{
     userId: string;
     userName: string;
-    currentRole: string | null;
+    currentRoles: string[];
   } | null>(null);
   const [editingStatus, setEditingStatus] = useState(false);
   const [impersonateUser, setImpersonateUser] = useState<{
@@ -80,7 +80,9 @@ export default function ClientDetailPage() {
 
   const handleStatusChange = async (newStatus: string) => {
     try {
-      await updateTenant.mutateAsync({ status: newStatus as 'active' | 'trial' | 'suspended' | 'churned' });
+      await updateTenant.mutateAsync({
+        status: newStatus as 'active' | 'trial' | 'suspended' | 'churned',
+      });
       setEditingStatus(false);
     } catch (err) {
       // handled by mutation
@@ -91,9 +93,13 @@ export default function ClientDetailPage() {
     <div className="max-w-[1400px] mx-auto">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-gray-500 mb-4">
-        <Link href="/agency" className="hover:text-red-600">Agency</Link>
+        <Link href="/agency" className="hover:text-red-600">
+          Agency
+        </Link>
         <span>/</span>
-        <Link href="/agency" className="hover:text-red-600">Clients</Link>
+        <Link href="/agency" className="hover:text-red-600">
+          Clients
+        </Link>
         <span>/</span>
         <span className="text-gray-900 font-medium">{tenant.name}</span>
       </div>
@@ -197,11 +203,21 @@ export default function ClientDetailPage() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Title / Dept</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Status</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    User
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
+                    Title / Dept
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Role
+                  </th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
+                    Status
+                  </th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -217,7 +233,13 @@ export default function ClientDetailPage() {
                       {[u.title, u.department].filter(Boolean).join(' / ') || '-'}
                     </td>
                     <td className="px-4 py-3">
-                      <RoleBadge role={u.roleSlug} />
+                      <div className="flex flex-wrap gap-1">
+                        {u.roles && u.roles.length > 0 ? (
+                          u.roles.map((r) => <RoleBadge key={r.slug} role={r.slug} />)
+                        ) : (
+                          <RoleBadge role={u.roleSlug} />
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 hidden sm:table-cell">
                       <UserStatusBadge status={u.status} />
@@ -225,22 +247,26 @@ export default function ClientDetailPage() {
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-3">
                         <button
-                          onClick={() => setImpersonateUser({
-                            id: u.id,
-                            firstName: u.firstName,
-                            lastName: u.lastName,
-                            email: u.email,
-                          })}
+                          onClick={() =>
+                            setImpersonateUser({
+                              id: u.id,
+                              firstName: u.firstName,
+                              lastName: u.lastName,
+                              email: u.email,
+                            })
+                          }
                           className="text-sm text-amber-600 hover:text-amber-700 font-medium"
                         >
                           Login As
                         </button>
                         <button
-                          onClick={() => setChangeRoleUser({
-                            userId: u.id,
-                            userName: `${u.firstName} ${u.lastName}`,
-                            currentRole: u.roleSlug,
-                          })}
+                          onClick={() =>
+                            setChangeRoleUser({
+                              userId: u.id,
+                              userName: `${u.firstName} ${u.lastName}`,
+                              currentRoles: (u.roles || []).map((r) => r.slug),
+                            })
+                          }
                           className="text-sm text-red-600 hover:text-red-700 font-medium"
                         >
                           Change Role
@@ -269,7 +295,7 @@ export default function ClientDetailPage() {
           tenantId={tenantId}
           userId={changeRoleUser.userId}
           userName={changeRoleUser.userName}
-          currentRole={changeRoleUser.currentRole}
+          currentRoles={changeRoleUser.currentRoles}
         />
       )}
 

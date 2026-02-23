@@ -17,13 +17,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
-import {
-  useUsers,
-  useDepartments,
-  useCreateUser,
-  type TenantUser,
-  type CreateUserInput,
-} from '@/hooks/api/useUsers';
+import { useUsers, useDepartments, useCreateUser, type TenantUser } from '@/hooks/api/useUsers';
 
 // ============================================================================
 // Types
@@ -583,14 +577,26 @@ function AddPersonModal({
     email: '',
     title: '',
     department: '',
-    role: 'learner' as CreateUserInput['role'],
     managerId: '',
   });
+  const [selectedRoles, setSelectedRoles] = useState<Set<string>>(new Set(['learner']));
   const [error, setError] = useState<string | null>(null);
 
   const createUser = useCreateUser(tenantId ?? undefined);
   const { data: usersResp } = useUsers(tenantId ?? undefined, { limit: 100 });
   const managerOptions = usersResp?.data ?? [];
+
+  const toggleRole = (value: string) => {
+    setSelectedRoles((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) {
+        if (next.size > 1) next.delete(value);
+      } else {
+        next.add(value);
+      }
+      return next;
+    });
+  };
 
   const handleSubmit = async () => {
     setError(null);
@@ -601,7 +607,12 @@ function AddPersonModal({
         email: formData.email,
         title: formData.title || undefined,
         department: formData.department || undefined,
-        role: formData.role,
+        roles: Array.from(selectedRoles) as (
+          | 'learner'
+          | 'mentor'
+          | 'facilitator'
+          | 'tenant_admin'
+        )[],
         managerId: formData.managerId || null,
       });
       onClose();
@@ -715,21 +726,35 @@ function AddPersonModal({
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm text-gray-500 mb-2">Platform Role *</label>
-                  <select
-                    required
-                    value={formData.role}
-                    onChange={(e) =>
-                      setFormData({ ...formData, role: e.target.value as CreateUserInput['role'] })
-                    }
-                    className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 appearance-none"
-                  >
-                    <option value="learner">Learner</option>
-                    <option value="mentor">Mentor</option>
-                    <option value="facilitator">Facilitator</option>
-                    <option value="tenant_admin">Admin</option>
-                  </select>
+                <div className="sm:col-span-2">
+                  <label className="block text-sm text-gray-500 mb-2">Platform Roles *</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(
+                      [
+                        { value: 'learner', label: 'Learner' },
+                        { value: 'mentor', label: 'Mentor' },
+                        { value: 'facilitator', label: 'Facilitator' },
+                        { value: 'tenant_admin', label: 'Admin' },
+                      ] as const
+                    ).map((r) => (
+                      <label
+                        key={r.value}
+                        className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors text-sm ${
+                          selectedRoles.has(r.value)
+                            ? 'border-red-500 bg-red-50'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedRoles.has(r.value)}
+                          onChange={() => toggleRole(r.value)}
+                          className="accent-red-600"
+                        />
+                        <span className="font-medium text-gray-900">{r.label}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm text-gray-500 mb-2">Manager</label>

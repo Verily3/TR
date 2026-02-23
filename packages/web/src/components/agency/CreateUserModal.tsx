@@ -12,10 +12,18 @@ interface CreateUserModalProps {
 }
 
 const ROLES = [
-  { value: 'learner', label: 'Learner' },
-  { value: 'mentor', label: 'Mentor' },
-  { value: 'facilitator', label: 'Facilitator' },
-  { value: 'tenant_admin', label: 'Client Admin' },
+  { value: 'learner', label: 'Learner', description: 'Program participant' },
+  { value: 'mentor', label: 'Mentor', description: 'Guides and supports assigned learners' },
+  {
+    value: 'facilitator',
+    label: 'Facilitator',
+    description: 'Leads and administers programs',
+  },
+  {
+    value: 'tenant_admin',
+    label: 'Client Admin',
+    description: 'Full access to client tenant',
+  },
 ] as const;
 
 export function CreateUserModal({ open, onClose, tenantId, tenantName }: CreateUserModalProps) {
@@ -25,9 +33,7 @@ export function CreateUserModal({ open, onClose, tenantId, tenantName }: CreateU
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'learner' | 'mentor' | 'facilitator' | 'tenant_admin'>(
-    'learner'
-  );
+  const [selectedRoles, setSelectedRoles] = useState<Set<string>>(new Set(['learner']));
   const [title, setTitle] = useState('');
   const [department, setDepartment] = useState('');
   const createUser = useCreateUser(selectedTenantId || undefined);
@@ -44,16 +50,33 @@ export function CreateUserModal({ open, onClose, tenantId, tenantName }: CreateU
       ? tenantName
       : tenants?.find((t) => t.id === selectedTenantId)?.name;
 
+  const toggleRole = (value: string) => {
+    setSelectedRoles((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) {
+        if (next.size > 1) next.delete(value); // Must keep at least one
+      } else {
+        next.add(value);
+      }
+      return next;
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedTenantId) return;
+    if (!selectedTenantId || selectedRoles.size === 0) return;
     try {
       await createUser.mutateAsync({
         email,
         firstName,
         lastName,
         password: password || undefined,
-        role,
+        roles: Array.from(selectedRoles) as (
+          | 'learner'
+          | 'mentor'
+          | 'facilitator'
+          | 'tenant_admin'
+        )[],
         title: title || undefined,
         department: department || undefined,
       });
@@ -61,7 +84,7 @@ export function CreateUserModal({ open, onClose, tenantId, tenantName }: CreateU
       setFirstName('');
       setLastName('');
       setPassword('');
-      setRole('learner');
+      setSelectedRoles(new Set(['learner']));
       setTitle('');
       setDepartment('');
       onClose();
@@ -153,20 +176,32 @@ export function CreateUserModal({ open, onClose, tenantId, tenantName }: CreateU
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Role <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Roles <span className="text-red-500">*</span>
             </label>
-            <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as typeof role)}
-              className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
-            >
+            <div className="space-y-2">
               {ROLES.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
-                </option>
+                <label
+                  key={r.value}
+                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                    selectedRoles.has(r.value)
+                      ? 'border-red-500 bg-red-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedRoles.has(r.value)}
+                    onChange={() => toggleRole(r.value)}
+                    className="mt-0.5 accent-red-600"
+                  />
+                  <div>
+                    <div className="text-sm font-medium text-gray-900">{r.label}</div>
+                    <div className="text-xs text-gray-500">{r.description}</div>
+                  </div>
+                </label>
               ))}
-            </select>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -207,7 +242,12 @@ export function CreateUserModal({ open, onClose, tenantId, tenantName }: CreateU
             <button
               type="submit"
               disabled={
-                createUser.isPending || !selectedTenantId || !email || !firstName || !lastName
+                createUser.isPending ||
+                !selectedTenantId ||
+                !email ||
+                !firstName ||
+                !lastName ||
+                selectedRoles.size === 0
               }
               className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
             >

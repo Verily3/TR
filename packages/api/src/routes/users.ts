@@ -96,6 +96,12 @@ usersRoutes.get(
           ORDER BY r."level" DESC
           LIMIT 1
         )`,
+        roles: sql<{ slug: string; name: string; level: number }[] | null>`(
+          SELECT json_agg(json_build_object('slug', r."slug", 'name', r."name", 'level', r."level") ORDER BY r."level" DESC)
+          FROM "user_roles" ur
+          INNER JOIN "roles" r ON ur."role_id" = r."id"
+          WHERE ur."user_id" = "users"."id"
+        )`,
       })
       .from(users)
       .where(and(...conditions))
@@ -259,7 +265,10 @@ const createUserSchema = z.object({
   password: z.string().min(12).max(100).optional(),
   title: z.string().max(200).optional(),
   department: z.string().max(200).optional(),
-  role: z.enum(['learner', 'mentor', 'facilitator', 'tenant_admin']),
+  roles: z
+    .array(z.enum(['learner', 'mentor', 'facilitator', 'tenant_admin']))
+    .min(1)
+    .max(4),
   managerId: z.string().uuid().nullable().optional(),
 });
 
@@ -274,7 +283,10 @@ const updateUserSchema = z.object({
 });
 
 const changeRoleSchema = z.object({
-  role: z.enum(['learner', 'mentor', 'facilitator', 'tenant_admin']),
+  roles: z
+    .array(z.enum(['learner', 'mentor', 'facilitator', 'tenant_admin']))
+    .min(1)
+    .max(4),
 });
 
 /**
@@ -317,26 +329,32 @@ usersRoutes.post(
       throw new ConflictError(`A user with email '${body.email}' already exists in this tenant`);
     }
 
-    // Find the role for this tenant
-    const [role] = await db
+    // Deduplicate requested roles
+    const uniqueRoleSlugs = [...new Set(body.roles)];
+
+    // Find all requested roles for this tenant
+    const matchedRoles = await db
       .select()
       .from(roles)
-      .where(and(eq(roles.slug, body.role), eq(roles.tenantId, tenantId)))
-      .limit(1);
+      .where(and(inArray(roles.slug, uniqueRoleSlugs), eq(roles.tenantId, tenantId)));
 
-    if (!role) {
-      throw new BadRequestError(`Role '${body.role}' not found for this tenant`);
+    if (matchedRoles.length !== uniqueRoleSlugs.length) {
+      const found = new Set(matchedRoles.map((r) => r.slug));
+      const missing = uniqueRoleSlugs.filter((s) => !found.has(s));
+      throw new BadRequestError(`Role(s) not found for this tenant: ${missing.join(', ')}`);
     }
 
     // Cannot assign role at or above your own level (unless agency owner)
-    if (currentUser.roleLevel < 100 && role.level >= currentUser.roleLevel) {
-      throw new ForbiddenError('Cannot assign a role at or above your own level');
+    for (const r of matchedRoles) {
+      if (currentUser.roleLevel < 100 && r.level >= currentUser.roleLevel) {
+        throw new ForbiddenError(`Cannot assign role '${r.slug}' at or above your own level`);
+      }
     }
 
     // Hash password if provided, otherwise leave null (SSO)
     const passwordHash = body.password ? await hash(body.password) : null;
 
-    // Create user and assign role in transaction
+    // Create user and assign roles in transaction
     const result = await db.transaction(async (tx) => {
       const [newUser] = await tx
         .insert(users)
@@ -352,22 +370,28 @@ usersRoutes.post(
         })
         .returning();
 
-      await tx.insert(userRoles).values({
-        userId: newUser.id,
-        roleId: role.id,
-      });
+      for (const r of matchedRoles) {
+        await tx.insert(userRoles).values({
+          userId: newUser.id,
+          roleId: r.id,
+        });
+      }
 
       return newUser;
     });
+
+    // Sort by level desc for response — highest role first
+    const sortedRoles = matchedRoles.sort((a, b) => b.level - a.level);
 
     return c.json(
       {
         data: {
           ...result,
           passwordHash: undefined,
-          roleSlug: body.role,
-          roleName: role.name,
-          roleLevel: role.level,
+          roleSlug: sortedRoles[0].slug,
+          roleName: sortedRoles[0].name,
+          roleLevel: sortedRoles[0].level,
+          roles: sortedRoles.map((r) => ({ slug: r.slug, name: r.name, level: r.level })),
         },
       },
       201
@@ -478,7 +502,8 @@ usersRoutes.put(
   async (c) => {
     const currentUser = c.get('user');
     const { tenantId, userId } = c.req.param();
-    const { role: newRoleSlug } = c.req.valid('json');
+    const { roles: newRoleSlugs } = c.req.valid('json');
+    const uniqueRoleSlugs = [...new Set(newRoleSlugs)];
 
     if (currentUser.id === userId) {
       throw new BadRequestError('Cannot change your own role');
@@ -495,28 +520,32 @@ usersRoutes.put(
       throw new NotFoundError('User', userId);
     }
 
-    // Find the new role
-    const [newRole] = await db
+    // Find all requested roles
+    const newRoles = await db
       .select()
       .from(roles)
-      .where(and(eq(roles.slug, newRoleSlug), eq(roles.tenantId, tenantId)))
-      .limit(1);
+      .where(and(inArray(roles.slug, uniqueRoleSlugs), eq(roles.tenantId, tenantId)));
 
-    if (!newRole) {
-      throw new BadRequestError(`Role '${newRoleSlug}' not found for this tenant`);
+    if (newRoles.length !== uniqueRoleSlugs.length) {
+      const found = new Set(newRoles.map((r) => r.slug));
+      const missing = uniqueRoleSlugs.filter((s) => !found.has(s));
+      throw new BadRequestError(`Role(s) not found for this tenant: ${missing.join(', ')}`);
     }
 
     // Cannot assign role at or above your own level (unless agency owner)
-    if (currentUser.roleLevel < 100 && newRole.level >= currentUser.roleLevel) {
-      throw new ForbiddenError('Cannot assign a role at or above your own level');
+    for (const r of newRoles) {
+      if (currentUser.roleLevel < 100 && r.level >= currentUser.roleLevel) {
+        throw new ForbiddenError(`Cannot assign role '${r.slug}' at or above your own level`);
+      }
     }
 
-    // Get current role to check level
+    // Get current highest role to check level
     const [currentRole] = await db
       .select({ level: roles.level })
       .from(userRoles)
       .innerJoin(roles, eq(userRoles.roleId, roles.id))
       .where(eq(userRoles.userId, userId))
+      .orderBy(desc(roles.level))
       .limit(1);
 
     // Cannot change role of someone at or above your level (unless agency owner)
@@ -524,7 +553,7 @@ usersRoutes.put(
       throw new ForbiddenError('Cannot change the role of a user at or above your own level');
     }
 
-    // Remove old tenant roles and assign new one
+    // Remove old tenant roles and assign new set
     await db.transaction(async (tx) => {
       // Get all tenant role IDs
       const tenantRoleIds = await tx
@@ -539,19 +568,24 @@ usersRoutes.put(
           .where(and(eq(userRoles.userId, userId), eq(userRoles.roleId, id)));
       }
 
-      // Assign new role
-      await tx.insert(userRoles).values({
-        userId,
-        roleId: newRole.id,
-      });
+      // Assign new roles
+      for (const r of newRoles) {
+        await tx.insert(userRoles).values({
+          userId,
+          roleId: r.id,
+        });
+      }
     });
+
+    const sortedRoles = newRoles.sort((a, b) => b.level - a.level);
 
     return c.json({
       data: {
         userId,
-        roleSlug: newRoleSlug,
-        roleName: newRole.name,
-        roleLevel: newRole.level,
+        roleSlug: sortedRoles[0].slug,
+        roleName: sortedRoles[0].name,
+        roleLevel: sortedRoles[0].level,
+        roles: sortedRoles.map((r) => ({ slug: r.slug, name: r.name, level: r.level })),
       },
     });
   }

@@ -489,7 +489,7 @@ function PeopleTab() {
   const [changeRoleUser, setChangeRoleUser] = useState<{
     userId: string;
     userName: string;
-    currentRole: string | null;
+    currentRoles: string[];
     tenantId: string;
   } | null>(null);
   const [impersonateUser, setImpersonateUser] = useState<{
@@ -515,7 +515,14 @@ function PeopleTab() {
 
   if (selectedTenant === 'all' || selectedTenant === 'agency') {
     (agencyUsers || []).forEach((u) => {
-      allUsers.push({ ...u, tenantName: 'Agency Staff', tenantId: '' });
+      allUsers.push({
+        ...u,
+        tenantName: 'Agency Staff',
+        tenantId: '',
+        roles: u.roleSlug
+          ? [{ slug: u.roleSlug, name: u.roleName || u.roleSlug, level: u.roleLevel || 0 }]
+          : null,
+      });
     });
   }
 
@@ -528,7 +535,10 @@ function PeopleTab() {
   }
 
   const filtered = allUsers.filter((u) => {
-    if (roleFilter !== 'all' && u.roleSlug !== roleFilter) return false;
+    if (roleFilter !== 'all') {
+      const hasRole = u.roles?.some((r) => r.slug === roleFilter) ?? u.roleSlug === roleFilter;
+      if (!hasRole) return false;
+    }
     if (search) {
       const q = search.toLowerCase();
       if (
@@ -629,7 +639,13 @@ function PeopleTab() {
                     {u.tenantName}
                   </td>
                   <td className="px-4 py-3">
-                    <RoleBadge role={u.roleSlug} />
+                    <div className="flex flex-wrap gap-1">
+                      {u.roles && u.roles.length > 0 ? (
+                        u.roles.map((r) => <RoleBadge key={r.slug} role={r.slug} />)
+                      ) : (
+                        <RoleBadge role={u.roleSlug} />
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 hidden sm:table-cell">
                     <UserStatusBadge status={u.status} />
@@ -657,7 +673,7 @@ function PeopleTab() {
                             setChangeRoleUser({
                               userId: u.id,
                               userName: `${u.firstName} ${u.lastName}`,
-                              currentRole: u.roleSlug,
+                              currentRoles: (u.roles || []).map((r) => r.slug),
                               tenantId: u.tenantId,
                             })
                           }
@@ -693,7 +709,7 @@ function PeopleTab() {
           tenantId={changeRoleUser.tenantId}
           userId={changeRoleUser.userId}
           userName={changeRoleUser.userName}
-          currentRole={changeRoleUser.currentRole}
+          currentRoles={changeRoleUser.currentRoles}
         />
       )}
 
