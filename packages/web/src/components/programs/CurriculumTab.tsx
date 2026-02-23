@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   BookOpen,
@@ -254,6 +254,8 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
 
   // Add lesson menu
   const [showAddLessonMenu, setShowAddLessonMenu] = useState(false);
+  const [addLessonMenuPos, setAddLessonMenuPos] = useState({ top: 0, left: 0 });
+  const addLessonBtnRef = useRef<HTMLButtonElement>(null);
   const [isCreatingLesson, setIsCreatingLesson] = useState(false);
 
   // Mutation hooks — use agency or tenant variants based on context
@@ -1373,8 +1375,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                       );
                     })}
                     {/* Inline Add Lesson */}
-                    <div className="relative pl-12 pr-3 py-1.5">
+                    <div className="pl-12 pr-3 py-1.5">
                       <button
+                        ref={selectedModuleId === mod.id ? addLessonBtnRef : undefined}
                         onClick={(e) => {
                           e.stopPropagation();
                           // Set this module as selected for lesson creation
@@ -1382,6 +1385,17 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                           setSelectedLesson(null);
                           setSelectedLessonModuleId(null);
                           setExpandedModules((prev) => ({ ...prev, [mod.id]: true }));
+                          // Calculate position from button
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const menuHeight = 320; // max-h-80 = 20rem = 320px
+                          const spaceBelow = window.innerHeight - rect.bottom;
+                          setAddLessonMenuPos({
+                            top:
+                              spaceBelow < menuHeight
+                                ? Math.max(8, rect.top - menuHeight)
+                                : rect.bottom + 2,
+                            left: rect.left,
+                          });
                           // Toggle dropdown
                           setShowAddLessonMenu((prev) => !(prev && selectedModuleId === mod.id));
                         }}
@@ -1394,10 +1408,13 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                       {showAddLessonMenu && selectedModuleId === mod.id && (
                         <>
                           <div
-                            className="fixed inset-0 z-10"
+                            className="fixed inset-0 z-40"
                             onClick={() => setShowAddLessonMenu(false)}
                           />
-                          <div className="absolute left-12 top-full mt-0.5 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20 max-h-80 overflow-y-auto">
+                          <div
+                            className="fixed w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50 max-h-80 overflow-y-auto"
+                            style={{ top: addLessonMenuPos.top, left: addLessonMenuPos.left }}
+                          >
                             {(['Content', 'Reflection', 'Activity'] as const).map((group) => {
                               const items = ADD_MENU_CONFIG.filter((c) => c.group === group);
                               return (
