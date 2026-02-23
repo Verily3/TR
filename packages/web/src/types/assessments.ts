@@ -26,6 +26,7 @@ export interface TemplateConfig {
   requireComments: boolean;
   anonymizeResponses: boolean;
   raterTypes: ('self' | 'manager' | 'peer' | 'direct_report')[];
+  showCompetenciesToRaters?: boolean;
   minRatersPerType?: Record<string, number>;
   maxRatersPerType?: Record<string, number>;
 }
@@ -61,7 +62,14 @@ export interface TemplateStats {
 
 export type AssessmentStatus = 'draft' | 'open' | 'closed' | 'completed';
 export type RaterType = 'self' | 'manager' | 'peer' | 'direct_report';
-export type InvitationStatus = 'pending' | 'sent' | 'viewed' | 'started' | 'completed' | 'declined' | 'expired';
+export type InvitationStatus =
+  | 'pending'
+  | 'sent'
+  | 'viewed'
+  | 'started'
+  | 'completed'
+  | 'declined'
+  | 'expired';
 
 export interface AssessmentSubject {
   id: string;

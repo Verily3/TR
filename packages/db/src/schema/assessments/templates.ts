@@ -86,6 +86,7 @@ export interface TemplateConfig {
   requireComments: boolean;
   anonymizeResponses: boolean;
   raterTypes: ('self' | 'manager' | 'peer' | 'direct_report')[];
+  showCompetenciesToRaters?: boolean;
   minRatersPerType?: Record<string, number>;
   maxRatersPerType?: Record<string, number>;
 }

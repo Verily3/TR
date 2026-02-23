@@ -21,11 +21,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { useTemplate, useUpdateTemplate } from '@/hooks/api/useTemplates';
-import type {
-  TemplateConfig,
-  TemplateCompetency,
-  TemplateQuestion,
-} from '@/types/assessments';
+import type { TemplateConfig, TemplateCompetency, TemplateQuestion } from '@/types/assessments';
 import { RaterResponseForm } from '@/components/assessments/RaterResponseForm';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -81,13 +77,16 @@ export default function TemplateEditorPage() {
       setDescription(template.description ?? '');
       setConfig(template.config);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [template]);
 
   // Warn on unload when dirty
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (isDirty) { e.preventDefault(); e.returnValue = ''; }
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
     };
     window.addEventListener('beforeunload', handler);
     return () => window.removeEventListener('beforeunload', handler);
@@ -103,7 +102,7 @@ export default function TemplateEditorPage() {
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [name, description, config, isDirty]);
 
   // ── config helpers ────────────────────────────────────────────────────────
@@ -136,29 +135,32 @@ export default function TemplateEditorPage() {
 
   // ── save / publish ────────────────────────────────────────────────────────
 
-  const doSave = useCallback(async (extraFields?: { status?: 'draft' | 'published' | 'archived' }) => {
-    if (!config) return;
-    const errors = validateConfig(name, config);
-    if (errors.length > 0) {
-      setValidationErrors(errors);
-      return;
-    }
-    setValidationErrors([]);
-    try {
-      await updateTemplate.mutateAsync({
-        templateId,
-        name,
-        description: description || undefined,
-        config,
-        ...extraFields,
-      });
-      setIsDirty(false);
-      setSaveMsg('Saved');
-      setTimeout(() => setSaveMsg(null), 2500);
-    } catch {
-      // error shown via mutation.isError
-    }
-  }, [config, description, name, templateId, updateTemplate, validateConfig]);
+  const doSave = useCallback(
+    async (extraFields?: { status?: 'draft' | 'published' | 'archived' }) => {
+      if (!config) return;
+      const errors = validateConfig(name, config);
+      if (errors.length > 0) {
+        setValidationErrors(errors);
+        return;
+      }
+      setValidationErrors([]);
+      try {
+        await updateTemplate.mutateAsync({
+          templateId,
+          name,
+          description: description || undefined,
+          config,
+          ...extraFields,
+        });
+        setIsDirty(false);
+        setSaveMsg('Saved');
+        setTimeout(() => setSaveMsg(null), 2500);
+      } catch {
+        // error shown via mutation.isError
+      }
+    },
+    [config, description, name, templateId, updateTemplate, validateConfig]
+  );
 
   const handlePublishToggle = useCallback(async () => {
     if (!template) return;
@@ -179,31 +181,44 @@ export default function TemplateEditorPage() {
     setExpandedIds((prev) => new Set([...prev, id]));
   }, [updateConfig]);
 
-  const deleteCompetency = useCallback((compId: string) => {
-    updateConfig((c) => {
-      if (c.competencies.length <= 1) return c; // guard in UI, belt-and-suspenders here
-      return { ...c, competencies: c.competencies.filter((x) => x.id !== compId) };
-    });
-    setExpandedIds((prev) => { const n = new Set(prev); n.delete(compId); return n; });
-  }, [updateConfig]);
+  const deleteCompetency = useCallback(
+    (compId: string) => {
+      updateConfig((c) => {
+        if (c.competencies.length <= 1) return c; // guard in UI, belt-and-suspenders here
+        return { ...c, competencies: c.competencies.filter((x) => x.id !== compId) };
+      });
+      setExpandedIds((prev) => {
+        const n = new Set(prev);
+        n.delete(compId);
+        return n;
+      });
+    },
+    [updateConfig]
+  );
 
-  const updateCompetency = useCallback((compId: string, patch: Partial<TemplateCompetency>) => {
-    updateConfig((c) => ({
-      ...c,
-      competencies: c.competencies.map((x) => x.id === compId ? { ...x, ...patch } : x),
-    }));
-  }, [updateConfig]);
+  const updateCompetency = useCallback(
+    (compId: string, patch: Partial<TemplateCompetency>) => {
+      updateConfig((c) => ({
+        ...c,
+        competencies: c.competencies.map((x) => (x.id === compId ? { ...x, ...patch } : x)),
+      }));
+    },
+    [updateConfig]
+  );
 
-  const moveCompetency = useCallback((compId: string, dir: 'up' | 'down') => {
-    updateConfig((c) => {
-      const arr = [...c.competencies];
-      const i = arr.findIndex((x) => x.id === compId);
-      const j = dir === 'up' ? i - 1 : i + 1;
-      if (j < 0 || j >= arr.length) return c;
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-      return { ...c, competencies: arr };
-    });
-  }, [updateConfig]);
+  const moveCompetency = useCallback(
+    (compId: string, dir: 'up' | 'down') => {
+      updateConfig((c) => {
+        const arr = [...c.competencies];
+        const i = arr.findIndex((x) => x.id === compId);
+        const j = dir === 'up' ? i - 1 : i + 1;
+        if (j < 0 || j >= arr.length) return c;
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+        return { ...c, competencies: arr };
+      });
+    },
+    [updateConfig]
+  );
 
   const toggleExpand = useCallback((id: string) => {
     setExpandedIds((prev) => {
@@ -215,51 +230,63 @@ export default function TemplateEditorPage() {
 
   // ── question operations ───────────────────────────────────────────────────
 
-  const addQuestion = useCallback((compId: string) => {
-    const newQ: TemplateQuestion = { id: crypto.randomUUID(), text: '' };
-    updateConfig((c) => ({
-      ...c,
-      competencies: c.competencies.map((x) =>
-        x.id === compId ? { ...x, questions: [...x.questions, newQ] } : x
-      ),
-    }));
-  }, [updateConfig]);
+  const addQuestion = useCallback(
+    (compId: string) => {
+      const newQ: TemplateQuestion = { id: crypto.randomUUID(), text: '' };
+      updateConfig((c) => ({
+        ...c,
+        competencies: c.competencies.map((x) =>
+          x.id === compId ? { ...x, questions: [...x.questions, newQ] } : x
+        ),
+      }));
+    },
+    [updateConfig]
+  );
 
-  const updateQuestion = useCallback((compId: string, qId: string, patch: Partial<TemplateQuestion>) => {
-    updateConfig((c) => ({
-      ...c,
-      competencies: c.competencies.map((x) =>
-        x.id === compId
-          ? { ...x, questions: x.questions.map((q) => q.id === qId ? { ...q, ...patch } : q) }
-          : x
-      ),
-    }));
-  }, [updateConfig]);
+  const updateQuestion = useCallback(
+    (compId: string, qId: string, patch: Partial<TemplateQuestion>) => {
+      updateConfig((c) => ({
+        ...c,
+        competencies: c.competencies.map((x) =>
+          x.id === compId
+            ? { ...x, questions: x.questions.map((q) => (q.id === qId ? { ...q, ...patch } : q)) }
+            : x
+        ),
+      }));
+    },
+    [updateConfig]
+  );
 
-  const deleteQuestion = useCallback((compId: string, qId: string) => {
-    updateConfig((c) => ({
-      ...c,
-      competencies: c.competencies.map((x) =>
-        x.id === compId ? { ...x, questions: x.questions.filter((q) => q.id !== qId) } : x
-      ),
-    }));
-  }, [updateConfig]);
+  const deleteQuestion = useCallback(
+    (compId: string, qId: string) => {
+      updateConfig((c) => ({
+        ...c,
+        competencies: c.competencies.map((x) =>
+          x.id === compId ? { ...x, questions: x.questions.filter((q) => q.id !== qId) } : x
+        ),
+      }));
+    },
+    [updateConfig]
+  );
 
   // CCI: only one per competency
-  const toggleCCI = useCallback((compId: string, qId: string) => {
-    updateConfig((c) => ({
-      ...c,
-      competencies: c.competencies.map((x) => {
-        if (x.id !== compId) return x;
-        return {
-          ...x,
-          questions: x.questions.map((q) =>
-            q.id === qId ? { ...q, isCCI: !q.isCCI } : { ...q, isCCI: false }
-          ),
-        };
-      }),
-    }));
-  }, [updateConfig]);
+  const toggleCCI = useCallback(
+    (compId: string, qId: string) => {
+      updateConfig((c) => ({
+        ...c,
+        competencies: c.competencies.map((x) => {
+          if (x.id !== compId) return x;
+          return {
+            ...x,
+            questions: x.questions.map((q) =>
+              q.id === qId ? { ...q, isCCI: !q.isCCI } : { ...q, isCCI: false }
+            ),
+          };
+        }),
+      }));
+    },
+    [updateConfig]
+  );
 
   // ── guards ────────────────────────────────────────────────────────────────
 
@@ -279,11 +306,9 @@ export default function TemplateEditorPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-
       {/* ── Sticky header ── */}
       <header className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 sm:px-6 py-3">
         <div className="max-w-5xl mx-auto flex items-center gap-3">
-
           {/* Back */}
           <button
             onClick={() => {
@@ -299,7 +324,10 @@ export default function TemplateEditorPage() {
           {/* Name (inline edit) */}
           <input
             value={name}
-            onChange={(e) => { setName(e.target.value); setIsDirty(true); }}
+            onChange={(e) => {
+              setName(e.target.value);
+              setIsDirty(true);
+            }}
             className="flex-1 text-base font-semibold text-gray-900 bg-transparent border-0 outline-none focus:ring-2 focus:ring-accent/30 rounded px-1 min-w-0"
             placeholder="Template name"
           />
@@ -324,7 +352,10 @@ export default function TemplateEditorPage() {
 
             {/* Preview */}
             <button
-              onClick={() => { setPreviewSubmitted(false); setShowPreview(true); }}
+              onClick={() => {
+                setPreviewSubmitted(false);
+                setShowPreview(true);
+              }}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
             >
               <Eye className="w-3.5 h-3.5" />
@@ -337,9 +368,15 @@ export default function TemplateEditorPage() {
               disabled={updateTemplate.isPending}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg transition-colors disabled:opacity-50"
             >
-              {status === 'published'
-                ? <><Archive className="w-3.5 h-3.5" /> Archive</>
-                : <><Globe className="w-3.5 h-3.5" /> Publish</>}
+              {status === 'published' ? (
+                <>
+                  <Archive className="w-3.5 h-3.5" /> Archive
+                </>
+              ) : (
+                <>
+                  <Globe className="w-3.5 h-3.5" /> Publish
+                </>
+              )}
             </button>
 
             {/* Save */}
@@ -348,9 +385,11 @@ export default function TemplateEditorPage() {
               disabled={!isDirty || updateTemplate.isPending}
               className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-accent text-accent-foreground rounded-lg hover:bg-accent/90 disabled:opacity-40 transition-colors"
             >
-              {updateTemplate.isPending
-                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                : <Save className="w-3.5 h-3.5" />}
+              {updateTemplate.isPending ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Save className="w-3.5 h-3.5" />
+              )}
               {saveMsg ?? (isDirty ? 'Save' : 'Saved')}
             </button>
           </div>
@@ -386,7 +425,6 @@ export default function TemplateEditorPage() {
 
       {/* ── Content ── */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-4 pb-16">
-
         {/* Meta */}
         <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
           <div>
@@ -395,14 +433,20 @@ export default function TemplateEditorPage() {
             </label>
             <textarea
               value={description}
-              onChange={(e) => { setDescription(e.target.value); setIsDirty(true); }}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                setIsDirty(true);
+              }}
               rows={2}
               placeholder="What is this template used for?"
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:border-red-400 focus:ring-1 focus:ring-red-400 outline-none resize-none"
             />
           </div>
           <div className="flex items-center gap-4 text-xs text-gray-400">
-            <span>Type: <span className="font-medium text-gray-600 uppercase">{template.assessmentType}</span></span>
+            <span>
+              Type:{' '}
+              <span className="font-medium text-gray-600 uppercase">{template.assessmentType}</span>
+            </span>
             <span>Version {template.version}</span>
             <span>
               {config.competencies.length} competencies ·{' '}
@@ -418,27 +462,37 @@ export default function TemplateEditorPage() {
             className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-900 hover:bg-gray-50 transition-colors"
           >
             <span>Settings — rater types, scale &amp; comments</span>
-            {showSettings
-              ? <ChevronUp className="w-4 h-4 text-gray-400" />
-              : <ChevronDown className="w-4 h-4 text-gray-400" />}
+            {showSettings ? (
+              <ChevronUp className="w-4 h-4 text-gray-400" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-gray-400" />
+            )}
           </button>
 
           {showSettings && (
             <div className="border-t border-gray-100 px-4 py-5 space-y-6">
-
               {/* Rater types */}
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Rater Types</p>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                  Rater Types
+                </p>
                 <div className="flex flex-wrap gap-4">
                   {(['self', 'manager', 'peer', 'direct_report'] as const).map((rt) => {
                     const checked = config.raterTypes.includes(rt);
                     return (
-                      <label key={rt} className={`flex items-center gap-2 select-none ${checked && config.raterTypes.length <= 1 ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
+                      <label
+                        key={rt}
+                        className={`flex items-center gap-2 select-none ${checked && config.raterTypes.length <= 1 ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                      >
                         <input
                           type="checkbox"
                           checked={checked}
                           disabled={checked && config.raterTypes.length <= 1}
-                          title={checked && config.raterTypes.length <= 1 ? 'At least one rater type is required' : undefined}
+                          title={
+                            checked && config.raterTypes.length <= 1
+                              ? 'At least one rater type is required'
+                              : undefined
+                          }
                           onChange={() =>
                             updateConfig((c) => ({
                               ...c,
@@ -458,7 +512,9 @@ export default function TemplateEditorPage() {
 
               {/* Scale */}
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Rating Scale</p>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                  Rating Scale
+                </p>
                 <div className="flex items-end gap-3">
                   <div>
                     <label className="text-xs text-gray-500 mb-1 block">Min</label>
@@ -468,7 +524,10 @@ export default function TemplateEditorPage() {
                       min={1}
                       max={config.scaleMax - 1}
                       onChange={(e) =>
-                        updateConfig((c) => ({ ...c, scaleMin: Math.max(1, parseInt(e.target.value) || 1) }))
+                        updateConfig((c) => ({
+                          ...c,
+                          scaleMin: Math.max(1, parseInt(e.target.value) || 1),
+                        }))
                       }
                       className="w-16 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:border-red-400 focus:ring-1 focus:ring-red-400 outline-none"
                     />
@@ -481,23 +540,35 @@ export default function TemplateEditorPage() {
                       min={config.scaleMin + 1}
                       max={10}
                       onChange={(e) =>
-                        updateConfig((c) => ({ ...c, scaleMax: Math.min(10, parseInt(e.target.value) || 5) }))
+                        updateConfig((c) => ({
+                          ...c,
+                          scaleMax: Math.min(10, parseInt(e.target.value) || 5),
+                        }))
                       }
                       className="w-16 border border-gray-200 rounded-lg px-2 py-1.5 text-sm focus:border-red-400 focus:ring-1 focus:ring-red-400 outline-none"
                     />
                   </div>
-                  <p className="text-xs text-gray-400 pb-2">{config.scaleMin} = lowest · {config.scaleMax} = highest</p>
+                  <p className="text-xs text-gray-400 pb-2">
+                    {config.scaleMin} = lowest · {config.scaleMax} = highest
+                  </p>
                 </div>
               </div>
 
               {/* Comments */}
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Comments &amp; Anonymity</p>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                  Comments &amp; Anonymity
+                </p>
                 <div className="space-y-2">
                   {[
                     { key: 'allowComments', label: 'Allow open-text comments' },
-                    { key: 'requireComments', label: 'Require comments (only applies if allowed)', disabled: !config.allowComments },
+                    {
+                      key: 'requireComments',
+                      label: 'Require comments (only applies if allowed)',
+                      disabled: !config.allowComments,
+                    },
                     { key: 'anonymizeResponses', label: 'Anonymize rater responses' },
+                    { key: 'showCompetenciesToRaters', label: 'Show competency names to raters' },
                   ].map(({ key, label, disabled }) => (
                     <label key={key} className="flex items-center gap-2 cursor-pointer select-none">
                       <input
@@ -512,7 +583,9 @@ export default function TemplateEditorPage() {
                         }
                         className="accent-red-600 disabled:opacity-50"
                       />
-                      <span className={`text-sm ${disabled ? 'text-gray-400' : 'text-gray-700'}`}>{label}</span>
+                      <span className={`text-sm ${disabled ? 'text-gray-400' : 'text-gray-700'}`}>
+                        {label}
+                      </span>
                     </label>
                   ))}
                 </div>
@@ -554,7 +627,6 @@ export default function TemplateEditorPage() {
 
               return (
                 <div key={comp.id} className="bg-white rounded-xl border border-gray-200">
-
                   {/* ── Competency header ── */}
                   <div className="flex items-center gap-2 px-4 py-3">
                     {/* Move up/down */}
@@ -603,9 +675,11 @@ export default function TemplateEditorPage() {
                       className="p-1 text-gray-400 hover:text-gray-600 rounded transition-colors flex-shrink-0"
                       aria-label={isExpanded ? 'Collapse' : 'Expand'}
                     >
-                      {isExpanded
-                        ? <ChevronUp className="w-4 h-4" />
-                        : <ChevronDown className="w-4 h-4" />}
+                      {isExpanded ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
                     </button>
 
                     {/* Delete */}
@@ -646,7 +720,9 @@ export default function TemplateEditorPage() {
                           <span className="cursor-default">[R]</span>
                           <span className="pointer-events-none absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-56 rounded-lg bg-gray-900 text-white text-xs px-3 py-2 shadow-lg opacity-0 group-hover/rh:opacity-100 transition-opacity z-50 normal-case tracking-normal font-normal leading-relaxed">
                             <strong className="font-semibold block mb-0.5">Reverse Scored</strong>
-                            The rating is inverted during computation. On a 1–5 scale, a raw score of 2 becomes 4. Use for negatively-phrased questions where a low rating means high performance.
+                            The rating is inverted during computation. On a 1–5 scale, a raw score
+                            of 2 becomes 4. Use for negatively-phrased questions where a low rating
+                            means high performance.
                             <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
                           </span>
                         </span>
@@ -654,8 +730,12 @@ export default function TemplateEditorPage() {
                         <span className="relative flex justify-center group/ccih">
                           <span className="cursor-default">CCI</span>
                           <span className="pointer-events-none absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-64 rounded-lg bg-gray-900 text-white text-xs px-3 py-2 shadow-lg opacity-0 group-hover/ccih:opacity-100 transition-opacity z-50 normal-case tracking-normal font-normal leading-relaxed">
-                            <strong className="font-semibold block mb-0.5">Coaching Capacity Index (CCI)</strong>
-                            Marks this question as the CCI item for this competency. CCI scores are averaged across all competencies and classified as Low / Moderate / High / Very High. Only one CCI question is allowed per competency.
+                            <strong className="font-semibold block mb-0.5">
+                              Coaching Capacity Index (CCI)
+                            </strong>
+                            Marks this question as the CCI item for this competency. CCI scores are
+                            averaged across all competencies and classified as Low / Moderate / High
+                            / Very High. Only one CCI question is allowed per competency.
                             <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
                           </span>
                         </span>
@@ -670,10 +750,14 @@ export default function TemplateEditorPage() {
                           style={{ gridTemplateColumns: '1fr 44px 44px 28px' }}
                         >
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-gray-300 w-4 flex-shrink-0 text-right">{qIdx + 1}.</span>
+                            <span className="text-xs text-gray-300 w-4 flex-shrink-0 text-right">
+                              {qIdx + 1}.
+                            </span>
                             <input
                               value={q.text}
-                              onChange={(e) => updateQuestion(comp.id, q.id, { text: e.target.value })}
+                              onChange={(e) =>
+                                updateQuestion(comp.id, q.id, { text: e.target.value })
+                              }
                               className="w-full text-sm text-gray-900 border border-gray-200 rounded-lg px-2.5 py-1.5 focus:border-red-400 focus:ring-1 focus:ring-red-400 outline-none"
                               placeholder="Question text…"
                             />
@@ -682,7 +766,9 @@ export default function TemplateEditorPage() {
                           {/* [R] — reverse scored */}
                           <div className="relative flex justify-center group/rb">
                             <button
-                              onClick={() => updateQuestion(comp.id, q.id, { reverseScored: !q.reverseScored })}
+                              onClick={() =>
+                                updateQuestion(comp.id, q.id, { reverseScored: !q.reverseScored })
+                              }
                               className={`w-9 py-1 rounded text-xs font-semibold transition-colors ${
                                 q.reverseScored
                                   ? 'bg-orange-100 text-orange-700 ring-1 ring-orange-300'
@@ -693,7 +779,8 @@ export default function TemplateEditorPage() {
                             </button>
                             <span className="pointer-events-none absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-56 rounded-lg bg-gray-900 text-white text-xs px-3 py-2 shadow-lg opacity-0 group-hover/rb:opacity-100 transition-opacity z-50 leading-relaxed">
                               <strong className="font-semibold block mb-0.5">Reverse Scored</strong>
-                              Rating is inverted during scoring. On a 1–5 scale, a raw score of 2 becomes 4. Use for negatively-phrased questions.
+                              Rating is inverted during scoring. On a 1–5 scale, a raw score of 2
+                              becomes 4. Use for negatively-phrased questions.
                               <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
                             </span>
                           </div>
@@ -711,8 +798,12 @@ export default function TemplateEditorPage() {
                               CCI
                             </button>
                             <span className="pointer-events-none absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-60 rounded-lg bg-gray-900 text-white text-xs px-3 py-2 shadow-lg opacity-0 group-hover/ccib:opacity-100 transition-opacity z-50 leading-relaxed">
-                              <strong className="font-semibold block mb-0.5">Coaching Capacity Index</strong>
-                              Marks this as the CCI question for this competency. CCI scores are averaged across competencies and rated Low → Very High. One per competency only.
+                              <strong className="font-semibold block mb-0.5">
+                                Coaching Capacity Index
+                              </strong>
+                              Marks this as the CCI question for this competency. CCI scores are
+                              averaged across competencies and rated Low → Very High. One per
+                              competency only.
                               <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
                             </span>
                           </div>
@@ -757,9 +848,7 @@ export default function TemplateEditorPage() {
           <div className="flex-shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 text-amber-800">
               <Eye className="w-4 h-4 flex-shrink-0" />
-              <span className="text-sm font-medium">
-                Rater Preview — responses are not saved.
-              </span>
+              <span className="text-sm font-medium">Rater Preview — responses are not saved.</span>
             </div>
             <div className="flex items-center gap-2">
               {previewSubmitted && (

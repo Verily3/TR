@@ -1,14 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import {
-  ChevronLeft,
-  ChevronRight,
-  CheckCircle2,
-  Loader2,
-  Send,
-  Save,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, Loader2, Send, Save } from 'lucide-react';
 
 interface Question {
   id: string;
@@ -37,6 +30,7 @@ interface RaterResponseFormProps {
   scaleLabels?: string[];
   allowComments: boolean;
   requireComments: boolean;
+  showCompetencyNames?: boolean;
   initialData?: Partial<ResponseData>;
   onSaveDraft?: (data: ResponseData) => void;
   onSubmit: (data: ResponseData) => void;
@@ -44,13 +38,7 @@ interface RaterResponseFormProps {
   isSaving?: boolean;
 }
 
-const defaultScaleLabels = [
-  'Strongly Disagree',
-  'Disagree',
-  'Neutral',
-  'Agree',
-  'Strongly Agree',
-];
+const defaultScaleLabels = ['Strongly Disagree', 'Disagree', 'Neutral', 'Agree', 'Strongly Agree'];
 
 export function RaterResponseForm({
   assessmentName,
@@ -61,6 +49,7 @@ export function RaterResponseForm({
   scaleLabels,
   allowComments,
   requireComments,
+  showCompetencyNames = false,
   initialData,
   onSaveDraft,
   onSubmit,
@@ -70,24 +59,13 @@ export function RaterResponseForm({
   const [currentStep, setCurrentStep] = useState(0);
   const totalSteps = competencies.length + 1; // competencies + overall comments
 
-  const [ratings, setRatings] = useState<Record<string, number>>(
-    initialData?.ratings || {}
-  );
-  const [comments, setComments] = useState<Record<string, string>>(
-    initialData?.comments || {}
-  );
-  const [overallComments, setOverallComments] = useState(
-    initialData?.overallComments || ''
-  );
+  const [ratings, setRatings] = useState<Record<string, number>>(initialData?.ratings || {});
+  const [comments, setComments] = useState<Record<string, string>>(initialData?.comments || {});
+  const [overallComments, setOverallComments] = useState(initialData?.overallComments || '');
 
-  const labels = scaleLabels && scaleLabels.length > 0
-    ? scaleLabels
-    : defaultScaleLabels;
+  const labels = scaleLabels && scaleLabels.length > 0 ? scaleLabels : defaultScaleLabels;
 
-  const scaleRange = Array.from(
-    { length: scaleMax - scaleMin + 1 },
-    (_, i) => scaleMin + i
-  );
+  const scaleRange = Array.from({ length: scaleMax - scaleMin + 1 }, (_, i) => scaleMin + i);
 
   const getResponseData = (): ResponseData => ({
     ratings,
@@ -118,17 +96,12 @@ export function RaterResponseForm({
     return competencies.every(isCompetencyComplete);
   };
 
-  const totalQuestions = competencies.reduce(
-    (sum, c) => sum + c.questions.length,
-    0
-  );
+  const totalQuestions = competencies.reduce((sum, c) => sum + c.questions.length, 0);
   const answeredQuestions = Object.keys(ratings).length;
   const progressPercent = Math.round((answeredQuestions / totalQuestions) * 100);
 
   const isLastStep = currentStep === totalSteps - 1;
-  const currentCompetency = currentStep < competencies.length
-    ? competencies[currentStep]
-    : null;
+  const currentCompetency = currentStep < competencies.length ? competencies[currentStep] : null;
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -146,7 +119,9 @@ export function RaterResponseForm({
           <span>
             Step {currentStep + 1} of {totalSteps}
           </span>
-          <span>{progressPercent}% complete ({answeredQuestions}/{totalQuestions} questions)</span>
+          <span>
+            {progressPercent}% complete ({answeredQuestions}/{totalQuestions} questions)
+          </span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-2">
           <div
@@ -173,16 +148,14 @@ export function RaterResponseForm({
                 }`}
               >
                 {complete && <CheckCircle2 className="w-3 h-3" />}
-                {c.name}
+                {showCompetencyNames ? c.name : `Section ${i + 1}`}
               </button>
             );
           })}
           <button
             onClick={() => setCurrentStep(totalSteps - 1)}
             className={`px-3 py-1 rounded-full text-xs whitespace-nowrap transition-colors ${
-              isLastStep
-                ? 'bg-red-600 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              isLastStep ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
             Summary
@@ -193,18 +166,21 @@ export function RaterResponseForm({
       {/* Current Competency Questions */}
       {currentCompetency && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              {currentCompetency.name}
-            </h2>
-            {currentCompetency.description && (
-              <p className="text-sm text-gray-500">{currentCompetency.description}</p>
-            )}
-          </div>
+          {showCompetencyNames && (
+            <div className="mb-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">{currentCompetency.name}</h2>
+              {currentCompetency.description && (
+                <p className="text-sm text-gray-500">{currentCompetency.description}</p>
+              )}
+            </div>
+          )}
 
           <div className="space-y-8">
             {currentCompetency.questions.map((question, qi) => (
-              <div key={question.id} className="border-b border-gray-100 pb-6 last:border-0 last:pb-0">
+              <div
+                key={question.id}
+                className="border-b border-gray-100 pb-6 last:border-0 last:pb-0"
+              >
                 <p className="text-sm font-medium text-gray-900 mb-4">
                   {qi + 1}. {question.text}
                 </p>
@@ -257,7 +233,7 @@ export function RaterResponseForm({
           <div className="mb-6">
             <h3 className="text-sm font-medium text-gray-900 mb-3">Response Summary</h3>
             <div className="space-y-2">
-              {competencies.map((c) => {
+              {competencies.map((c, i) => {
                 const complete = isCompetencyComplete(c);
                 const answered = c.questions.filter((q) => ratings[q.id] != null).length;
                 return (
@@ -271,7 +247,9 @@ export function RaterResponseForm({
                       ) : (
                         <div className="w-4 h-4 rounded-full border-2 border-gray-300" />
                       )}
-                      <span className="text-sm font-medium text-gray-900">{c.name}</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {showCompetencyNames ? c.name : `Section ${i + 1}`}
+                      </span>
                     </div>
                     <span className="text-xs text-gray-500">
                       {answered}/{c.questions.length} answered
@@ -284,9 +262,7 @@ export function RaterResponseForm({
 
           {/* Overall Comments */}
           <div>
-            <h3 className="text-sm font-medium text-gray-900 mb-2">
-              Overall Comments (Optional)
-            </h3>
+            <h3 className="text-sm font-medium text-gray-900 mb-2">Overall Comments (Optional)</h3>
             <p className="text-xs text-gray-500 mb-3">
               Any additional feedback you&apos;d like to share about {subjectName}?
             </p>

@@ -64,6 +64,7 @@ interface AssessmentInfo {
     scaleLabels?: string[];
     allowComments: boolean;
     requireComments: boolean;
+    showCompetenciesToRaters?: boolean;
   };
 }
 
@@ -224,6 +225,7 @@ export default function PublicRespondPage() {
           scaleLabels={config.scaleLabels}
           allowComments={config.allowComments}
           requireComments={config.requireComments}
+          showCompetencyNames={config.showCompetenciesToRaters ?? false}
           onSubmit={handleSubmit}
           isSubmitting={isSubmitting}
         />
