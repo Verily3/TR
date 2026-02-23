@@ -51,11 +51,16 @@ function now(): string {
 
 function logColor(level: LogLevel): string {
   switch (level) {
-    case 'info': return 'text-blue-400';
-    case 'success': return 'text-green-400';
-    case 'error': return 'text-red-400';
-    case 'warning': return 'text-yellow-400';
-    case 'output': return 'text-slate-400';
+    case 'info':
+      return 'text-blue-400';
+    case 'success':
+      return 'text-green-400';
+    case 'error':
+      return 'text-red-400';
+    case 'warning':
+      return 'text-yellow-400';
+    case 'output':
+      return 'text-slate-400';
   }
 }
 
@@ -72,7 +77,9 @@ function StatusBadge({ status }: { status: RunStatus }) {
   const Icon = config.icon;
 
   return (
-    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${config.bg}`}>
+    <span
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${config.bg}`}
+    >
       <Icon className={`w-3.5 h-3.5 ${status === 'running' ? 'animate-spin' : ''}`} />
       {config.label}
     </span>
@@ -140,11 +147,7 @@ function TerminalOutput({
   );
 }
 
-function SecretGate({
-  onUnlock,
-}: {
-  onUnlock: (secret: string) => void;
-}) {
+function SecretGate({ onUnlock }: { onUnlock: (secret: string) => void }) {
   const [input, setInput] = useState('');
   const [error, setError] = useState('');
   const verify = useVerifySecret();
@@ -162,7 +165,7 @@ function SecretGate({
         sessionStorage.setItem('admin_db_secret', input.trim());
         onUnlock(input.trim());
       } else {
-        setError('Invalid secret. Check your ADMIN_SECRET or JWT_ACCESS_SECRET env var.');
+        setError('Invalid secret. Check your ADMIN_SECRET env var.');
       }
     } catch {
       setError('Failed to verify secret. Is the API running?');
@@ -177,8 +180,9 @@ function SecretGate({
         </div>
         <h2 className="text-xl font-semibold mb-2">Admin Access Required</h2>
         <p className="text-sm text-gray-500 mb-6">
-          Enter your admin secret to access database management tools.
-          This is your <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">ADMIN_SECRET</code> environment variable.
+          Enter your admin secret to access database management tools. This is your{' '}
+          <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs">ADMIN_SECRET</code>{' '}
+          environment variable.
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
@@ -189,9 +193,7 @@ function SecretGate({
             className="w-full px-4 py-2.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
             autoFocus
           />
-          {error && (
-            <p className="text-sm text-red-600 text-left">{error}</p>
-          )}
+          {error && <p className="text-sm text-red-600 text-left">{error}</p>}
           <button
             type="submit"
             disabled={verify.isPending}
@@ -259,10 +261,14 @@ function DatabaseHealthCard({
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                  <div className={`w-3 h-3 rounded-full ${health.connection.connected ? 'bg-green-500' : 'bg-red-500'}`} />
+                  <div
+                    className={`w-3 h-3 rounded-full ${health.connection.connected ? 'bg-green-500' : 'bg-red-500'}`}
+                  />
                   <div>
                     <p className="text-xs text-slate-500">Status</p>
-                    <p className="text-sm font-medium">{health.connection.connected ? 'Connected' : 'Disconnected'}</p>
+                    <p className="text-sm font-medium">
+                      {health.connection.connected ? 'Connected' : 'Disconnected'}
+                    </p>
                   </div>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-lg">
@@ -285,14 +291,23 @@ function DatabaseHealthCard({
                 <span className="flex items-center gap-2">
                   <Table2 className="w-4 h-4" /> Tables ({health.tables.length})
                 </span>
-                {showTables ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                {showTables ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
               </button>
               {showTables && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                   {health.tables.map((t) => (
-                    <div key={`${t.schema}.${t.name}`} className="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg text-sm">
+                    <div
+                      key={`${t.schema}.${t.name}`}
+                      className="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg text-sm"
+                    >
                       <span className="font-mono text-slate-700 truncate">{t.name}</span>
-                      <span className="text-slate-400 text-xs ml-2 shrink-0">~{t.estimatedRows.toLocaleString()} rows</span>
+                      <span className="text-slate-400 text-xs ml-2 shrink-0">
+                        ~{t.estimatedRows.toLocaleString()} rows
+                      </span>
                     </div>
                   ))}
                   {health.tables.length === 0 && (
@@ -311,7 +326,11 @@ function DatabaseHealthCard({
                 <span className="flex items-center gap-2">
                   <GitBranch className="w-4 h-4" /> Migrations
                 </span>
-                {showMigrations ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                {showMigrations ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
               </button>
               <div className="grid grid-cols-3 gap-3 mb-3">
                 <div className="p-3 bg-slate-50 rounded-lg text-center">
@@ -322,17 +341,28 @@ function DatabaseHealthCard({
                   <p className="text-2xl font-bold text-green-700">{health.migrations.applied}</p>
                   <p className="text-xs text-green-600">Applied</p>
                 </div>
-                <div className={`p-3 rounded-lg text-center ${health.migrations.pending > 0 ? 'bg-amber-50' : 'bg-slate-50'}`}>
-                  <p className={`text-2xl font-bold ${health.migrations.pending > 0 ? 'text-amber-700' : 'text-slate-700'}`}>
+                <div
+                  className={`p-3 rounded-lg text-center ${health.migrations.pending > 0 ? 'bg-amber-50' : 'bg-slate-50'}`}
+                >
+                  <p
+                    className={`text-2xl font-bold ${health.migrations.pending > 0 ? 'text-amber-700' : 'text-slate-700'}`}
+                  >
                     {health.migrations.pending}
                   </p>
-                  <p className={`text-xs ${health.migrations.pending > 0 ? 'text-amber-600' : 'text-slate-500'}`}>Pending</p>
+                  <p
+                    className={`text-xs ${health.migrations.pending > 0 ? 'text-amber-600' : 'text-slate-500'}`}
+                  >
+                    Pending
+                  </p>
                 </div>
               </div>
               {showMigrations && (
                 <div className="space-y-2">
                   {health.migrations.availableFiles.map((f) => (
-                    <div key={f} className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded text-xs font-mono">
+                    <div
+                      key={f}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 rounded text-xs font-mono"
+                    >
                       <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />
                       <span className="text-slate-600 truncate">{f}</span>
                     </div>
@@ -425,9 +455,12 @@ function MigrationCard({
       } else {
         addLog('error', `Migration failed: ${result.error}`);
         if (result.errorStack) {
-          result.errorStack.split('\n').slice(0, 5).forEach((line) => {
-            addLog('error', `  ${line}`);
-          });
+          result.errorStack
+            .split('\n')
+            .slice(0, 5)
+            .forEach((line) => {
+              addLog('error', `  ${line}`);
+            });
         }
         setStatus('failed');
       }
@@ -470,11 +503,17 @@ function MigrationCard({
             <p className="text-2xl font-bold text-green-700">{applied}</p>
             <p className="text-xs text-green-600">Applied</p>
           </div>
-          <div className={`p-3 rounded-lg text-center ${pending > 0 ? 'bg-amber-50' : 'bg-slate-50'}`}>
-            <p className={`text-2xl font-bold ${pending > 0 ? 'text-amber-700' : 'text-slate-700'}`}>
+          <div
+            className={`p-3 rounded-lg text-center ${pending > 0 ? 'bg-amber-50' : 'bg-slate-50'}`}
+          >
+            <p
+              className={`text-2xl font-bold ${pending > 0 ? 'text-amber-700' : 'text-slate-700'}`}
+            >
               {pending}
             </p>
-            <p className={`text-xs ${pending > 0 ? 'text-amber-600' : 'text-slate-500'}`}>Pending</p>
+            <p className={`text-xs ${pending > 0 ? 'text-amber-600' : 'text-slate-500'}`}>
+              Pending
+            </p>
           </div>
         </div>
 
@@ -506,8 +545,8 @@ function MigrationCard({
               <div className="flex-1">
                 <h4 className="text-sm font-semibold text-amber-800">Confirm Migration</h4>
                 <p className="text-sm text-amber-700 mt-1">
-                  This will run all pending Drizzle migrations against the production database.
-                  Make sure you have a backup before proceeding.
+                  This will run all pending Drizzle migrations against the production database. Make
+                  sure you have a backup before proceeding.
                 </p>
                 <div className="flex gap-2 mt-3">
                   <button
@@ -549,8 +588,8 @@ function HelpSection() {
               <Server className="w-4 h-4" /> Database Health
             </h4>
             <p className="text-sm text-slate-600">
-              Checks connection status, PostgreSQL version, lists all tables with estimated row counts,
-              and shows the migration state (applied vs. available files).
+              Checks connection status, PostgreSQL version, lists all tables with estimated row
+              counts, and shows the migration state (applied vs. available files).
             </p>
           </div>
           <div>
@@ -558,8 +597,8 @@ function HelpSection() {
               <GitBranch className="w-4 h-4" /> SQL Migrations
             </h4>
             <p className="text-sm text-slate-600">
-              Runs pending Drizzle ORM migrations against the database. Shows detailed execution logs
-              including what was applied, timing, and any errors.
+              Runs pending Drizzle ORM migrations against the database. Shows detailed execution
+              logs including what was applied, timing, and any errors.
             </p>
           </div>
         </div>
@@ -572,8 +611,14 @@ function HelpSection() {
             <ul className="text-sm text-amber-700 mt-1 space-y-1 list-disc list-inside">
               <li>Always back up your database before running migrations in production.</li>
               <li>Migrations are forward-only and cannot be rolled back from this UI.</li>
-              <li>The admin secret is stored in your browser&apos;s session storage and clears when you close the tab.</li>
-              <li>Auto-migration on deploy can be enabled by setting <code className="bg-amber-100 px-1 py-0.5 rounded text-xs">AUTO_MIGRATE=true</code>.</li>
+              <li>
+                The admin secret is stored in your browser&apos;s session storage and clears when
+                you close the tab.
+              </li>
+              <li>
+                Auto-migration on deploy can be enabled by setting{' '}
+                <code className="bg-amber-100 px-1 py-0.5 rounded text-xs">AUTO_MIGRATE=true</code>.
+              </li>
             </ul>
           </div>
         </div>
