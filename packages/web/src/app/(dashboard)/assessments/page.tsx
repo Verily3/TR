@@ -3,8 +3,21 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/use-auth';
-import { useAssessments, useAssessmentStats, useAssessment, useAssessmentResults, useTemplates, useTenants } from '@/hooks/api';
-import type { AssessmentListItem, AssessmentDetail, ComputedAssessmentResults, AssessmentTemplate as APITemplate, AssessmentInvitation } from '@/types/assessments';
+import {
+  useAssessments,
+  useAssessmentStats,
+  useAssessment,
+  useAssessmentResults,
+  useTemplates,
+  useTenants,
+} from '@/hooks/api';
+import type {
+  AssessmentListItem,
+  AssessmentDetail,
+  ComputedAssessmentResults,
+  AssessmentTemplate as APITemplate,
+  AssessmentInvitation,
+} from '@/types/assessments';
 import { DownloadReportButton } from '@/components/assessments/DownloadReportButton';
 import { DevelopmentPlanView } from '@/components/assessments/DevelopmentPlanView';
 import {
@@ -251,8 +264,8 @@ const sampleCompetencyScores: CompetencyScore[] = [
     managerScore: 4.2,
     peerScore: 4.1,
     directReportScore: 4.3,
-    averageScore: 4.10,
-    gap: -0.30,
+    averageScore: 4.1,
+    gap: -0.3,
   },
   {
     competencyId: 'c3',
@@ -261,8 +274,8 @@ const sampleCompetencyScores: CompetencyScore[] = [
     managerScore: 3.5,
     peerScore: 3.7,
     directReportScore: 3.2,
-    averageScore: 3.60,
-    gap: 0.40,
+    averageScore: 3.6,
+    gap: 0.4,
   },
   {
     competencyId: 'c4',
@@ -271,8 +284,8 @@ const sampleCompetencyScores: CompetencyScore[] = [
     managerScore: 4.0,
     peerScore: 3.9,
     directReportScore: 3.8,
-    averageScore: 3.80,
-    gap: -0.30,
+    averageScore: 3.8,
+    gap: -0.3,
   },
 ];
 
@@ -378,8 +391,7 @@ function AssessmentCard({
     (r) => r.status === 'pending' || r.status === 'in_progress'
   ).length;
 
-  const isOverdue =
-    assessment.status === 'active' && new Date(assessment.dueDate) < new Date();
+  const isOverdue = assessment.status === 'active' && new Date(assessment.dueDate) < new Date();
 
   return (
     <div
@@ -397,9 +409,7 @@ function AssessmentCard({
           {/* Assessment details */}
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-1">
-              <span className="text-gray-900 font-medium">
-                {assessment.subject.name}
-              </span>
+              <span className="text-gray-900 font-medium">{assessment.subject.name}</span>
               <span
                 className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.text}`}
               >
@@ -467,9 +477,7 @@ function AssessmentCard({
         <div className="flex flex-col items-end gap-2 shrink-0">
           {/* Response rate */}
           <div className="text-right">
-            <div className="text-2xl font-medium text-gray-900">
-              {assessment.responseRate}%
-            </div>
+            <div className="text-2xl font-medium text-gray-900">{assessment.responseRate}%</div>
             <div className="text-xs text-gray-500">Response Rate</div>
           </div>
 
@@ -532,9 +540,7 @@ function CompetencyScoreRow({ score }: { score: CompetencyScore }) {
       <div className="flex items-center justify-between mb-4">
         <h4 className="font-medium text-gray-900">{score.competencyName}</h4>
         <div className="flex items-center gap-2">
-          <span className="text-2xl font-bold text-gray-900">
-            {score.averageScore.toFixed(1)}
-          </span>
+          <span className="text-2xl font-bold text-gray-900">{score.averageScore.toFixed(1)}</span>
           <span className="text-sm text-gray-500">/ 5.0</span>
         </div>
       </div>
@@ -581,7 +587,13 @@ function CompetencyScoreRow({ score }: { score: CompetencyScore }) {
 
 // ─── ResultsView ───────────────────────────────────────────────────────────────
 
-function ResultsView({ results, apiResults }: { results: AssessmentResults; apiResults?: ComputedAssessmentResults }) {
+function ResultsView({
+  results,
+  apiResults,
+}: {
+  results: AssessmentResults;
+  apiResults?: ComputedAssessmentResults;
+}) {
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
@@ -625,17 +637,13 @@ function ResultsView({ results, apiResults }: { results: AssessmentResults; apiR
             </span>
           </div>
           <div className="text-sm text-gray-500">Development Areas</div>
-          <div className="text-xs text-yellow-600 mt-1">
-            {results.developmentAreas.join(', ')}
-          </div>
+          <div className="text-xs text-yellow-600 mt-1">{results.developmentAreas.join(', ')}</div>
         </div>
       </div>
 
       {/* Response Breakdown */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">
-          Response Breakdown by Rater Type
-        </h3>
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Response Breakdown by Rater Type</h3>
         <div className="flex flex-wrap items-center gap-6">
           {Object.entries(results.responsesByType).map(([type, count]) => {
             if (count === 0) return null;
@@ -767,15 +775,18 @@ function ResultsView({ results, apiResults }: { results: AssessmentResults; apiR
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h3 className="text-lg font-medium text-gray-900 mb-4">Self vs Others Gap Analysis</h3>
         <p className="text-sm text-gray-500 mb-6">
-          Understanding the gap between self-perception and how others perceive you can reveal
-          blind spots and hidden strengths.
+          Understanding the gap between self-perception and how others perceive you can reveal blind
+          spots and hidden strengths.
         </p>
         <div className="space-y-4">
           {results.competencyScores.map((score) => {
             const gap = score.gap || 0;
             const absGap = Math.abs(gap);
             return (
-              <div key={score.competencyId} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+              <div
+                key={score.competencyId}
+                className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4"
+              >
                 <div className="w-40 text-sm text-gray-900">{score.competencyName}</div>
                 <div className="flex-1 flex items-center gap-2">
                   <div className="w-20 text-right text-sm text-gray-500">
@@ -821,7 +832,10 @@ function ResultsView({ results, apiResults }: { results: AssessmentResults; apiR
           <p className="text-sm text-[#1B3A5C] font-medium mb-4">
             {apiResults.currentCeiling.competencyName}
             {apiResults.currentCeiling.subtitle && (
-              <span className="text-gray-500 font-normal"> — {apiResults.currentCeiling.subtitle}</span>
+              <span className="text-gray-500 font-normal">
+                {' '}
+                — {apiResults.currentCeiling.subtitle}
+              </span>
             )}
           </p>
           <p className="text-sm text-gray-600 leading-relaxed max-w-2xl">
@@ -848,12 +862,17 @@ function ResultsView({ results, apiResults }: { results: AssessmentResults; apiR
               </span>
               <span className="text-sm text-gray-500 ml-2">/ 5.0</span>
             </div>
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-              apiResults.cciResult.band === 'Very High' ? 'bg-green-100 text-green-700' :
-              apiResults.cciResult.band === 'High' ? 'bg-blue-100 text-blue-700' :
-              apiResults.cciResult.band === 'Moderate' ? 'bg-yellow-100 text-yellow-700' :
-              'bg-red-100 text-red-700'
-            }`}>
+            <span
+              className={`px-3 py-1 rounded-full text-sm font-medium ${
+                apiResults.cciResult.band === 'Very High'
+                  ? 'bg-green-100 text-green-700'
+                  : apiResults.cciResult.band === 'High'
+                    ? 'bg-blue-100 text-blue-700'
+                    : apiResults.cciResult.band === 'Moderate'
+                      ? 'bg-yellow-100 text-yellow-700'
+                      : 'bg-red-100 text-red-700'
+              }`}
+            >
               {apiResults.cciResult.band}
             </span>
           </div>
@@ -870,7 +889,10 @@ function ResultsView({ results, apiResults }: { results: AssessmentResults; apiR
           <div className="space-y-2">
             <h4 className="text-sm font-medium text-gray-700 mb-2">Item Breakdown</h4>
             {apiResults.cciResult.items.map((item) => (
-              <div key={`${item.competencyId}-${item.questionId}`} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+              <div
+                key={`${item.competencyId}-${item.questionId}`}
+                className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
+              >
                 <div className="flex-1">
                   <span className="text-xs font-medium text-[#1B3A5C]">{item.competencyName}</span>
                   <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{item.questionText}</p>
@@ -894,17 +916,26 @@ function ResultsView({ results, apiResults }: { results: AssessmentResults; apiR
 
           <div className="flex items-center gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
             <span className="text-sm text-gray-500">Overall Direction</span>
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-              apiResults.trend.overallDirection === 'improved' ? 'bg-green-100 text-green-700' :
-              apiResults.trend.overallDirection === 'declined' ? 'bg-red-100 text-red-700' :
-              'bg-gray-100 text-gray-700'
-            }`}>
-              {apiResults.trend.overallDirection === 'improved' ? '↑' :
-               apiResults.trend.overallDirection === 'declined' ? '↓' : '→'}{' '}
-              {apiResults.trend.overallDirection.charAt(0).toUpperCase() + apiResults.trend.overallDirection.slice(1)}
+            <span
+              className={`px-3 py-1 rounded-full text-sm font-medium ${
+                apiResults.trend.overallDirection === 'improved'
+                  ? 'bg-green-100 text-green-700'
+                  : apiResults.trend.overallDirection === 'declined'
+                    ? 'bg-red-100 text-red-700'
+                    : 'bg-gray-100 text-gray-700'
+              }`}
+            >
+              {apiResults.trend.overallDirection === 'improved'
+                ? '↑'
+                : apiResults.trend.overallDirection === 'declined'
+                  ? '↓'
+                  : '→'}{' '}
+              {apiResults.trend.overallDirection.charAt(0).toUpperCase() +
+                apiResults.trend.overallDirection.slice(1)}
               {apiResults.trend.overallChange !== 0 && (
                 <span className="ml-1">
-                  ({apiResults.trend.overallChange > 0 ? '+' : ''}{apiResults.trend.overallChange.toFixed(2)})
+                  ({apiResults.trend.overallChange > 0 ? '+' : ''}
+                  {apiResults.trend.overallChange.toFixed(2)})
                 </span>
               )}
             </span>
@@ -912,18 +943,28 @@ function ResultsView({ results, apiResults }: { results: AssessmentResults; apiR
 
           <div className="space-y-3">
             {apiResults.trend.competencyChanges.map((change) => (
-              <div key={change.competencyId} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+              <div
+                key={change.competencyId}
+                className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
+              >
                 <span className="text-sm text-gray-900">{change.competencyName}</span>
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-gray-500">{change.previousScore.toFixed(2)}</span>
                   <span className="text-xs text-gray-400">→</span>
-                  <span className="text-xs text-gray-900 font-medium">{change.currentScore.toFixed(2)}</span>
-                  <span className={`text-xs font-medium ${
-                    change.direction === 'improved' ? 'text-green-600' :
-                    change.direction === 'declined' ? 'text-red-600' :
-                    'text-gray-500'
-                  }`}>
-                    {change.change > 0 ? '+' : ''}{change.change.toFixed(2)}
+                  <span className="text-xs text-gray-900 font-medium">
+                    {change.currentScore.toFixed(2)}
+                  </span>
+                  <span
+                    className={`text-xs font-medium ${
+                      change.direction === 'improved'
+                        ? 'text-green-600'
+                        : change.direction === 'declined'
+                          ? 'text-red-600'
+                          : 'text-gray-500'
+                    }`}
+                  >
+                    {change.change > 0 ? '+' : ''}
+                    {change.change.toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -980,8 +1021,7 @@ function AssessmentDetailView({
     {} as Record<string, Rater[]>
   );
 
-  const isOverdue =
-    assessment.status === 'active' && new Date(assessment.dueDate) < new Date();
+  const isOverdue = assessment.status === 'active' && new Date(assessment.dueDate) < new Date();
 
   return (
     <>
@@ -1002,9 +1042,7 @@ function AssessmentDetailView({
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-3 mb-1">
-                <h1 className="text-2xl font-semibold text-gray-900">
-                  {assessment.subject.name}
-                </h1>
+                <h1 className="text-2xl font-semibold text-gray-900">{assessment.subject.name}</h1>
                 <span
                   className={`px-3 py-1 rounded-full text-sm font-medium ${statusConfig.bg} ${statusConfig.text}`}
                 >
@@ -1079,9 +1117,7 @@ function AssessmentDetailView({
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-2 px-4 py-2 rounded text-sm transition-colors whitespace-nowrap ${
-              activeTab === tab.id
-                ? 'bg-red-600 text-white'
-                : 'text-gray-900 hover:bg-white'
+              activeTab === tab.id ? 'bg-red-600 text-white' : 'text-gray-900 hover:bg-white'
             }`}
           >
             {tab.icon}
@@ -1141,9 +1177,7 @@ function AssessmentDetailView({
             <div className="space-y-3 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-gray-500">Competencies</span>
-                <span className="font-medium text-gray-900">
-                  {template.competencies.length}
-                </span>
+                <span className="font-medium text-gray-900">{template.competencies.length}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-gray-500">Questions</span>
@@ -1178,9 +1212,7 @@ function AssessmentDetailView({
 
           {/* Competencies */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sm:col-span-2 lg:col-span-3">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">
-              Competencies Being Assessed
-            </h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Competencies Being Assessed</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {template.competencies.map((competency) => (
                 <div key={competency.id} className="p-4 border border-gray-200 rounded-lg">
@@ -1202,10 +1234,7 @@ function AssessmentDetailView({
           {Object.entries(ratersByType).map(([type, raters]) => {
             const colors = raterTypeColors[type];
             return (
-              <div
-                key={type}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
-              >
+              <div key={type} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
                     <span
@@ -1218,9 +1247,7 @@ function AssessmentDetailView({
                       completed
                     </span>
                   </div>
-                  {raters.some(
-                    (r) => r.status === 'pending' || r.status === 'in_progress'
-                  ) && (
+                  {raters.some((r) => r.status === 'pending' || r.status === 'in_progress') && (
                     <button className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-sm hover:bg-blue-200 transition-colors flex items-center gap-1">
                       <Mail className="w-4 h-4" />
                       Send Reminder
@@ -1511,12 +1538,18 @@ function adaptDetailToAssessment(detail: AssessmentDetail): Assessment {
   };
 }
 
-function adaptComputedResults(results: ComputedAssessmentResults, subjectName: string): AssessmentResults {
+function adaptComputedResults(
+  results: ComputedAssessmentResults,
+  subjectName: string
+): AssessmentResults {
   return {
     assessmentId: '',
     subjectName,
     completedAt: results.computedAt,
-    totalResponses: Object.values(results.responseRateByType).reduce((sum, r) => sum + r.completed, 0),
+    totalResponses: Object.values(results.responseRateByType).reduce(
+      (sum, r) => sum + r.completed,
+      0
+    ),
     responsesByType: Object.fromEntries(
       Object.entries(results.responseRateByType).map(([type, data]) => [type, data.completed])
     ) as Record<RaterType, number>,
@@ -1556,7 +1589,9 @@ export default function AssessmentsPage() {
   }, [isAgencyUser, tenants, selectedTenantId]);
 
   // Fetch assessments and stats from API
-  const { data: assessmentsData, isLoading: assessmentsLoading } = useAssessments(activeTenantId ?? undefined);
+  const { data: assessmentsData, isLoading: assessmentsLoading } = useAssessments(
+    activeTenantId ?? undefined
+  );
   const { data: statsData } = useAssessmentStats(activeTenantId ?? undefined);
   const { data: templatesData } = useTemplates({ status: 'published' });
 
@@ -1569,11 +1604,13 @@ export default function AssessmentsPage() {
   // Fetch results if assessment is completed
   const { data: resultsData } = useAssessmentResults(
     activeTenantId ?? undefined,
-    assessmentDetail?.status === 'completed' ? selectedAssessmentId ?? undefined : undefined
+    assessmentDetail?.status === 'completed' ? (selectedAssessmentId ?? undefined) : undefined
   );
 
   // Adapt API data to page types
-  const assessments: Assessment[] = (assessmentsData?.assessments || []).map(adaptAssessmentListItem);
+  const assessments: Assessment[] = (assessmentsData?.assessments || []).map(
+    adaptAssessmentListItem
+  );
   const stats: AssessmentStats = statsData || defaultAssessmentStats;
   const templates: AssessmentTemplate[] = (templatesData?.templates || []).map(adaptTemplate);
 
@@ -1632,9 +1669,7 @@ export default function AssessmentsPage() {
       {/* Page Header */}
       <header className="mb-8 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2">
-            Assessments
-          </h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2">Assessments</h1>
           <p className="text-gray-500">
             {isAgencyUser
               ? 'View and manage assessments across your clients'
@@ -1652,19 +1687,23 @@ export default function AssessmentsPage() {
                 className="pl-8 pr-8 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-red-500 appearance-none cursor-pointer"
               >
                 {tenants.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
                 ))}
               </select>
               <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
             </div>
           )}
-          <button
-            onClick={() => router.push('/assessments/new')}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            New Assessment
-          </button>
+          {(isAgencyUser || (user?.roleLevel ?? 0) >= 70) && (
+            <button
+              onClick={() => router.push('/assessments/new')}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              New Assessment
+            </button>
+          )}
         </div>
       </header>
 
@@ -1689,9 +1728,7 @@ export default function AssessmentsPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <div className="flex items-center gap-3 mb-2">
             <CheckCircle2 className="w-5 h-5 text-green-600" />
-            <span className="text-2xl font-medium text-gray-900">
-              {stats.completedAssessments}
-            </span>
+            <span className="text-2xl font-medium text-gray-900">{stats.completedAssessments}</span>
           </div>
           <div className="text-sm text-gray-500">Completed</div>
         </div>
@@ -1707,9 +1744,7 @@ export default function AssessmentsPage() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <div className="flex items-center gap-3 mb-2">
             <TrendingUp className="w-5 h-5 text-purple-600" />
-            <span className="text-2xl font-medium text-gray-900">
-              {stats.averageResponseRate}%
-            </span>
+            <span className="text-2xl font-medium text-gray-900">{stats.averageResponseRate}%</span>
           </div>
           <div className="text-sm text-gray-500">Avg Response Rate</div>
         </div>
@@ -1759,7 +1794,10 @@ export default function AssessmentsPage() {
       {assessmentsLoading ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-pulse">
+            <div
+              key={i}
+              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-pulse"
+            >
               <div className="h-5 bg-gray-200 rounded w-1/3 mb-3"></div>
               <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
               <div className="h-4 bg-gray-200 rounded w-1/2"></div>
@@ -1783,10 +1821,12 @@ export default function AssessmentsPage() {
             <h3 className="text-gray-900 mb-2">No Assessments Found</h3>
             <p className="text-sm text-gray-500 mb-4">
               {activeFilter === 'all'
-                ? 'Create your first assessment to gather feedback'
+                ? isAgencyUser || (user?.roleLevel ?? 0) >= 70
+                  ? 'Create your first assessment to gather feedback'
+                  : 'No assessments have been assigned to you yet'
                 : `No ${activeFilter} assessments found`}
             </p>
-            {activeFilter === 'all' && (
+            {activeFilter === 'all' && (isAgencyUser || (user?.roleLevel ?? 0) >= 70) && (
               <button
                 onClick={() => router.push('/assessments/new')}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
@@ -1797,7 +1837,6 @@ export default function AssessmentsPage() {
           </div>
         </div>
       )}
-
     </div>
   );
 }
