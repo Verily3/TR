@@ -6,6 +6,48 @@ import { RaterResponseForm } from '@/components/assessments/RaterResponseForm';
 import { CheckCircle2, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
 import { API_URL } from '@/lib/api';
 
+// Shape returned by the API
+interface ApiResponseData {
+  assessment: {
+    id: string;
+    name: string;
+    description: string | null;
+    status: string;
+    subjectName?: string;
+  };
+  template: {
+    id: string;
+    name: string;
+    assessmentType: string;
+    config: {
+      competencies: {
+        id: string;
+        name: string;
+        description?: string;
+        questions: { id: string; text: string }[];
+      }[];
+      scaleMin: number;
+      scaleMax: number;
+      scaleLabels?: string[];
+      allowComments: boolean;
+      requireComments: boolean;
+    };
+  };
+  invitation: {
+    id: string;
+    raterType: string;
+    status: string;
+  };
+  existingResponse: {
+    responseData?: {
+      ratings?: Record<string, number>;
+      comments?: Record<string, string>;
+      overallComments?: string;
+    };
+  } | null;
+}
+
+// Flattened shape used by the component
 interface AssessmentInfo {
   assessmentName: string;
   subjectName: string;
@@ -43,8 +85,16 @@ export default function PublicRespondPage() {
           const errData = await res.json().catch(() => ({}));
           throw new Error(errData?.error?.message || 'Invalid or expired access link');
         }
-        const data = await res.json();
-        setAssessmentInfo(data.data);
+        const json = await res.json();
+        const apiData = json.data as ApiResponseData;
+
+        // Map API response to the shape the component expects
+        setAssessmentInfo({
+          assessmentName: apiData.assessment.name,
+          subjectName: apiData.assessment.subjectName || apiData.assessment.name,
+          raterType: apiData.invitation.raterType,
+          config: apiData.template.config,
+        });
       } catch (err: any) {
         setError(err.message || 'Failed to load assessment');
       } finally {

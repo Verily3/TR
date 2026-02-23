@@ -6,11 +6,7 @@ import { db, schema } from '@tr/db';
 import { NotFoundError, BadRequestError, ForbiddenError } from '../lib/errors.js';
 import type { Variables } from '../types/context.js';
 
-const {
-  assessments,
-  assessmentInvitations,
-  assessmentResponses,
-} = schema;
+const { assessments, assessmentInvitations, assessmentResponses } = schema;
 
 // ============================
 // AUTHENTICATED RESPONSE ROUTES
@@ -74,174 +70,170 @@ assessmentResponseRoutes.get('/mine', async (c) => {
  * POST /api/tenants/:tenantId/assessments/:assessmentId/responses
  * Submit or save a draft response
  */
-assessmentResponseRoutes.post(
-  '/',
-  zValidator('json', submitResponseSchema),
-  async (c) => {
-    const assessmentId = c.req.param('assessmentId')!;
-    const user = c.get('user');
-    const body = c.req.valid('json');
+assessmentResponseRoutes.post('/', zValidator('json', submitResponseSchema), async (c) => {
+  const assessmentId = c.req.param('assessmentId')!;
+  const user = c.get('user');
+  const body = c.req.valid('json');
 
-    // Verify assessment is open
-    const [assessment] = await db
-      .select()
-      .from(assessments)
-      .where(eq(assessments.id, assessmentId))
-      .limit(1);
+  // Verify assessment is open
+  const [assessment] = await db
+    .select()
+    .from(assessments)
+    .where(eq(assessments.id, assessmentId))
+    .limit(1);
 
-    if (!assessment) throw new NotFoundError('Assessment');
-    if (assessment.status !== 'open') {
-      throw new BadRequestError('Assessment is not open for responses');
-    }
-
-    // Find the user's invitation
-    const [invitation] = await db
-      .select()
-      .from(assessmentInvitations)
-      .where(
-        and(
-          eq(assessmentInvitations.assessmentId, assessmentId),
-          eq(assessmentInvitations.raterId, user.id)
-        )
-      )
-      .limit(1);
-
-    if (!invitation) {
-      throw new ForbiddenError('You are not invited to this assessment');
-    }
-
-    if (invitation.status === 'completed') {
-      throw new BadRequestError('Response already submitted');
-    }
-
-    // Upsert response
-    const [existing] = await db
-      .select()
-      .from(assessmentResponses)
-      .where(eq(assessmentResponses.invitationId, invitation.id))
-      .limit(1);
-
-    let response;
-    if (existing) {
-      [response] = await db
-        .update(assessmentResponses)
-        .set({
-          responses: body.responses,
-          overallComments: body.overallComments ?? null,
-          updatedAt: new Date(),
-        })
-        .where(eq(assessmentResponses.id, existing.id))
-        .returning();
-    } else {
-      [response] = await db
-        .insert(assessmentResponses)
-        .values({
-          invitationId: invitation.id,
-          responses: body.responses,
-          overallComments: body.overallComments ?? null,
-          isComplete: false,
-        })
-        .returning();
-
-      // Update invitation status to started
-      if (invitation.status === 'pending' || invitation.status === 'sent' || invitation.status === 'viewed') {
-        await db
-          .update(assessmentInvitations)
-          .set({ status: 'started', startedAt: new Date() })
-          .where(eq(assessmentInvitations.id, invitation.id));
-      }
-    }
-
-    return c.json({ data: response }, existing ? 200 : 201);
+  if (!assessment) throw new NotFoundError('Assessment');
+  if (assessment.status !== 'open') {
+    throw new BadRequestError('Assessment is not open for responses');
   }
-);
+
+  // Find the user's invitation
+  const [invitation] = await db
+    .select()
+    .from(assessmentInvitations)
+    .where(
+      and(
+        eq(assessmentInvitations.assessmentId, assessmentId),
+        eq(assessmentInvitations.raterId, user.id)
+      )
+    )
+    .limit(1);
+
+  if (!invitation) {
+    throw new ForbiddenError('You are not invited to this assessment');
+  }
+
+  if (invitation.status === 'completed') {
+    throw new BadRequestError('Response already submitted');
+  }
+
+  // Upsert response
+  const [existing] = await db
+    .select()
+    .from(assessmentResponses)
+    .where(eq(assessmentResponses.invitationId, invitation.id))
+    .limit(1);
+
+  let response;
+  if (existing) {
+    [response] = await db
+      .update(assessmentResponses)
+      .set({
+        responses: body.responses,
+        overallComments: body.overallComments ?? null,
+        updatedAt: new Date(),
+      })
+      .where(eq(assessmentResponses.id, existing.id))
+      .returning();
+  } else {
+    [response] = await db
+      .insert(assessmentResponses)
+      .values({
+        invitationId: invitation.id,
+        responses: body.responses,
+        overallComments: body.overallComments ?? null,
+        isComplete: false,
+      })
+      .returning();
+
+    // Update invitation status to started
+    if (
+      invitation.status === 'pending' ||
+      invitation.status === 'sent' ||
+      invitation.status === 'viewed'
+    ) {
+      await db
+        .update(assessmentInvitations)
+        .set({ status: 'started', startedAt: new Date() })
+        .where(eq(assessmentInvitations.id, invitation.id));
+    }
+  }
+
+  return c.json({ data: response }, existing ? 200 : 201);
+});
 
 /**
  * POST /api/tenants/:tenantId/assessments/:assessmentId/responses/submit
  * Finalize and submit the response
  */
-assessmentResponseRoutes.post(
-  '/submit',
-  zValidator('json', submitResponseSchema),
-  async (c) => {
-    const assessmentId = c.req.param('assessmentId')!;
-    const user = c.get('user');
-    const body = c.req.valid('json');
+assessmentResponseRoutes.post('/submit', zValidator('json', submitResponseSchema), async (c) => {
+  const assessmentId = c.req.param('assessmentId')!;
+  const user = c.get('user');
+  const body = c.req.valid('json');
 
-    // Verify assessment is open
-    const [assessment] = await db
-      .select()
-      .from(assessments)
-      .where(eq(assessments.id, assessmentId))
-      .limit(1);
+  // Verify assessment is open
+  const [assessment] = await db
+    .select()
+    .from(assessments)
+    .where(eq(assessments.id, assessmentId))
+    .limit(1);
 
-    if (!assessment) throw new NotFoundError('Assessment');
-    if (assessment.status !== 'open') {
-      throw new BadRequestError('Assessment is not open for responses');
-    }
-
-    // Find the user's invitation
-    const [invitation] = await db
-      .select()
-      .from(assessmentInvitations)
-      .where(
-        and(
-          eq(assessmentInvitations.assessmentId, assessmentId),
-          eq(assessmentInvitations.raterId, user.id)
-        )
-      )
-      .limit(1);
-
-    if (!invitation) {
-      throw new ForbiddenError('You are not invited to this assessment');
-    }
-
-    if (invitation.status === 'completed') {
-      throw new BadRequestError('Response already submitted');
-    }
-
-    // Upsert response as complete
-    const [existing] = await db
-      .select()
-      .from(assessmentResponses)
-      .where(eq(assessmentResponses.invitationId, invitation.id))
-      .limit(1);
-
-    let response;
-    if (existing) {
-      [response] = await db
-        .update(assessmentResponses)
-        .set({
-          responses: body.responses,
-          overallComments: body.overallComments ?? null,
-          isComplete: true,
-          submittedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(assessmentResponses.id, existing.id))
-        .returning();
-    } else {
-      [response] = await db
-        .insert(assessmentResponses)
-        .values({
-          invitationId: invitation.id,
-          responses: body.responses,
-          overallComments: body.overallComments ?? null,
-          isComplete: true,
-          submittedAt: new Date(),
-        })
-        .returning();
-    }
-
-    // Mark invitation as completed
-    await db
-      .update(assessmentInvitations)
-      .set({ status: 'completed', completedAt: new Date() })
-      .where(eq(assessmentInvitations.id, invitation.id));
-
-    return c.json({ data: response });
+  if (!assessment) throw new NotFoundError('Assessment');
+  if (assessment.status !== 'open') {
+    throw new BadRequestError('Assessment is not open for responses');
   }
-);
+
+  // Find the user's invitation
+  const [invitation] = await db
+    .select()
+    .from(assessmentInvitations)
+    .where(
+      and(
+        eq(assessmentInvitations.assessmentId, assessmentId),
+        eq(assessmentInvitations.raterId, user.id)
+      )
+    )
+    .limit(1);
+
+  if (!invitation) {
+    throw new ForbiddenError('You are not invited to this assessment');
+  }
+
+  if (invitation.status === 'completed') {
+    throw new BadRequestError('Response already submitted');
+  }
+
+  // Upsert response as complete
+  const [existing] = await db
+    .select()
+    .from(assessmentResponses)
+    .where(eq(assessmentResponses.invitationId, invitation.id))
+    .limit(1);
+
+  let response;
+  if (existing) {
+    [response] = await db
+      .update(assessmentResponses)
+      .set({
+        responses: body.responses,
+        overallComments: body.overallComments ?? null,
+        isComplete: true,
+        submittedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(assessmentResponses.id, existing.id))
+      .returning();
+  } else {
+    [response] = await db
+      .insert(assessmentResponses)
+      .values({
+        invitationId: invitation.id,
+        responses: body.responses,
+        overallComments: body.overallComments ?? null,
+        isComplete: true,
+        submittedAt: new Date(),
+      })
+      .returning();
+  }
+
+  // Mark invitation as completed
+  await db
+    .update(assessmentInvitations)
+    .set({ status: 'completed', completedAt: new Date() })
+    .where(eq(assessmentInvitations.id, invitation.id));
+
+  return c.json({ data: response });
+});
 
 /**
  * PUT /api/tenants/:tenantId/assessments/:assessmentId/responses/:responseId
@@ -350,6 +342,10 @@ publicAssessmentRoutes.get('/:accessToken', async (c) => {
       .where(eq(assessmentInvitations.id, invitation.id));
   }
 
+  const subjectName =
+    [assessment.subjectFirstName, assessment.subjectLastName].filter(Boolean).join(' ') ||
+    'the subject';
+
   return c.json({
     data: {
       assessment: {
@@ -357,6 +353,7 @@ publicAssessmentRoutes.get('/:accessToken', async (c) => {
         name: assessment.name,
         description: assessment.description,
         status: assessment.status,
+        subjectName,
       },
       template,
       invitation: {
