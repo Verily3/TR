@@ -1,4 +1,8 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+/**
+ * API base URL — empty string means relative URLs (works in production via Next.js rewrites).
+ * Only set NEXT_PUBLIC_API_URL in local dev (.env.local) to point at localhost:3002.
+ */
+export const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 const REQUEST_TIMEOUT_MS = 30_000; // 30 seconds for JSON requests
 const UPLOAD_TIMEOUT_MS = 120_000; // 2 minutes for file uploads

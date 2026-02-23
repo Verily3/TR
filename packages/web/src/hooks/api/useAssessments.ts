@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, API_URL } from '@/lib/api';
 import type {
   Assessment,
   AssessmentListItem,
@@ -13,8 +13,6 @@ import type {
   ComputedAssessmentResults,
   AssessmentSetupInfo,
 } from '@/types/assessments';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 // ============ Assessment Queries ============
 
@@ -318,7 +316,7 @@ export function useDownloadReport(tenantId: string | undefined) {
   return useMutation({
     mutationFn: async ({ assessmentId, filename }: { assessmentId: string; filename: string }) => {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || ''}/api/tenants/${tenantId}/assessments/${assessmentId}/report/pdf`,
+        `${API_URL}/api/tenants/${tenantId}/assessments/${assessmentId}/report/pdf`,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
@@ -349,7 +347,7 @@ export function useAssessmentSetup(token: string | undefined) {
   return useQuery({
     queryKey: ['assessmentSetup', token],
     queryFn: async () => {
-      const response = await fetch(`${API_BASE}/api/assessments/setup/${token}`);
+      const response = await fetch(`${API_URL}/api/assessments/setup/${token}`);
       if (!response.ok) throw new Error('Invalid or expired setup link');
       const json = (await response.json()) as { data: AssessmentSetupInfo };
       return json.data;
@@ -366,7 +364,7 @@ export function useSubmitSetupRaters(token: string | undefined) {
     mutationFn: async (
       raters: { firstName: string; lastName: string; email: string; raterType: string }[]
     ) => {
-      const response = await fetch(`${API_BASE}/api/assessments/setup/${token}/raters`, {
+      const response = await fetch(`${API_URL}/api/assessments/setup/${token}/raters`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ raters }),

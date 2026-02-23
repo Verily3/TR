@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { API_URL } from '@/lib/api';
 
 /**
  * Download a completion certificate for a given enrollment.
@@ -26,9 +27,8 @@ export function useDownloadCertificate() {
       if (token) headers['Authorization'] = `Bearer ${token}`;
       if (impersonationToken) headers['X-Impersonation-Token'] = impersonationToken;
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
       const response = await fetch(
-        `${apiUrl}/api/tenants/${tenantId}/programs/${programId}/enrollments/${enrollmentId}/certificate`,
+        `${API_URL}/api/tenants/${tenantId}/programs/${programId}/enrollments/${enrollmentId}/certificate`,
         { headers }
       );
 

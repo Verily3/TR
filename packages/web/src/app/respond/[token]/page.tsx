@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { RaterResponseForm } from '@/components/assessments/RaterResponseForm';
 import { CheckCircle2, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
+import { API_URL } from '@/lib/api';
 
 interface AssessmentInfo {
   assessmentName: string;
