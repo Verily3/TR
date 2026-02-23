@@ -4,12 +4,25 @@ set -e
 echo "=== Results Tracking System Starting ==="
 
 # Load environment variables from .env file (if present)
-# set -a exports all vars; set +a stops exporting
+# Only sets vars that are NOT already defined (preserves Cloud Run env vars)
 if [ -f packages/api/.env ]; then
-  echo "Loading env vars from packages/api/.env..."
-  set -a
-  . packages/api/.env
-  set +a
+  echo "Loading env vars from packages/api/.env (skipping already-set vars)..."
+  while IFS= read -r line || [ -n "$line" ]; do
+    # Skip comments and blank lines
+    case "$line" in
+      \#*|"") continue ;;
+    esac
+    # Extract variable name (everything before first =)
+    var_name="${line%%=*}"
+    # Only export if not already set in environment
+    eval "current_val=\${$var_name+_SET_}"
+    if [ -z "$current_val" ]; then
+      export "$line"
+      echo "  Set $var_name from .env"
+    else
+      echo "  Skipped $var_name (already set by environment)"
+    fi
+  done < packages/api/.env
 fi
 
 # Optional: Run database migrations before startup
