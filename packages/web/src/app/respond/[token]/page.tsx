@@ -153,15 +153,33 @@ export default function PublicRespondPage() {
     setIsSubmitting(true);
     setError(null);
     try {
+      // Transform flat ratings/comments maps into the array format the API expects:
+      // { responses: [{ competencyId, questionId, rating, comment }], overallComments }
+      const responses: {
+        competencyId: string;
+        questionId: string;
+        rating?: number;
+        comment?: string;
+      }[] = [];
+      for (const competency of assessmentInfo!.config.competencies) {
+        for (const question of competency.questions) {
+          if (data.ratings[question.id] != null) {
+            responses.push({
+              competencyId: competency.id,
+              questionId: question.id,
+              rating: data.ratings[question.id],
+              comment: data.comments[question.id] || undefined,
+            });
+          }
+        }
+      }
+
       const res = await fetch(`${API_URL}/api/assessments/respond/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          responseData: {
-            ratings: data.ratings,
-            comments: data.comments,
-            overallComments: data.overallComments,
-          },
+          responses,
+          overallComments: data.overallComments || undefined,
         }),
       });
 
