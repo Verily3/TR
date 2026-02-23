@@ -412,7 +412,7 @@ assessmentsRoutes.post('/', zValidator('json', createAssessmentSchema), async (c
       showResultsToSubject: body.showResultsToSubject,
       programId: body.programId ?? null,
       enrollmentId: body.enrollmentId ?? null,
-      status: 'draft',
+      status: 'open',
     })
     .returning();
 
