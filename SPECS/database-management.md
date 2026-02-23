@@ -11,10 +11,10 @@
 ## Admin Secret
 
 ```
-7w3ZcHSoSkChrPsmG0MMZpIo5yyNwCEijAR472pgzedQtx0G
+437f2393f5b7ae468c749f1cc2f41e571c9563f6c822cdbca2aac59e2237fb2e
 ```
 
-This is the `ADMIN_SECRET` environment variable set on Cloud Run. Falls back to `JWT_ACCESS_SECRET` if not set.
+This is the `ADMIN_SECRET` environment variable. No fallback — must be set explicitly.
 
 ---
 
@@ -29,7 +29,7 @@ Validates an admin secret. Used by the frontend before storing it in sessionStor
 ```bash
 curl -X POST https://transforming-results-952706457090.us-east1.run.app/api/admin/db/verify \
   -H "Content-Type: application/json" \
-  -d '{"secret":"7w3ZcHSoSkChrPsmG0MMZpIo5yyNwCEijAR472pgzedQtx0G"}'
+  -d '{"secret":"437f2393f5b7ae468c749f1cc2f41e571c9563f6c822cdbca2aac59e2237fb2e"}'
 ```
 
 **Response:** `{"data":{"valid":true}}`
@@ -39,11 +39,12 @@ curl -X POST https://transforming-results-952706457090.us-east1.run.app/api/admi
 Returns database connection status, PostgreSQL version, table list with row counts, and migration status. Does not modify anything.
 
 ```bash
-curl "https://transforming-results-952706457090.us-east1.run.app/api/admin/db/health?secret=7w3ZcHSoSkChrPsmG0MMZpIo5yyNwCEijAR472pgzedQtx0G" \
+curl "https://transforming-results-952706457090.us-east1.run.app/api/admin/db/health?secret=437f2393f5b7ae468c749f1cc2f41e571c9563f6c822cdbca2aac59e2237fb2e" \
   -H "Accept: application/json"
 ```
 
 **Response includes:**
+
 - `connection`: connected (bool), latencyMs, postgresVersion, databaseUrl (masked)
 - `tables`: array of {schema, name, estimatedRows}
 - `migrations`: applied count, available count, pending count, appliedList, availableFiles
@@ -54,14 +55,15 @@ Runs all pending Drizzle ORM migrations and returns detailed results. Returns HT
 
 ```bash
 # JSON response
-curl "https://transforming-results-952706457090.us-east1.run.app/api/admin/db/migrate?secret=7w3ZcHSoSkChrPsmG0MMZpIo5yyNwCEijAR472pgzedQtx0G" \
+curl "https://transforming-results-952706457090.us-east1.run.app/api/admin/db/migrate?secret=437f2393f5b7ae468c749f1cc2f41e571c9563f6c822cdbca2aac59e2237fb2e" \
   -H "Accept: application/json"
 
 # HTML response (open in browser)
-https://transforming-results-952706457090.us-east1.run.app/api/admin/db/migrate?secret=7w3ZcHSoSkChrPsmG0MMZpIo5yyNwCEijAR472pgzedQtx0G
+https://transforming-results-952706457090.us-east1.run.app/api/admin/db/migrate?secret=437f2393f5b7ae468c749f1cc2f41e571c9563f6c822cdbca2aac59e2237fb2e
 ```
 
 **Response includes:**
+
 - `success`: boolean
 - `durationMs`: execution time
 - `appliedBefore` / `appliedAfter`: migration hashes
@@ -75,7 +77,7 @@ https://transforming-results-952706457090.us-east1.run.app/api/admin/db/migrate?
 Returns current applied migrations without running anything.
 
 ```bash
-curl "https://transforming-results-952706457090.us-east1.run.app/api/admin/db/status?secret=7w3ZcHSoSkChrPsmG0MMZpIo5yyNwCEijAR472pgzedQtx0G"
+curl "https://transforming-results-952706457090.us-east1.run.app/api/admin/db/status?secret=437f2393f5b7ae468c749f1cc2f41e571c9563f6c822cdbca2aac59e2237fb2e"
 ```
 
 ---
@@ -90,28 +92,28 @@ Alternatively, set `RUN_MIGRATIONS=true` to run migrations via the Docker entryp
 
 ## Current Database State (as of 2026-02-16)
 
-| Metric | Value |
-|--------|-------|
-| PostgreSQL Version | 17.7 |
-| Database URL | postgres://transforming-results-user24:****@34.30.95.0:5432/transforming-results |
-| Total Tables | 34 |
-| Applied Migrations | 9 of 9 |
-| Pending Migrations | 0 |
-| Connection Latency | ~220ms |
+| Metric             | Value                                                                                |
+| ------------------ | ------------------------------------------------------------------------------------ |
+| PostgreSQL Version | 17.7                                                                                 |
+| Database URL       | postgres://transforming-results-user24:\*\*\*\*@34.30.95.0:5432/transforming-results |
+| Total Tables       | 34                                                                                   |
+| Applied Migrations | 9 of 9                                                                               |
+| Pending Migrations | 0                                                                                    |
+| Connection Latency | ~220ms                                                                               |
 
 ### Migration Files
 
-| # | File |
-|---|------|
-| 0 | 0000_nosy_longshot.sql |
-| 1 | 0001_loving_hitman.sql |
-| 2 | 0002_bitter_cobalt_man.sql |
-| 3 | 0003_lame_leech.sql |
-| 4 | 0004_famous_trish_tilby.sql |
-| 5 | 0005_lovely_shriek.sql |
-| 6 | 0006_ordinary_tinkerer.sql |
-| 7 | 0007_vengeful_virginia_dare.sql |
-| 8 | 0008_elite_silver_samurai.sql |
+| #   | File                            |
+| --- | ------------------------------- |
+| 0   | 0000_nosy_longshot.sql          |
+| 1   | 0001_loving_hitman.sql          |
+| 2   | 0002_bitter_cobalt_man.sql      |
+| 3   | 0003_lame_leech.sql             |
+| 4   | 0004_famous_trish_tilby.sql     |
+| 5   | 0005_lovely_shriek.sql          |
+| 6   | 0006_ordinary_tinkerer.sql      |
+| 7   | 0007_vengeful_virginia_dare.sql |
+| 8   | 0008_elite_silver_samurai.sql   |
 
 ---
 
@@ -131,23 +133,23 @@ Alternatively, set `RUN_MIGRATIONS=true` to run migrations via the Docker entryp
 
 ## Files
 
-| File | Purpose |
-|------|---------|
+| File                                                        | Purpose                                                               |
+| ----------------------------------------------------------- | --------------------------------------------------------------------- |
 | `packages/web/src/app/(dashboard)/agency/database/page.tsx` | Frontend page (SecretGate, HealthCard, MigrationCard, Terminal, Help) |
-| `packages/web/src/hooks/api/useAdminDb.ts` | React Query hooks (useVerifySecret, useDbHealth, useRunMigrations) |
-| `packages/api/src/routes/admin/db.ts` | API routes (verify, health, migrate, status) |
-| `packages/db/src/migrate.ts` | Programmatic migration runner (runMigrations function) |
+| `packages/web/src/hooks/api/useAdminDb.ts`                  | React Query hooks (useVerifySecret, useDbHealth, useRunMigrations)    |
+| `packages/api/src/routes/admin/db.ts`                       | API routes (verify, health, migrate, status)                          |
+| `packages/db/src/migrate.ts`                                | Programmatic migration runner (runMigrations function)                |
 
 ---
 
 ## Test Accounts
 
-| Email | Role | Password |
-|-------|------|----------|
-| admin@acme.com | Agency Owner | password123 |
-| admin@techcorp.com | Tenant Admin | password123 |
-| coach@techcorp.com | Facilitator | password123 |
-| mentor@techcorp.com | Mentor | password123 |
-| john.doe@techcorp.com | Learner | password123 |
-| jane.smith@techcorp.com | Learner | password123 |
-| alex.wilson@techcorp.com | Learner | password123 |
+| Email                    | Role         | Password    |
+| ------------------------ | ------------ | ----------- |
+| admin@acme.com           | Agency Owner | password123 |
+| admin@techcorp.com       | Tenant Admin | password123 |
+| coach@techcorp.com       | Facilitator  | password123 |
+| mentor@techcorp.com      | Mentor       | password123 |
+| john.doe@techcorp.com    | Learner      | password123 |
+| jane.smith@techcorp.com  | Learner      | password123 |
+| alex.wilson@techcorp.com | Learner      | password123 |
