@@ -14,7 +14,7 @@
     "db:migrate": "pnpm --filter @tr/db db:migrate",
     "db:seed": "pnpm --filter @tr/db db:seed",
     "db:studio": "pnpm --filter @tr/db db:studio",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "lint-staged": {
     "packages/api/src/**/*.ts": [
