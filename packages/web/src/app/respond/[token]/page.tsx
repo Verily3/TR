@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { RaterResponseForm } from '@/components/assessments/RaterResponseForm';
 import { CheckCircle2, Loader2, AlertCircle, ShieldCheck } from 'lucide-react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 interface AssessmentInfo {
   assessmentName: string;
@@ -72,7 +72,9 @@ export default function PublicRespondPage() {
         <div className="text-center max-w-md">
           <AlertCircle className="w-12 h-12 mx-auto text-red-500 mb-4" />
           <h2 className="text-lg font-semibold text-gray-900 mb-2">Unable to Load Assessment</h2>
-          <p className="text-gray-500">{error || 'This assessment link may be invalid or expired.'}</p>
+          <p className="text-gray-500">
+            {error || 'This assessment link may be invalid or expired.'}
+          </p>
         </div>
       </div>
     );
@@ -83,16 +85,12 @@ export default function PublicRespondPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center max-w-md">
           <CheckCircle2 className="w-16 h-16 mx-auto text-green-600 mb-4" />
-          <h2 className="text-2xl font-semibold text-gray-900 mb-2">
-            Thank You!
-          </h2>
+          <h2 className="text-2xl font-semibold text-gray-900 mb-2">Thank You!</h2>
           <p className="text-gray-500 mb-2">
             Your feedback for <span className="font-medium">{assessmentInfo.subjectName}</span> has
             been submitted successfully.
           </p>
-          <p className="text-xs text-gray-400">
-            You can close this page now.
-          </p>
+          <p className="text-xs text-gray-400">You can close this page now.</p>
         </div>
       </div>
     );

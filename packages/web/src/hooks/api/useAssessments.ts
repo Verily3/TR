@@ -14,7 +14,7 @@ import type {
   AssessmentSetupInfo,
 } from '@/types/assessments';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 // ============ Assessment Queries ============
 
@@ -31,7 +31,7 @@ export function useAssessments(tenantId: string | undefined, params?: Assessment
       const queryString = searchParams.toString();
       const url = `/api/tenants/${tenantId}/assessments${queryString ? `?${queryString}` : ''}`;
 
-      const response = await api.get<AssessmentListItem[]>(url) as unknown as {
+      const response = (await api.get<AssessmentListItem[]>(url)) as unknown as {
         data: AssessmentListItem[];
         pagination?: { total: number; page: number; limit: number; totalPages: number };
       };
@@ -52,9 +52,9 @@ export function useAssessment(tenantId: string | undefined, assessmentId: string
   return useQuery({
     queryKey: ['assessment', tenantId, assessmentId],
     queryFn: async () => {
-      const response = await api.get<AssessmentDetail>(
+      const response = (await api.get<AssessmentDetail>(
         `/api/tenants/${tenantId}/assessments/${assessmentId}`
-      ) as unknown as { data: AssessmentDetail };
+      )) as unknown as { data: AssessmentDetail };
       return response.data;
     },
     enabled: !!tenantId && !!assessmentId,
@@ -65,22 +65,25 @@ export function useAssessmentStats(tenantId: string | undefined) {
   return useQuery({
     queryKey: ['assessmentStats', tenantId],
     queryFn: async () => {
-      const response = await api.get<AssessmentStats>(
+      const response = (await api.get<AssessmentStats>(
         `/api/tenants/${tenantId}/assessments/stats`
-      ) as unknown as { data: AssessmentStats };
+      )) as unknown as { data: AssessmentStats };
       return response.data;
     },
     enabled: !!tenantId,
   });
 }
 
-export function useAssessmentResults(tenantId: string | undefined, assessmentId: string | undefined) {
+export function useAssessmentResults(
+  tenantId: string | undefined,
+  assessmentId: string | undefined
+) {
   return useQuery({
     queryKey: ['assessmentResults', tenantId, assessmentId],
     queryFn: async () => {
-      const response = await api.get<ComputedAssessmentResults>(
+      const response = (await api.get<ComputedAssessmentResults>(
         `/api/tenants/${tenantId}/assessments/${assessmentId}/results`
-      ) as unknown as { data: ComputedAssessmentResults };
+      )) as unknown as { data: ComputedAssessmentResults };
       return response.data;
     },
     enabled: !!tenantId && !!assessmentId,
@@ -88,13 +91,16 @@ export function useAssessmentResults(tenantId: string | undefined, assessmentId:
   });
 }
 
-export function useAssessmentInvitations(tenantId: string | undefined, assessmentId: string | undefined) {
+export function useAssessmentInvitations(
+  tenantId: string | undefined,
+  assessmentId: string | undefined
+) {
   return useQuery({
     queryKey: ['assessmentInvitations', tenantId, assessmentId],
     queryFn: async () => {
-      const response = await api.get<AssessmentInvitation[]>(
+      const response = (await api.get<AssessmentInvitation[]>(
         `/api/tenants/${tenantId}/assessments/${assessmentId}/invitations`
-      ) as unknown as { data: AssessmentInvitation[] };
+      )) as unknown as { data: AssessmentInvitation[] };
       return response.data || [];
     },
     enabled: !!tenantId && !!assessmentId,
@@ -108,10 +114,10 @@ export function useCreateAssessment(tenantId: string | undefined) {
 
   return useMutation({
     mutationFn: async (data: CreateAssessmentInput) => {
-      const response = await api.post<Assessment>(
+      const response = (await api.post<Assessment>(
         `/api/tenants/${tenantId}/assessments`,
         data
-      ) as unknown as { data: Assessment };
+      )) as unknown as { data: Assessment };
       return response.data;
     },
     onSuccess: () => {
@@ -125,11 +131,14 @@ export function useUpdateAssessment(tenantId: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ assessmentId, ...data }: UpdateAssessmentInput & { assessmentId: string }) => {
-      const response = await api.put<Assessment>(
+    mutationFn: async ({
+      assessmentId,
+      ...data
+    }: UpdateAssessmentInput & { assessmentId: string }) => {
+      const response = (await api.put<Assessment>(
         `/api/tenants/${tenantId}/assessments/${assessmentId}`,
         data
-      ) as unknown as { data: Assessment };
+      )) as unknown as { data: Assessment };
       return response.data;
     },
     onSuccess: (_, vars) => {
@@ -158,15 +167,20 @@ export function useAddInvitations(tenantId: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ assessmentId, ...data }: AddInvitationsInput & { assessmentId: string }) => {
-      const response = await api.post<AssessmentInvitation[]>(
+    mutationFn: async ({
+      assessmentId,
+      ...data
+    }: AddInvitationsInput & { assessmentId: string }) => {
+      const response = (await api.post<AssessmentInvitation[]>(
         `/api/tenants/${tenantId}/assessments/${assessmentId}/invitations`,
         data
-      ) as unknown as { data: AssessmentInvitation[] };
+      )) as unknown as { data: AssessmentInvitation[] };
       return response.data;
     },
     onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: ['assessmentInvitations', tenantId, vars.assessmentId] });
+      queryClient.invalidateQueries({
+        queryKey: ['assessmentInvitations', tenantId, vars.assessmentId],
+      });
       queryClient.invalidateQueries({ queryKey: ['assessment', tenantId, vars.assessmentId] });
     },
   });
@@ -176,11 +190,21 @@ export function useRemoveInvitation(tenantId: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ assessmentId, invitationId }: { assessmentId: string; invitationId: string }) => {
-      await api.delete(`/api/tenants/${tenantId}/assessments/${assessmentId}/invitations/${invitationId}`);
+    mutationFn: async ({
+      assessmentId,
+      invitationId,
+    }: {
+      assessmentId: string;
+      invitationId: string;
+    }) => {
+      await api.delete(
+        `/api/tenants/${tenantId}/assessments/${assessmentId}/invitations/${invitationId}`
+      );
     },
     onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: ['assessmentInvitations', tenantId, vars.assessmentId] });
+      queryClient.invalidateQueries({
+        queryKey: ['assessmentInvitations', tenantId, vars.assessmentId],
+      });
       queryClient.invalidateQueries({ queryKey: ['assessment', tenantId, vars.assessmentId] });
     },
   });
@@ -191,13 +215,15 @@ export function useSendReminders(tenantId: string | undefined) {
 
   return useMutation({
     mutationFn: async (assessmentId: string) => {
-      const response = await api.post<{ reminded: number }>(
+      const response = (await api.post<{ reminded: number }>(
         `/api/tenants/${tenantId}/assessments/${assessmentId}/invitations/remind`
-      ) as unknown as { data: { reminded: number } };
+      )) as unknown as { data: { reminded: number } };
       return response.data;
     },
     onSuccess: (_, assessmentId) => {
-      queryClient.invalidateQueries({ queryKey: ['assessmentInvitations', tenantId, assessmentId] });
+      queryClient.invalidateQueries({
+        queryKey: ['assessmentInvitations', tenantId, assessmentId],
+      });
     },
   });
 }
@@ -207,9 +233,9 @@ export function useCloseAssessment(tenantId: string | undefined) {
 
   return useMutation({
     mutationFn: async (assessmentId: string) => {
-      const response = await api.post<{ status: string; results: ComputedAssessmentResults }>(
+      const response = (await api.post<{ status: string; results: ComputedAssessmentResults }>(
         `/api/tenants/${tenantId}/assessments/${assessmentId}/close`
-      ) as unknown as { data: { status: string; results: ComputedAssessmentResults } };
+      )) as unknown as { data: { status: string; results: ComputedAssessmentResults } };
       return response.data;
     },
     onSuccess: (_, assessmentId) => {
@@ -226,9 +252,9 @@ export function useComputeResults(tenantId: string | undefined) {
 
   return useMutation({
     mutationFn: async (assessmentId: string) => {
-      const response = await api.post<ComputedAssessmentResults>(
+      const response = (await api.post<ComputedAssessmentResults>(
         `/api/tenants/${tenantId}/assessments/${assessmentId}/results/compute`
-      ) as unknown as { data: ComputedAssessmentResults };
+      )) as unknown as { data: ComputedAssessmentResults };
       return response.data;
     },
     onSuccess: (_, assessmentId) => {
@@ -261,9 +287,9 @@ export function useAssessmentGoals(tenantId: string | undefined, assessmentId: s
   return useQuery({
     queryKey: ['assessmentGoals', tenantId, assessmentId],
     queryFn: async () => {
-      const response = await api.get<IndividualGoal[]>(
+      const response = (await api.get<IndividualGoal[]>(
         `/api/tenants/${tenantId}/assessments/${assessmentId}/goals`
-      ) as unknown as { data: IndividualGoal[] };
+      )) as unknown as { data: IndividualGoal[] };
       return response.data || [];
     },
     enabled: !!tenantId && !!assessmentId,
@@ -275,9 +301,9 @@ export function useCreateGoalsFromAssessment(tenantId: string | undefined) {
 
   return useMutation({
     mutationFn: async (assessmentId: string) => {
-      const response = await api.post<IndividualGoal[]>(
+      const response = (await api.post<IndividualGoal[]>(
         `/api/tenants/${tenantId}/assessments/${assessmentId}/goals`
-      ) as unknown as { data: IndividualGoal[] };
+      )) as unknown as { data: IndividualGoal[] };
       return response.data;
     },
     onSuccess: (_, assessmentId) => {
@@ -292,7 +318,7 @@ export function useDownloadReport(tenantId: string | undefined) {
   return useMutation({
     mutationFn: async ({ assessmentId, filename }: { assessmentId: string; filename: string }) => {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002'}/api/tenants/${tenantId}/assessments/${assessmentId}/report/pdf`,
+        `${process.env.NEXT_PUBLIC_API_URL || ''}/api/tenants/${tenantId}/assessments/${assessmentId}/report/pdf`,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
@@ -325,7 +351,7 @@ export function useAssessmentSetup(token: string | undefined) {
     queryFn: async () => {
       const response = await fetch(`${API_BASE}/api/assessments/setup/${token}`);
       if (!response.ok) throw new Error('Invalid or expired setup link');
-      const json = await response.json() as { data: AssessmentSetupInfo };
+      const json = (await response.json()) as { data: AssessmentSetupInfo };
       return json.data;
     },
     enabled: !!token,
@@ -337,17 +363,19 @@ export function useSubmitSetupRaters(token: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (raters: { firstName: string; lastName: string; email: string; raterType: string }[]) => {
+    mutationFn: async (
+      raters: { firstName: string; lastName: string; email: string; raterType: string }[]
+    ) => {
       const response = await fetch(`${API_BASE}/api/assessments/setup/${token}/raters`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ raters }),
       });
       if (!response.ok) {
-        const err = await response.json() as { error?: { message?: string } };
+        const err = (await response.json()) as { error?: { message?: string } };
         throw new Error(err.error?.message || 'Failed to submit raters');
       }
-      const json = await response.json() as { data: { added: number } };
+      const json = (await response.json()) as { data: { added: number } };
       return json.data;
     },
     onSuccess: () => {
@@ -362,9 +390,9 @@ export function useAssessmentBenchmarks(templateId: string | undefined) {
   return useQuery({
     queryKey: ['assessmentBenchmarks', templateId],
     queryFn: async () => {
-      const response = await api.get<any>(
+      const response = (await api.get<any>(
         `/api/agencies/me/benchmarks/${templateId}`
-      ) as unknown as { data: any };
+      )) as unknown as { data: any };
       return response.data;
     },
     enabled: !!templateId,
