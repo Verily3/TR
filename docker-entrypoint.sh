@@ -3,6 +3,15 @@ set -e
 
 echo "=== Results Tracking System Starting ==="
 
+# Load environment variables from .env file (if present)
+# set -a exports all vars; set +a stops exporting
+if [ -f packages/api/.env ]; then
+  echo "Loading env vars from packages/api/.env..."
+  set -a
+  . packages/api/.env
+  set +a
+fi
+
 # Optional: Run database migrations before startup
 if [ "$RUN_MIGRATIONS" = "true" ]; then
   echo "Running database migrations..."

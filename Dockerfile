@@ -114,6 +114,7 @@ COPY --from=builder /app/packages/db/package.json ./packages/db/package.json
 
 COPY --from=builder /app/packages/api/dist ./packages/api/dist
 COPY --from=builder /app/packages/api/package.json ./packages/api/package.json
+COPY --from=builder /app/packages/api/.env ./packages/api/.env
 
 # 3) Copy production node_modules (third-party deps with compiled argon2)
 #    This overwrites the standalone's node_modules with the full prod superset
