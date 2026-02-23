@@ -113,7 +113,7 @@ class ApiClient {
     clearTimeout(timeoutId);
 
     // 401 — attempt token refresh and retry once
-    if (response.status === 401 && !path.includes('/api/auth/')) {
+    if (response.status === 401 && !path.includes('/api/auth/') && !path.includes('/api/admin/')) {
       const refreshed = await this.tryRefreshToken();
       if (refreshed) {
         // Retry with new token

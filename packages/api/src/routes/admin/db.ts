@@ -149,13 +149,25 @@ function renderHtml(result: MigrationResult): string {
  */
 adminDbRoutes.get('/migrate', async (c) => {
   const secret = c.req.query('secret') || c.req.header('X-Admin-Secret');
+  const wantsJson = (c.req.header('Accept') || '').includes('application/json');
 
   if (!verifySecret(secret)) {
+    if (wantsJson) {
+      return c.json(
+        {
+          error: {
+            code: 'UNAUTHORIZED',
+            message: 'Invalid secret. Check your ADMIN_SECRET env var.',
+          },
+        },
+        401
+      );
+    }
     return c.html(
       `<html><body style="font-family:monospace;background:#0f172a;color:#fca5a5;padding:2rem">
         <h1>&#10060; 401 Unauthorized</h1>
         <p>Invalid or missing secret. Provide <code>?secret=YOUR_SECRET</code> query parameter or <code>X-Admin-Secret</code> header.</p>
-        <p style="color:#64748b;margin-top:1rem">The secret is your <code>ADMIN_SECRET</code> env var (or <code>JWT_ACCESS_SECRET</code> if ADMIN_SECRET is not set).</p>
+        <p style="color:#64748b;margin-top:1rem">The secret is your <code>ADMIN_SECRET</code> env var.</p>
       </body></html>`,
       401
     );
