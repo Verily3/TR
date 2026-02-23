@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/use-auth';
+import { api } from '@/lib/api';
 import {
   useAssessments,
   useAssessmentStats,
@@ -110,6 +112,8 @@ interface Assessment {
   raters: Rater[];
   responseRate: number;
   hasResults: boolean;
+  tenantId?: string;
+  tenantName?: string;
 }
 
 interface CompetencyScore {
@@ -370,10 +374,12 @@ function AssessmentCard({
   assessment,
   onView,
   onSendReminder,
+  showTenantName,
 }: {
   assessment: Assessment;
   onView?: (id: string) => void;
   onSendReminder?: (id: string) => void;
+  showTenantName?: boolean;
 }) {
   const statusConfig = assessmentStatusConfig[assessment.status];
 
@@ -433,7 +439,13 @@ function AssessmentCard({
             </div>
 
             <div className="text-sm text-gray-500 mb-2">
-              {assessment.subject.role} &bull; {assessment.templateName}
+              {assessment.subject.role ? `${assessment.subject.role} \u2022 ` : ''}
+              {assessment.templateName}
+              {showTenantName && assessment.tenantName && (
+                <span className="ml-2 px-2 py-0.5 rounded bg-gray-100 text-gray-600 text-xs">
+                  {assessment.tenantName}
+                </span>
+              )}
             </div>
 
             {/* Rater breakdown */}
@@ -1420,7 +1432,7 @@ const typeFilterOptions: { id: FilterType; label: string }[] = [
 
 // ─── API Data Adapters ──────────────────────────────────────────────────────
 
-function adaptAssessmentListItem(item: AssessmentListItem): Assessment {
+function adaptAssessmentListItem(item: AssessmentListItem, tenantName?: string): Assessment {
   const subjectPerson: Person = item.subject
     ? {
         id: item.subject.id,
@@ -1452,6 +1464,8 @@ function adaptAssessmentListItem(item: AssessmentListItem): Assessment {
     raters: [],
     responseRate: item.responseRate,
     hasResults: item.computedResults != null,
+    tenantId: item.tenantId,
+    tenantName,
   };
 }
 
@@ -1575,43 +1589,130 @@ export default function AssessmentsPage() {
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   const [activeTypeFilter, setActiveTypeFilter] = useState<FilterType>('all');
   const [selectedAssessmentId, setSelectedAssessmentId] = useState<string | null>(null);
+  const [detailTenantId, setDetailTenantId] = useState<string | null>(null);
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
 
   // Determine tenant
   const { data: tenants, isLoading: tenantsLoading } = useTenants();
   const isAgencyUser = user?.agencyId && !user?.tenantId;
-  const activeTenantId = isAgencyUser ? selectedTenantId : user?.tenantId;
+  const allClientsSelected = !!(isAgencyUser && selectedTenantId === 'all');
+  const activeTenantId = isAgencyUser
+    ? selectedTenantId === 'all'
+      ? null
+      : selectedTenantId
+    : user?.tenantId;
 
   useEffect(() => {
     if (isAgencyUser && tenants && tenants.length > 0 && !selectedTenantId) {
-      setSelectedTenantId(tenants[0].id);
+      setSelectedTenantId('all');
     }
   }, [isAgencyUser, tenants, selectedTenantId]);
 
-  // Fetch assessments and stats from API
+  // Fetch assessments and stats from API (for single-tenant view)
   const { data: assessmentsData, isLoading: assessmentsLoading } = useAssessments(
     activeTenantId ?? undefined
   );
   const { data: statsData } = useAssessmentStats(activeTenantId ?? undefined);
   const { data: templatesData } = useTemplates({ status: 'published' });
 
+  // Build tenant name lookup
+  const tenantNameMap: Record<string, string> = tenants
+    ? Object.fromEntries(tenants.map((t) => [t.id, t.name]))
+    : {};
+
+  // Fetch assessments across ALL tenants (for "All Clients" view)
+  const { data: allTenantsData, isLoading: allTenantsLoading } = useQuery({
+    queryKey: ['assessments', 'all-tenants', tenants?.map((t) => t.id)],
+    queryFn: async () => {
+      if (!tenants) return { assessments: [] as AssessmentListItem[], total: 0 };
+      const results = await Promise.all(
+        tenants.map((t) =>
+          api
+            .get<AssessmentListItem[]>(`/api/tenants/${t.id}/assessments?limit=100`)
+            .then((r: unknown) => {
+              const resp = r as { data: AssessmentListItem[] };
+              return {
+                tenantId: t.id,
+                tenantName: t.name,
+                assessments: resp.data || [],
+              };
+            })
+        )
+      );
+      const all = results.flatMap((r) =>
+        r.assessments.map((a) => ({ ...a, _tenantName: r.tenantName }))
+      );
+      return { assessments: all, total: all.length };
+    },
+    enabled: !!(allClientsSelected && tenants?.length),
+  });
+
+  // Aggregate stats for "All Clients" from merged data
+  const allTenantsStats: AssessmentStats | null =
+    allTenantsData && allTenantsData.assessments
+      ? (() => {
+          const items = allTenantsData.assessments as (AssessmentListItem & {
+            _tenantName?: string;
+          })[];
+          const active = items.filter((a) => a.status === 'open').length;
+          const completed = items.filter(
+            (a) => a.status === 'completed' || a.status === 'closed'
+          ).length;
+          const draft = items.filter((a) => a.status === 'draft').length;
+          const avgRate =
+            items.length > 0
+              ? Math.round(
+                  items.reduce((sum: number, a) => sum + (a.responseRate || 0), 0) / items.length
+                )
+              : 0;
+          const pending = items.reduce(
+            (sum: number, a) =>
+              sum + ((a.invitationStats?.total || 0) - (a.invitationStats?.completed || 0)),
+            0
+          );
+          return {
+            totalAssessments: items.length,
+            activeAssessments: active,
+            completedAssessments: completed,
+            draftAssessments: draft,
+            pendingResponses: pending,
+            averageResponseRate: avgRate,
+          };
+        })()
+      : null;
+
+  // Use the detail tenant ID for assessment detail (allows "All Clients" drill-down)
+  const effectiveDetailTenantId = detailTenantId || activeTenantId;
+
   // Fetch selected assessment detail
   const { data: assessmentDetail } = useAssessment(
-    activeTenantId ?? undefined,
+    effectiveDetailTenantId ?? undefined,
     selectedAssessmentId ?? undefined
   );
 
   // Fetch results if assessment is completed
   const { data: resultsData } = useAssessmentResults(
-    activeTenantId ?? undefined,
+    effectiveDetailTenantId ?? undefined,
     assessmentDetail?.status === 'completed' ? (selectedAssessmentId ?? undefined) : undefined
   );
 
   // Adapt API data to page types
-  const assessments: Assessment[] = (assessmentsData?.assessments || []).map(
-    adaptAssessmentListItem
+  const singleTenantAssessments: Assessment[] = (assessmentsData?.assessments || []).map((item) =>
+    adaptAssessmentListItem(item, tenantNameMap[item.tenantId])
   );
-  const stats: AssessmentStats = statsData || defaultAssessmentStats;
+  const allTenantAssessments: Assessment[] = (allTenantsData?.assessments || []).map((item) =>
+    adaptAssessmentListItem(
+      item,
+      (item as AssessmentListItem & { _tenantName?: string })._tenantName ||
+        tenantNameMap[item.tenantId]
+    )
+  );
+  const assessments: Assessment[] = allClientsSelected
+    ? allTenantAssessments
+    : singleTenantAssessments;
+
+  const stats: AssessmentStats =
+    allClientsSelected && allTenantsStats ? allTenantsStats : statsData || defaultAssessmentStats;
   const templates: AssessmentTemplate[] = (templatesData?.templates || []).map(adaptTemplate);
 
   // Use fallback mock templates if API returns empty (for non-agency users)
@@ -1656,8 +1757,11 @@ export default function AssessmentsPage() {
           assessment={selectedAssessment}
           template={template || displayTemplates[0]}
           results={results}
-          onBack={() => setSelectedAssessmentId(null)}
-          tenantId={activeTenantId ?? undefined}
+          onBack={() => {
+            setSelectedAssessmentId(null);
+            setDetailTenantId(null);
+          }}
+          tenantId={effectiveDetailTenantId ?? undefined}
           apiResults={resultsData ?? undefined}
         />
       </div>
@@ -1686,6 +1790,7 @@ export default function AssessmentsPage() {
                 onChange={(e) => setSelectedTenantId(e.target.value)}
                 className="pl-8 pr-8 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-red-500 appearance-none cursor-pointer"
               >
+                <option value="all">All Clients</option>
                 {tenants.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name}
@@ -1791,7 +1896,7 @@ export default function AssessmentsPage() {
       </div>
 
       {/* Assessments List */}
-      {assessmentsLoading ? (
+      {assessmentsLoading || (allClientsSelected && allTenantsLoading) ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
             <div
@@ -1810,7 +1915,11 @@ export default function AssessmentsPage() {
             <AssessmentCard
               key={assessment.id}
               assessment={assessment}
-              onView={(id) => setSelectedAssessmentId(id)}
+              onView={(id) => {
+                setDetailTenantId(assessment.tenantId || null);
+                setSelectedAssessmentId(id);
+              }}
+              showTenantName={allClientsSelected}
             />
           ))}
         </div>
