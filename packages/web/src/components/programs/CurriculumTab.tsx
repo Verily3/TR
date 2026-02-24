@@ -104,12 +104,16 @@ type AddMenuKey =
   | 'how_you_used'
   | 'food_for_thought';
 
-// Maps add-menu keys to their DB contentType and default lesson title.
+// Maps add-menu keys to their DB contentType, default lesson title, and optional mediaType.
 // Multiple menu entries can share the same DB contentType (e.g. Reading + Video = lesson).
-const ADD_MENU_MAP: Record<AddMenuKey, { contentType: ContentType; defaultTitle: string }> = {
+// mediaType is stored in content JSON to distinguish subtypes for icon/label display.
+const ADD_MENU_MAP: Record<
+  AddMenuKey,
+  { contentType: ContentType; defaultTitle: string; mediaType?: string }
+> = {
   lesson: { contentType: 'lesson', defaultTitle: 'New Reading' },
-  video: { contentType: 'lesson', defaultTitle: 'New Video' },
-  key_concepts: { contentType: 'lesson', defaultTitle: 'Key Concepts' },
+  video: { contentType: 'lesson', defaultTitle: 'New Video', mediaType: 'video' },
+  key_concepts: { contentType: 'lesson', defaultTitle: 'Key Concepts', mediaType: 'key_concepts' },
   quiz: { contentType: 'quiz', defaultTitle: 'New Quiz' },
   assignment: { contentType: 'assignment', defaultTitle: 'New Assignment' },
   food_for_thought: { contentType: 'assignment', defaultTitle: 'Food for Thought' },
@@ -119,6 +123,20 @@ const ADD_MENU_MAP: Record<AddMenuKey, { contentType: ContentType; defaultTitle:
   goal: { contentType: 'goal', defaultTitle: 'New Goal' },
   survey: { contentType: 'survey', defaultTitle: 'New Survey' },
 };
+
+/** Get the display icon and label for a lesson, accounting for subtypes */
+function getLessonDisplay(lesson: { contentType: string; content?: unknown }): ContentTypeConfig {
+  if (lesson.contentType === 'lesson') {
+    const c = lesson.content as LessonContent | undefined;
+    if (c?.mediaType === 'video' || c?.videoUrl) {
+      return { icon: Video, label: 'Video', color: 'text-indigo-600' };
+    }
+    if (c?.mediaType === 'key_concepts') {
+      return { icon: Layers, label: 'Key Concepts', color: 'text-violet-600' };
+    }
+  }
+  return CONTENT_TYPE_CONFIG[lesson.contentType as ContentType] || CONTENT_TYPE_CONFIG.lesson!;
+}
 
 // Add menu config — displayed in the "Add lesson" dropdown in the builder.
 const ADD_MENU_CONFIG: {
@@ -480,13 +498,15 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
     if (!moduleId) return;
     setShowAddLessonMenu(false);
     setIsCreatingLesson(true);
-    const { contentType, defaultTitle } = ADD_MENU_MAP[menuKey];
+    const { contentType, defaultTitle, mediaType } = ADD_MENU_MAP[menuKey];
     try {
       const title = defaultTitle;
       const basePath = isAgencyContext
         ? `/api/agencies/me/programs/${program.id}/modules/${moduleId}/lessons`
         : `/api/tenants/${tenantId}/programs/${program.id}/modules/${moduleId}/lessons`;
-      await api.post(basePath, { title, contentType });
+      const body: Record<string, unknown> = { title, contentType };
+      if (mediaType) body.content = { mediaType };
+      await api.post(basePath, body);
       if (isAgencyContext) {
         queryClient.invalidateQueries({ queryKey: ['agencyProgram', program.id] });
       } else {
@@ -1344,12 +1364,8 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                 {isExpanded && (
                   <>
                     {sortedLessons.map((lesson) => {
-                      const isVideo =
-                        lesson.contentType === 'lesson' &&
-                        !!(lesson.content as LessonContent)?.videoUrl;
-                      const typeConfig =
-                        CONTENT_TYPE_CONFIG[lesson.contentType] || CONTENT_TYPE_CONFIG.lesson!;
-                      const TypeIcon = isVideo ? Video : typeConfig!.icon;
+                      const display = getLessonDisplay(lesson);
+                      const TypeIcon = display.icon;
                       const isLessonSelected = selectedLesson?.id === lesson.id;
 
                       return (
@@ -1361,7 +1377,7 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                           }`}
                         >
                           <TypeIcon
-                            className={`w-4 h-4 shrink-0 ${isLessonSelected ? 'text-red-500' : typeConfig!.color}`}
+                            className={`w-4 h-4 shrink-0 ${isLessonSelected ? 'text-red-500' : display.color}`}
                           />
                           <div className="flex-1 min-w-0">
                             <p
@@ -1489,12 +1505,7 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
                   {(() => {
-                    const isVideo =
-                      selectedLesson.contentType === 'lesson' &&
-                      !!(selectedLesson.content as LessonContent)?.videoUrl;
-                    const TypeIcon = isVideo
-                      ? Video
-                      : CONTENT_TYPE_CONFIG[selectedLesson.contentType]?.icon || BookOpen;
+                    const { icon: TypeIcon } = getLessonDisplay(selectedLesson);
                     return <TypeIcon className="w-5 h-5 text-red-600" />;
                   })()}
                 </div>
@@ -1578,7 +1589,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                   >
                     {Object.entries(CONTENT_TYPE_CONFIG).map(([key, config]) => (
                       <option key={key} value={key}>
-                        {config!.label}
+                        {key === 'lesson' && selectedLesson
+                          ? getLessonDisplay(selectedLesson).label
+                          : config!.label}
                       </option>
                     ))}
                   </select>

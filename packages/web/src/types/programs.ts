@@ -6,14 +6,12 @@ export type ProgramType = 'cohort' | 'self_paced';
 export type ProgramStatus = 'draft' | 'active' | 'archived';
 export type EnrollmentRole = 'learner' | 'mentor' | 'facilitator';
 export type EnrollmentStatus = 'active' | 'completed' | 'dropped';
-export type ContentType =
-  | 'lesson'
-  | 'quiz'
-  | 'assignment'
-  | 'text_form'
-  | 'goal'
-  | 'survey';
-export type ModuleDripType = 'immediate' | 'days_after_enrollment' | 'days_after_previous' | 'on_date';
+export type ContentType = 'lesson' | 'quiz' | 'assignment' | 'text_form' | 'goal' | 'survey';
+export type ModuleDripType =
+  | 'immediate'
+  | 'days_after_enrollment'
+  | 'days_after_previous'
+  | 'on_date';
 export type LessonDripType = 'immediate' | 'sequential' | 'days_after_module_start' | 'on_date';
 export type LessonStatus = 'draft' | 'active';
 export type ApprovalRequired = 'none' | 'mentor' | 'facilitator' | 'both';
@@ -69,6 +67,7 @@ export interface VisibilitySettings {
 }
 
 export interface LessonContent {
+  mediaType?: 'video' | 'key_concepts';
   introduction?: string;
   mainContent?: string;
   videoUrl?: string;
@@ -568,7 +567,7 @@ export interface QuizAttempt {
   enrollmentId: string;
   attemptNumber: number;
   answers: Record<string, string | number>;
-  score: string | null;         // numeric string e.g. "85.00"
+  score: string | null; // numeric string e.g. "85.00"
   pointsEarned: number;
   passed: boolean | null;
   breakdown: QuizBreakdownItem[];
