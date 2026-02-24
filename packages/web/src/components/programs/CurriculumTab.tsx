@@ -732,58 +732,70 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
 
   // ---- Reorder handlers ----
 
-  const handleMoveModule = async (moduleId: string, direction: 'up' | 'down') => {
-    const idx = sortedModules.findIndex((m) => m.id === moduleId);
-    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (swapIdx < 0 || swapIdx >= sortedModules.length) return;
-    const items = sortedModules.map((m, i) => ({
-      id: m.id,
-      order:
-        i === idx
-          ? sortedModules[swapIdx].order
-          : i === swapIdx
-            ? sortedModules[idx].order
-            : m.order,
-    }));
+  const doReorder = async (
+    basePath: string,
+    items: { id: string; order: number }[],
+    label: string
+  ) => {
     try {
-      const basePath = isAgencyContext
-        ? `/api/agencies/me/programs/${program.id}/modules/reorder`
-        : `/api/tenants/${tenantId}/programs/${program.id}/modules/reorder`;
-      await api.put(basePath, { items });
+      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}${basePath}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('accessToken') || ''}`,
+        },
+        body: JSON.stringify({ items }),
+      });
+      if (!resp.ok) {
+        const body = await resp.text();
+        console.error(`Reorder ${label} failed (${resp.status}):`, body);
+        setErrorMessage(`Reorder failed (${resp.status}): ${body.slice(0, 120)}`);
+        return;
+      }
       if (isAgencyContext) {
         queryClient.invalidateQueries({ queryKey: ['agencyProgram', program.id] });
       } else {
         queryClient.invalidateQueries({ queryKey: ['program', tenantId, program.id] });
       }
-    } catch {
-      setErrorMessage('Failed to reorder modules');
+    } catch (err: unknown) {
+      console.error(`Reorder ${label} error:`, err);
+      setErrorMessage(err instanceof Error ? err.message : `Failed to reorder ${label}`);
     }
+  };
+
+  const handleMoveModule = async (moduleId: string, direction: 'up' | 'down') => {
+    const idx = sortedModules.findIndex((m) => m.id === moduleId);
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= sortedModules.length) return;
+    const a = sortedModules[idx];
+    const b = sortedModules[swapIdx];
+    const items = [
+      { id: a.id, order: Math.round(b.order) },
+      { id: b.id, order: Math.round(a.order) },
+    ];
+    const basePath = isAgencyContext
+      ? `/api/agencies/me/programs/${program.id}/modules/reorder`
+      : `/api/tenants/${tenantId}/programs/${program.id}/modules/reorder`;
+    await doReorder(basePath, items, 'modules');
   };
 
   const handleMoveLesson = async (moduleId: string, lessonId: string, direction: 'up' | 'down') => {
     const mod = sortedModules.find((m) => m.id === moduleId);
     if (!mod) return;
-    const lessons = [...(mod.lessons || [])].sort((a, b) => a.order - b.order);
-    const idx = lessons.findIndex((l) => l.id === lessonId);
+    const sorted = [...(mod.lessons || [])].sort((a, b) => a.order - b.order);
+    const idx = sorted.findIndex((l) => l.id === lessonId);
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (swapIdx < 0 || swapIdx >= lessons.length) return;
-    const items = lessons.map((l, i) => ({
-      id: l.id,
-      order: i === idx ? lessons[swapIdx].order : i === swapIdx ? lessons[idx].order : l.order,
-    }));
-    try {
-      const basePath = isAgencyContext
-        ? `/api/agencies/me/programs/${program.id}/modules/${moduleId}/lessons/reorder`
-        : `/api/tenants/${tenantId}/programs/${program.id}/modules/${moduleId}/lessons/reorder`;
-      await api.put(basePath, { items });
-      if (isAgencyContext) {
-        queryClient.invalidateQueries({ queryKey: ['agencyProgram', program.id] });
-      } else {
-        queryClient.invalidateQueries({ queryKey: ['program', tenantId, program.id] });
-      }
-    } catch {
-      setErrorMessage('Failed to reorder lessons');
-    }
+    if (swapIdx < 0 || swapIdx >= sorted.length) return;
+    const a = sorted[idx];
+    const b = sorted[swapIdx];
+    const items = [
+      { id: a.id, order: Math.round(b.order) },
+      { id: b.id, order: Math.round(a.order) },
+    ];
+    const basePath = isAgencyContext
+      ? `/api/agencies/me/programs/${program.id}/modules/${moduleId}/lessons/reorder`
+      : `/api/tenants/${tenantId}/programs/${program.id}/modules/${moduleId}/lessons/reorder`;
+    await doReorder(basePath, items, 'lessons');
   };
 
   // ---- Role-specific content helpers ----
