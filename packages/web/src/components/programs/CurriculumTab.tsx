@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   BookOpen,
@@ -14,6 +14,7 @@ import {
   Plus,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   Save,
   Trash2,
   Eye,
@@ -35,6 +36,7 @@ import {
   Layers,
   ClipboardCheck,
   Menu,
+  Check,
 } from 'lucide-react';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { getEmbedUrl, getVideoProvider } from '@/lib/video-utils';
@@ -228,6 +230,50 @@ function ToggleSwitch({ enabled, onChange }: { enabled: boolean; onChange: (v: b
 }
 
 // ============================================
+// Confirm Dialog Component
+// ============================================
+
+function ConfirmDialog({
+  title,
+  message,
+  confirmLabel = 'Delete',
+  confirmColor = 'bg-red-600 hover:bg-red-700',
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  confirmColor?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/50" onClick={onCancel} />
+      <div className="relative bg-white rounded-xl shadow-xl max-w-sm w-full p-6 space-y-4">
+        <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+        <p className="text-sm text-gray-600">{message}</p>
+        <div className="flex justify-end gap-3 pt-2">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ${confirmColor}`}
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
 // CurriculumTab
 // ============================================
 
@@ -282,6 +328,16 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
   const [showAddDropdown, setShowAddDropdown] = useState(false);
   const [showMobileFab, setShowMobileFab] = useState(false);
 
+  // Save feedback & confirmations
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: 'lesson' | 'module' | 'event';
+    id: string;
+    title: string;
+  } | null>(null);
+  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
+
   // Mutation hooks — use agency or tenant variants based on context
   const tenantCreateModule = useCreateModule(tenantId, program.id);
   const tenantUpdateModule = useUpdateModule(tenantId, program.id);
@@ -320,6 +376,8 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
   const updateTask = isAgencyContext ? agencyUpdateTask : tenantUpdateTask;
   const deleteTask = isAgencyContext ? agencyDeleteTask : tenantDeleteTask;
 
+  // Reorder: called directly via api.put in handlers (tenant/agency have different param shapes)
+
   // Sorted modules
   const sortedModules = useMemo(
     () => [...(program.modules || [])].sort((a, b) => a.order - b.order),
@@ -333,11 +391,12 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
   const totalEvents = eventItems.length;
   const totalLessons = moduleItems.reduce((sum, m) => sum + (m.lessons?.length || 0), 0);
 
-  // Auto-expand all modules on first load
+  // Auto-expand first 3 modules on first load
   useEffect(() => {
     if (program?.modules && Object.keys(expandedModules).length === 0) {
       const expanded: Record<string, boolean> = {};
-      program.modules.forEach((m) => {
+      const sorted = [...program.modules].sort((a, b) => a.order - b.order);
+      sorted.slice(0, 3).forEach((m) => {
         expanded[m.id] = true;
       });
       setExpandedModules(expanded);
@@ -404,33 +463,114 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
     }
   }, [selectedLesson]);
 
+  // ---- Dirty state detection ----
+  const isDirty = useMemo(() => {
+    if (!selectedLesson) return false;
+    return (
+      editTitle !== selectedLesson.title ||
+      editContentType !== selectedLesson.contentType ||
+      JSON.stringify(editContent) !== JSON.stringify(selectedLesson.content || {}) ||
+      (editDuration !== '' ? Number(editDuration) : undefined) !==
+        (selectedLesson.durationMinutes ?? undefined) ||
+      (editPoints !== '' ? Number(editPoints) : undefined) !==
+        (selectedLesson.points ?? undefined) ||
+      editApprovalRequired !== (selectedLesson.approvalRequired || 'none')
+    );
+  }, [
+    editTitle,
+    editContentType,
+    editContent,
+    editDuration,
+    editPoints,
+    editApprovalRequired,
+    selectedLesson,
+  ]);
+
+  // Clear error after 5s
+  useEffect(() => {
+    if (errorMessage) {
+      const t = setTimeout(() => setErrorMessage(null), 5000);
+      return () => clearTimeout(t);
+    }
+  }, [errorMessage]);
+
   // ---- Handlers ----
 
+  const navigateWithDirtyCheck = useCallback(
+    (action: () => void) => {
+      if (isDirty) {
+        setPendingNavigation(() => action);
+      } else {
+        action();
+      }
+    },
+    [isDirty]
+  );
+
+  const doNavigate = (fn: () => void) => {
+    setSaveStatus('idle');
+    fn();
+  };
+
   const handleSelectModule = (moduleId: string) => {
-    setSelectedModuleId(moduleId);
-    setSelectedLesson(null);
-    setSelectedLessonModuleId(null);
-    setExpandedModules((prev) => ({ ...prev, [moduleId]: true }));
-    setSidebarOpen(false); // auto-close on mobile
+    const nav = () => {
+      doNavigate(() => {
+        setSelectedModuleId(moduleId);
+        setSelectedLesson(null);
+        setSelectedLessonModuleId(null);
+        setExpandedModules((prev) => ({ ...prev, [moduleId]: true }));
+        setSidebarOpen(false);
+      });
+    };
+    if (selectedLesson && isDirty) {
+      navigateWithDirtyCheck(nav);
+    } else {
+      nav();
+    }
   };
 
   const handleSelectLesson = (lesson: Lesson, moduleId: string) => {
-    setSelectedLesson(lesson);
-    setSelectedLessonModuleId(moduleId);
-    setSelectedModuleId(null);
-    setSidebarOpen(false); // auto-close on mobile
+    const nav = () => {
+      doNavigate(() => {
+        setSelectedLesson(lesson);
+        setSelectedLessonModuleId(moduleId);
+        setSelectedModuleId(null);
+        setSidebarOpen(false);
+      });
+    };
+    if (selectedLesson && selectedLesson.id !== lesson.id && isDirty) {
+      navigateWithDirtyCheck(nav);
+    } else {
+      nav();
+    }
   };
 
   const handleBackToOverview = () => {
-    setSelectedModuleId(null);
-    setSelectedLesson(null);
-    setSelectedLessonModuleId(null);
+    const nav = () =>
+      doNavigate(() => {
+        setSelectedModuleId(null);
+        setSelectedLesson(null);
+        setSelectedLessonModuleId(null);
+      });
+    if (selectedLesson && isDirty) {
+      navigateWithDirtyCheck(nav);
+    } else {
+      nav();
+    }
   };
 
   const handleBackToProgram = () => {
-    if (selectedLessonModuleId) setSelectedModuleId(selectedLessonModuleId);
-    setSelectedLesson(null);
-    setSelectedLessonModuleId(null);
+    const nav = () =>
+      doNavigate(() => {
+        if (selectedLessonModuleId) setSelectedModuleId(selectedLessonModuleId);
+        setSelectedLesson(null);
+        setSelectedLessonModuleId(null);
+      });
+    if (isDirty) {
+      navigateWithDirtyCheck(nav);
+    } else {
+      nav();
+    }
   };
 
   const handleToggleModule = (e: React.MouseEvent, moduleId: string) => {
@@ -451,6 +591,7 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
             setExpandedModules((prev) => ({ ...prev, [newModule.id!]: true }));
           }
         },
+        onError: (err: Error) => setErrorMessage(err.message || 'Failed to add module'),
       }
     );
   };
@@ -467,6 +608,7 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
             setSelectedLessonModuleId(null);
           }
         },
+        onError: (err: Error) => setErrorMessage(err.message || 'Failed to add event'),
       }
     );
   };
@@ -478,9 +620,8 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
 
   const handleDeleteEvent = () => {
     if (!selectedModuleId) return;
-    if (!confirm('Are you sure you want to delete this event?')) return;
-    deleteModule.mutate(selectedModuleId);
-    setSelectedModuleId(null);
+    const mod = sortedModules.find((m) => m.id === selectedModuleId);
+    setDeleteTarget({ type: 'event', id: selectedModuleId, title: mod?.title || 'this event' });
   };
 
   const handleSaveModuleSettings = () => {
@@ -496,9 +637,8 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
 
   const handleDeleteModule = () => {
     if (!selectedModuleId) return;
-    if (!confirm('Are you sure you want to delete this module and all its lessons?')) return;
-    deleteModule.mutate(selectedModuleId);
-    setSelectedModuleId(null);
+    const mod = sortedModules.find((m) => m.id === selectedModuleId);
+    setDeleteTarget({ type: 'module', id: selectedModuleId, title: mod?.title || 'this module' });
   };
 
   const handleAddLesson = async (menuKey: AddMenuKey) => {
@@ -520,8 +660,8 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
       } else {
         queryClient.invalidateQueries({ queryKey: ['program', tenantId, program.id] });
       }
-    } catch {
-      // silent fail
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to add lesson');
     } finally {
       setIsCreatingLesson(false);
     }
@@ -553,20 +693,98 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
       points: editPoints === '' ? undefined : Number(editPoints),
       approvalRequired: editApprovalRequired,
     };
-    updateLesson.mutate({ lessonId: selectedLesson.id, input });
+    updateLesson.mutate(
+      { lessonId: selectedLesson.id, input },
+      {
+        onSuccess: () => {
+          setSaveStatus('saved');
+          setTimeout(() => setSaveStatus('idle'), 2000);
+        },
+        onError: () => {
+          setSaveStatus('error');
+          setTimeout(() => setSaveStatus('idle'), 3000);
+        },
+      }
+    );
   };
 
   const handleDeleteLesson = () => {
     if (!selectedLesson || !selectedLessonModuleId) return;
-    if (!confirm('Are you sure you want to delete this lesson?')) return;
-    deleteLesson.mutate(selectedLesson.id);
-    setSelectedModuleId(selectedLessonModuleId);
-    setSelectedLesson(null);
-    setSelectedLessonModuleId(null);
+    setDeleteTarget({ type: 'lesson', id: selectedLesson.id, title: selectedLesson.title });
+  };
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    if (deleteTarget.type === 'lesson') {
+      deleteLesson.mutate(deleteTarget.id);
+      if (selectedLessonModuleId) setSelectedModuleId(selectedLessonModuleId);
+      setSelectedLesson(null);
+      setSelectedLessonModuleId(null);
+    } else if (deleteTarget.type === 'module' || deleteTarget.type === 'event') {
+      deleteModule.mutate(deleteTarget.id);
+      setSelectedModuleId(null);
+    }
+    setDeleteTarget(null);
   };
 
   const getModulePoints = (mod: Module) =>
     (mod.lessons || []).reduce((sum, l) => sum + (l.points || 0), 0);
+
+  // ---- Reorder handlers ----
+
+  const handleMoveModule = async (moduleId: string, direction: 'up' | 'down') => {
+    const idx = sortedModules.findIndex((m) => m.id === moduleId);
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= sortedModules.length) return;
+    const items = sortedModules.map((m, i) => ({
+      id: m.id,
+      order:
+        i === idx
+          ? sortedModules[swapIdx].order
+          : i === swapIdx
+            ? sortedModules[idx].order
+            : m.order,
+    }));
+    try {
+      const basePath = isAgencyContext
+        ? `/api/agencies/me/programs/${program.id}/modules/reorder`
+        : `/api/tenants/${tenantId}/programs/${program.id}/modules/reorder`;
+      await api.put(basePath, { items });
+      if (isAgencyContext) {
+        queryClient.invalidateQueries({ queryKey: ['agencyProgram', program.id] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['program', tenantId, program.id] });
+      }
+    } catch {
+      setErrorMessage('Failed to reorder modules');
+    }
+  };
+
+  const handleMoveLesson = async (moduleId: string, lessonId: string, direction: 'up' | 'down') => {
+    const mod = sortedModules.find((m) => m.id === moduleId);
+    if (!mod) return;
+    const lessons = [...(mod.lessons || [])].sort((a, b) => a.order - b.order);
+    const idx = lessons.findIndex((l) => l.id === lessonId);
+    const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= lessons.length) return;
+    const items = lessons.map((l, i) => ({
+      id: l.id,
+      order: i === idx ? lessons[swapIdx].order : i === swapIdx ? lessons[idx].order : l.order,
+    }));
+    try {
+      const basePath = isAgencyContext
+        ? `/api/agencies/me/programs/${program.id}/modules/${moduleId}/lessons/reorder`
+        : `/api/tenants/${tenantId}/programs/${program.id}/modules/${moduleId}/lessons/reorder`;
+      await api.put(basePath, { items });
+      if (isAgencyContext) {
+        queryClient.invalidateQueries({ queryKey: ['agencyProgram', program.id] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['program', tenantId, program.id] });
+      }
+    } catch {
+      setErrorMessage('Failed to reorder lessons');
+    }
+  };
 
   // ---- Role-specific content helpers ----
 
@@ -623,7 +841,7 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
             {/* Video Source */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-3">Video Source</label>
-              <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                 <div className="flex flex-col items-center gap-2 p-4 border-2 border-gray-200 rounded-lg text-center opacity-50 cursor-not-allowed">
                   <Upload className="w-5 h-5 text-gray-400" />
                   <div>
@@ -1404,54 +1622,96 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
           </div>
         </div>
 
+        {/* Error Banner */}
+        {errorMessage && (
+          <div className="mx-3 mb-1 px-3 py-2 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+            <p className="text-xs text-red-700 flex-1">{errorMessage}</p>
+            <button
+              onClick={() => setErrorMessage(null)}
+              className="text-red-400 hover:text-red-600"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* Module Tree */}
         <div className="flex-1 overflow-y-auto py-2">
-          {sortedModules.map((mod) => {
+          {sortedModules.map((mod, modIdx) => {
             const isEvent = mod.type === 'event';
             const isExpanded = expandedModules[mod.id] ?? false;
             const isModSelected = selectedModuleId === mod.id && !selectedLesson;
             const sortedLessons = [...(mod.lessons || [])].sort((a, b) => a.order - b.order);
             const modulePoints = getModulePoints(mod);
+            const moduleNumber = isEvent ? 0 : moduleItems.findIndex((m) => m.id === mod.id) + 1;
 
             // Event rendering
             if (isEvent) {
               return (
-                <div key={mod.id}>
-                  <button
-                    onClick={() => handleSelectModule(mod.id)}
-                    className={`w-full flex items-center gap-2 px-3 py-2.5 text-left transition-colors ${
+                <div key={mod.id} className="group/event border-l-[3px] border-blue-400">
+                  <div
+                    className={`flex items-center gap-2 px-3 py-3 transition-colors cursor-pointer ${
                       isModSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
                     }`}
                   >
-                    <span className="p-0.5 w-5" />
-                    <Calendar
-                      className={`w-4 h-4 shrink-0 ${isModSelected ? 'text-blue-500' : 'text-blue-400'}`}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-500 leading-none mb-0.5">
-                        Event
-                      </p>
-                      <p
-                        className={`text-sm font-medium truncate ${isModSelected ? 'text-blue-600' : 'text-gray-900'}`}
+                    <button
+                      onClick={() => handleSelectModule(mod.id)}
+                      className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                    >
+                      <Calendar
+                        className={`w-4 h-4 shrink-0 ${isModSelected ? 'text-blue-500' : 'text-blue-400'}`}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-500 leading-none mb-0.5">
+                          Event
+                        </p>
+                        <p
+                          className={`text-sm font-semibold truncate ${isModSelected ? 'text-blue-600' : 'text-gray-900'}`}
+                        >
+                          {mod.title}
+                        </p>
+                        {mod.eventConfig?.date && (
+                          <p className="text-xs text-gray-400">{mod.eventConfig.date}</p>
+                        )}
+                      </div>
+                    </button>
+                    {/* Reorder buttons */}
+                    <div className="flex flex-col opacity-0 group-hover/event:opacity-100 transition-opacity shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMoveModule(mod.id, 'up');
+                        }}
+                        disabled={modIdx === 0}
+                        className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-default"
+                        aria-label="Move up"
                       >
-                        {mod.title}
-                      </p>
-                      {mod.eventConfig?.date && (
-                        <p className="text-xs text-gray-400">{mod.eventConfig.date}</p>
-                      )}
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMoveModule(mod.id, 'down');
+                        }}
+                        disabled={modIdx === sortedModules.length - 1}
+                        className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-default"
+                        aria-label="Move down"
+                      >
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                  </button>
+                  </div>
                 </div>
               );
             }
 
             return (
-              <div key={mod.id}>
+              <div key={mod.id} className="border-l-[3px] border-red-500">
                 {/* Module Header */}
-                <button
-                  onClick={() => handleSelectModule(mod.id)}
-                  className={`w-full flex items-center gap-2 px-3 py-2.5 text-left transition-colors ${
-                    isModSelected ? 'bg-red-50' : 'hover:bg-gray-50'
+                <div
+                  className={`group/mod flex items-center gap-2 px-3 py-3 bg-gray-50/80 transition-colors cursor-pointer ${
+                    isModSelected ? 'bg-red-50' : 'hover:bg-gray-100/80'
                   }`}
                 >
                   <span
@@ -1465,6 +1725,7 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                       }
                     }}
                     className="p-0.5 text-gray-400 hover:text-gray-600"
+                    aria-expanded={isExpanded}
                   >
                     {isExpanded ? (
                       <ChevronDown className="w-4 h-4" />
@@ -1472,12 +1733,20 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                       <ChevronRight className="w-4 h-4" />
                     )}
                   </span>
-                  <FolderOpen
-                    className={`w-4 h-4 shrink-0 ${isModSelected ? 'text-red-500' : 'text-gray-400'}`}
-                  />
-                  <div className="flex-1 min-w-0">
+                  {/* Module number badge */}
+                  <span
+                    className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                      isModSelected ? 'bg-red-500 text-white' : 'bg-red-100 text-red-600'
+                    }`}
+                  >
+                    {moduleNumber}
+                  </span>
+                  <button
+                    onClick={() => handleSelectModule(mod.id)}
+                    className="flex-1 min-w-0 text-left"
+                  >
                     <p
-                      className={`text-sm font-medium truncate ${isModSelected ? 'text-red-600' : 'text-gray-900'}`}
+                      className={`text-sm font-semibold truncate ${isModSelected ? 'text-red-600' : 'text-gray-900'}`}
                     >
                       {mod.title}
                     </p>
@@ -1485,37 +1754,98 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                       {sortedLessons.length} lesson{sortedLessons.length !== 1 ? 's' : ''} &bull;{' '}
                       {modulePoints} pts
                     </p>
+                  </button>
+                  {/* Reorder buttons */}
+                  <div className="flex flex-col opacity-0 group-hover/mod:opacity-100 transition-opacity shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMoveModule(mod.id, 'up');
+                      }}
+                      disabled={modIdx === 0}
+                      className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-default"
+                      aria-label="Move module up"
+                    >
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMoveModule(mod.id, 'down');
+                      }}
+                      disabled={modIdx === sortedModules.length - 1}
+                      className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-default"
+                      aria-label="Move module down"
+                    >
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                </button>
+                </div>
 
                 {/* Lesson List */}
                 {isExpanded && (
                   <>
-                    {sortedLessons.map((lesson) => {
+                    {sortedLessons.map((lesson, lessonIdx) => {
                       const display = getLessonDisplay(lesson);
                       const TypeIcon = display.icon;
                       const isLessonSelected = selectedLesson?.id === lesson.id;
 
                       return (
-                        <button
+                        <div
                           key={lesson.id}
-                          onClick={() => handleSelectLesson(lesson, mod.id)}
-                          className={`w-full flex items-center gap-2.5 pl-12 pr-3 py-2 text-left transition-colors ${
+                          className={`group/lesson flex items-center gap-2.5 pl-12 pr-3 py-2 transition-colors ${
                             isLessonSelected ? 'bg-red-50' : 'hover:bg-gray-50'
                           }`}
                         >
-                          <TypeIcon
-                            className={`w-4 h-4 shrink-0 ${isLessonSelected ? 'text-red-500' : display.color}`}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p
-                              className={`text-sm truncate ${isLessonSelected ? 'text-red-600 font-medium' : 'text-gray-700'}`}
+                          <button
+                            onClick={() => handleSelectLesson(lesson, mod.id)}
+                            className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
+                          >
+                            <TypeIcon
+                              className={`w-4 h-4 shrink-0 ${isLessonSelected ? 'text-red-500' : display.color}`}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                <p
+                                  className={`text-sm truncate ${isLessonSelected ? 'text-red-600 font-medium' : 'text-gray-700'}`}
+                                >
+                                  {lesson.title}
+                                </p>
+                                {lesson.status === 'draft' && (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full shrink-0">
+                                    Draft
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-400">{lesson.points} pts</p>
+                            </div>
+                          </button>
+                          {/* Reorder buttons */}
+                          <div className="flex flex-col opacity-0 group-hover/lesson:opacity-100 transition-opacity shrink-0">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMoveLesson(mod.id, lesson.id, 'up');
+                              }}
+                              disabled={lessonIdx === 0}
+                              className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-default"
+                              aria-label="Move lesson up"
                             >
-                              {lesson.title}
-                            </p>
-                            <p className="text-xs text-gray-400">{lesson.points} pts</p>
+                              <ChevronUp className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleMoveLesson(mod.id, lesson.id, 'down');
+                              }}
+                              disabled={lessonIdx === sortedLessons.length - 1}
+                              className="p-0.5 text-gray-400 hover:text-gray-700 disabled:opacity-30 disabled:cursor-default"
+                              aria-label="Move lesson down"
+                            >
+                              <ChevronDown className="w-3 h-3" />
+                            </button>
                           </div>
-                        </button>
+                        </div>
                       );
                     })}
                     {/* Inline Add Lesson */}
@@ -1674,10 +2004,29 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                   <button
                     onClick={handleSaveLesson}
                     disabled={updateLesson.isPending}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+                    className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+                      saveStatus === 'saved'
+                        ? 'bg-green-600 text-white'
+                        : saveStatus === 'error'
+                          ? 'bg-red-800 text-white'
+                          : 'bg-red-600 text-white hover:bg-red-700'
+                    }`}
                   >
-                    <Save className="w-4 h-4" />
-                    {updateLesson.isPending ? 'Saving...' : 'Save Lesson'}
+                    {saveStatus === 'saved' ? (
+                      <Check className="w-4 h-4" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                    {updateLesson.isPending
+                      ? 'Saving...'
+                      : saveStatus === 'saved'
+                        ? 'Saved'
+                        : saveStatus === 'error'
+                          ? 'Save Failed'
+                          : 'Save Lesson'}
+                    {isDirty && saveStatus === 'idle' && !updateLesson.isPending && (
+                      <span className="w-2 h-2 rounded-full bg-white/80" />
+                    )}
                   </button>
                   <button
                     onClick={handleDeleteLesson}
@@ -1730,7 +2079,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                       type="number"
                       value={editPoints}
                       onChange={(e) =>
-                        setEditPoints(e.target.value === '' ? '' : Number(e.target.value))
+                        setEditPoints(
+                          e.target.value === '' ? '' : Math.max(0, Number(e.target.value))
+                        )
                       }
                       min={0}
                       className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
@@ -1746,7 +2097,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                         type="number"
                         value={editDuration}
                         onChange={(e) =>
-                          setEditDuration(e.target.value === '' ? '' : Number(e.target.value))
+                          setEditDuration(
+                            e.target.value === '' ? '' : Math.max(0, Number(e.target.value))
+                          )
                         }
                         min={0}
                         className="w-full px-4 py-2.5 pr-12 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
@@ -1920,6 +2273,8 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                       <button
                         key={tab.role}
                         onClick={() => handleRoleTabChange(tab.role)}
+                        role="tab"
+                        aria-selected={activeRoleTab === tab.role}
                         className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
                           activeRoleTab === tab.role
                             ? 'border-red-500 text-red-600'
@@ -2285,7 +2640,7 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               {/* Module Summary */}
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h3 className="text-base font-semibold text-gray-900 mb-4">Module Summary</h3>
-                <div className="grid grid-cols-3 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="text-center py-3 border border-gray-200 rounded-lg">
                     <div className="text-xl font-semibold text-gray-900">
                       {(selectedModule.lessons || []).length}
@@ -2332,20 +2687,22 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
         </div>
 
         {/* ======== MOBILE FAB ======== */}
-        <div className="fixed bottom-6 right-6 z-30 lg:hidden">
-          <button
-            onClick={() => setShowMobileFab((prev) => !prev)}
-            className="w-14 h-14 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 transition-all flex items-center justify-center active:scale-95"
-            aria-label="Add content"
-          >
-            <Plus
-              className={`w-6 h-6 transition-transform duration-200 ${showMobileFab ? 'rotate-45' : ''}`}
-            />
-          </button>
-        </div>
+        {!sidebarOpen && (
+          <div className="fixed bottom-6 right-6 z-30 lg:hidden">
+            <button
+              onClick={() => setShowMobileFab((prev) => !prev)}
+              className="w-14 h-14 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 transition-all flex items-center justify-center active:scale-95"
+              aria-label="Add content"
+            >
+              <Plus
+                className={`w-6 h-6 transition-transform duration-200 ${showMobileFab ? 'rotate-45' : ''}`}
+              />
+            </button>
+          </div>
+        )}
 
         {/* Mobile FAB Bottom Sheet */}
-        {showMobileFab && (
+        {showMobileFab && !sidebarOpen && (
           <>
             <div
               className="fixed inset-0 bg-black/30 z-40 lg:hidden"
@@ -2415,6 +2772,33 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               </div>
             </div>
           </>
+        )}
+
+        {/* ======== DELETE CONFIRM DIALOG ======== */}
+        {deleteTarget && (
+          <ConfirmDialog
+            title={`Delete ${deleteTarget.type === 'event' ? 'Event' : deleteTarget.type === 'module' ? 'Module' : 'Lesson'}`}
+            message={`Are you sure you want to delete "${deleteTarget.title}"? This cannot be undone.`}
+            confirmLabel="Delete"
+            onConfirm={confirmDelete}
+            onCancel={() => setDeleteTarget(null)}
+          />
+        )}
+
+        {/* ======== UNSAVED CHANGES DIALOG ======== */}
+        {pendingNavigation && (
+          <ConfirmDialog
+            title="Unsaved Changes"
+            message="You have unsaved changes. Discard them and continue?"
+            confirmLabel="Discard"
+            confirmColor="bg-amber-600 hover:bg-amber-700"
+            onConfirm={() => {
+              const nav = pendingNavigation;
+              setPendingNavigation(null);
+              nav();
+            }}
+            onCancel={() => setPendingNavigation(null)}
+          />
         )}
       </div>
     </div>
