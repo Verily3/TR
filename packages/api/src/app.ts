@@ -44,7 +44,8 @@ export const app = new Hono<{ Variables: Variables }>();
 app.use('*', logger());
 app.use('*', secureHeaders());
 
-// Request timeout: 30 seconds
+// Request timeout: 30 seconds (default), 120 seconds for admin db operations
+app.use('/api/admin/db/*', timeout(120_000));
 app.use('*', timeout(30_000));
 
 // Body size limit: 1MB for JSON payloads (default)

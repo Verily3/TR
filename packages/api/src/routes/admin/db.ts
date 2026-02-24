@@ -369,4 +369,39 @@ adminDbRoutes.get('/health', async (c) => {
   }
 });
 
+/**
+ * GET /admin/db/seed-production?secret=YOUR_SECRET
+ *
+ * Runs the production seed (agency, templates, LeaderShift program).
+ * Idempotent — skips if "The Oxley Group" agency already exists.
+ * Returns JSON with seed results and execution log.
+ */
+adminDbRoutes.get('/seed-production', async (c) => {
+  const secret = c.req.query('secret') || c.req.header('X-Admin-Secret');
+
+  if (!verifySecret(secret)) {
+    return c.json({ error: { code: 'UNAUTHORIZED', message: 'Invalid secret.' } }, 401);
+  }
+
+  try {
+    const { db: sharedDb } = await import('@tr/db');
+    const { runProductionSeed } = await import('@tr/db');
+    const result = await runProductionSeed(sharedDb);
+    return c.json({ data: result }, result.success ? 200 : 500);
+  } catch (err: unknown) {
+    return c.json(
+      {
+        data: {
+          success: false,
+          skipped: false,
+          message: err instanceof Error ? err.message : String(err),
+          logs: [],
+          durationMs: 0,
+        },
+      },
+      500
+    );
+  }
+});
+
 export { adminDbRoutes };

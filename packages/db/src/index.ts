@@ -29,6 +29,10 @@ export type Database = typeof db;
 export { runMigrations, resolveMigrationsFolder, listMigrationFiles } from './migrate.js';
 export type { MigrationResult } from './migrate.js';
 
+// Export production seed runner
+export { runProductionSeed } from './seed-production.js';
+export type { ProductionSeedResult } from './seed-production.js';
+
 // Graceful shutdown: close all database connections
 export async function closeDatabase() {
   await client.end();

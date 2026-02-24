@@ -7,7 +7,9 @@
  * SAFE: Does NOT delete any data. Checks for existing records before inserting.
  * IDEMPOTENT: Skips if agency "The Oxley Group" already exists.
  *
- * Usage: DATABASE_URL=<prod_url> pnpm --filter @tr/db db:seed-production
+ * Usage:
+ *   CLI: DATABASE_URL=<prod_url> pnpm --filter @tr/db db:seed-production
+ *   API: GET /api/admin/db/seed-production?secret=YOUR_SECRET
  */
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { eq } from 'drizzle-orm';
@@ -17,13 +19,19 @@ import * as schema from './schema/index.js';
 import type { TemplateConfig, TemplateCompetency } from './schema/assessments/templates.js';
 import { SYSTEM_ROLES, type SystemRoleDefinition } from '@tr/shared';
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  throw new Error('DATABASE_URL environment variable is required');
-}
+// Only create standalone connection when run as CLI script
+let client: ReturnType<typeof postgres> | null = null;
+let db: ReturnType<typeof drizzle>;
 
-const client = postgres(connectionString);
-const db = drizzle(client, { schema });
+const isDirectRun = process.argv[1]?.includes('seed-production');
+if (isDirectRun) {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL environment variable is required');
+  }
+  client = postgres(connectionString);
+  db = drizzle(client, { schema });
+}
 
 // ============================================
 // Types for LeaderShift content
@@ -426,22 +434,36 @@ const LEADERSHIFT_180_CONFIG: TemplateConfig = {
 // Main seed function
 // ============================================
 
-async function seedProduction() {
-  console.log('🏭 Starting PRODUCTION database seed...\n');
+export interface ProductionSeedResult {
+  success: boolean;
+  skipped: boolean;
+  message: string;
+  logs: string[];
+  durationMs: number;
+}
+
+export async function runProductionSeed(externalDb?: any): Promise<ProductionSeedResult> {
+  const useDb = externalDb || db;
+  const logs: string[] = [];
+  const origLog = console.log;
+  console.log = (...args: any[]) => { const msg = args.map(String).join(' '); origLog(msg); logs.push(msg); };
+  const start = Date.now();
+
+  console.log('Starting PRODUCTION database seed...');
 
   // Idempotency check
-  const existing = await db.query.agencies.findFirst({
+  const existing = await useDb.query.agencies.findFirst({
     where: eq(schema.agencies.name, 'The Oxley Group'),
   });
 
   if (existing) {
-    console.log('⚠ Agency "The Oxley Group" already exists — skipping seed.');
-    console.log('  If you need to re-seed, delete the agency first.\n');
-    await client.end();
-    process.exit(0);
+    const msg = 'Agency "The Oxley Group" already exists — skipping seed.';
+    console.log(msg);
+    console.log = origLog;
+    return { success: true, skipped: true, message: msg, logs, durationMs: Date.now() - start };
   }
 
-  await db.transaction(async (tx) => {
+  await useDb.transaction(async (tx: any) => {
     // ─── 1. Agency ───────────────────────────────────────────────────
     console.log('Creating agency...');
     const [agency] = await tx
@@ -469,7 +491,7 @@ async function seedProduction() {
     console.log(`  ✓ Agency: ${agency.name} (${agency.id})`);
 
     // ─── 2. Agency Roles ─────────────────────────────────────────────
-    console.log('\nCreating agency roles...');
+    console.log('Creating agency roles...');
     const agencyRoles: Record<string, typeof schema.roles.$inferSelect> = {};
 
     for (const [key, roleDef] of Object.entries(SYSTEM_ROLES) as [string, SystemRoleDefinition][]) {
@@ -1172,13 +1194,26 @@ async function seedProduction() {
   console.log('  Agency: The Oxley Group');
   console.log('  Client: VerilyAssist');
   console.log('  Templates: 4 assessment templates');
-  console.log('  Program: LeaderShift (agency template)\n');
+  console.log('  Program: LeaderShift (agency template)');
 
-  await client.end();
-  process.exit(0);
+  console.log = origLog;
+  return { success: true, skipped: false, message: 'Production seed completed successfully', logs, durationMs: Date.now() - start };
 }
 
-seedProduction().catch((err) => {
-  console.error('❌ Production seed failed:', err);
-  process.exit(1);
-});
+// CLI entry point
+if (isDirectRun) {
+  runProductionSeed()
+    .then(async (result) => {
+      if (!result.success) {
+        console.error('❌ Production seed failed:', result.message);
+        process.exit(1);
+      }
+      await client?.end();
+      process.exit(0);
+    })
+    .catch(async (err) => {
+      console.error('❌ Production seed failed:', err);
+      await client?.end();
+      process.exit(1);
+    });
+}
