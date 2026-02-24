@@ -1,6 +1,6 @@
 # Results Tracking System — Project Status
 
-> Last Updated: 2026-02-22 (session 6)
+> Last Updated: 2026-02-24 (session 8)
 
 ## Status Legend
 
@@ -62,14 +62,17 @@
 | Module + lesson structure (nested, ordered)         | 🟢 **Complete** | Parent/child modules, reorder support                         |
 | 6 content types                                     | 🟢 **Complete** | `lesson`, `quiz`, `assignment`, `text_form`, `goal`, `survey` |
 | Curriculum builder (11-entry add menu)              | 🟢 **Complete** | 3 groups: Content, Reflection, Activity                       |
-| Drip scheduling (module + lesson level)             | 🟢 **Complete** | 4 drip strategies each                                        |
+| Drip scheduling (module + lesson level)             | 🟢 **Complete** | 4 drip strategies each; enforced on learner LMS view          |
 | Program enrollment (Facilitator / Mentor / Learner) | 🟢 **Complete** | Role-based access                                             |
 | Mentor–Learner assignments                          | 🟢 **Complete** | Many-to-many via enrollment_mentorships                       |
 | Progress tracking + lesson completion               | 🟢 **Complete** | Cascades to enrollment.progress                               |
 | Learner LMS UI (`/programs/[id]/learn`)             | 🟢 **Complete** | Sidebar, sequential locking, completion modal                 |
 | Program detail page (`/programs/[id]`)              | 🟢 **Complete** | Stats, module tracker, linked goals                           |
 | Program catalog (`/programs`)                       | 🟢 **Complete** | Tabs, cards, filter, agency tenant selector                   |
-| Preview mode (`?previewRole=learner`)               | 🟢 **Complete** | Bypasses sequential locking                                   |
+| Content visibility toggles (draft/active)           | 🟢 **Complete** | Module + lesson status; API + frontend filtering              |
+| API-level draft filtering                           | 🟢 **Complete** | Non-builder users only see `active` content in API responses  |
+| Drip scheduling enforcement (learner LMS)           | 🟢 **Complete** | `drip-utils.ts` evaluator + sidebar lock indicators           |
+| Preview mode (`?previewRole=learner`)               | 🟢 **Complete** | Bypasses sequential + drip locking; respects draft visibility |
 | Program Templates                                   | 🟢 **Complete** | Mark as template, use template, assign to client              |
 | Tasks within lessons                                | 🟢 **Complete** | `lesson_tasks` + `task_progress` tables                       |
 | Events as module peers                              | 🟢 **Complete** | `moduleType` enum (module / event) + eventConfig JSONB        |
@@ -324,13 +327,15 @@
 | Settings Integrations tab (real connections) | Low      | Shows Coming Soon; no OAuth flows built                                   |
 | Settings Billing tab (real data)             | Low      | Shows Coming Soon; needs billing provider                                 |
 
-### Recently Completed (session 6)
+### Recently Completed (session 8)
 
-| Item                                       | Status                                                                                   |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| ~~Rich content editor (WYSIWYG)~~          | 🟢 Tiptap editor for lesson intro/body/takeaway + assignment/goal/text_form intro fields |
-| ~~Lesson resources/attachments upload UI~~ | 🟢 Full storage backend (local+S3), Resources tab with upload/link/delete                |
-| ~~Remove .env secrets from git history~~   | 🟢 Verified: no .env files ever committed; `.gitignore` properly covers all variants     |
+| Item                                   | Status                                                                                                 |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| ~~Content visibility toggles~~         | 🟢 Module/lesson `status` (draft/active); Zod schemas fixed; toggle UI in CurriculumTab                |
+| ~~Drip scheduling enforcement~~        | 🟢 `drip-utils.ts` pure evaluator; integrated into learn page useMemo + LearnerSidebar lock indicators |
+| ~~API-level draft filtering~~          | 🟢 `programs.ts` GET /:programId + `progress.ts` GET /progress filter for non-builder users            |
+| ~~New content defaults to active~~     | 🟢 All create/deep-copy handlers in programs.ts + agencies.ts default to `status: 'active'`            |
+| ~~Learn page navigation improvements~~ | 🟢 Skips empty modules in init/goToNext/goToPrevious; "Back to Program" goes to detail page            |
 
 ---
 
@@ -417,4 +422,5 @@ Password for all: `password123`
 - Email sending silently skips in dev if `RESEND_API_KEY` is not set
 - TypeScript check: run `npx tsc --noEmit` from within each package directory (not via `pnpm filter`)
 - Drizzle LATERAL JOIN does not work via `.leftJoin()` — use correlated subqueries
+- Module/lesson DB default is `status = 'draft'`; all API create handlers override to `'active'`; deep-copy preserves source status
 - `components/` folder is a standalone Vite + React 18 prototype — do not import from `packages/web` (React 19)

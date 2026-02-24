@@ -23,7 +23,17 @@ import {
 } from 'lucide-react';
 
 // Lesson types
-type LessonType = 'reading' | 'video' | 'meeting' | 'submission' | 'assignment' | 'goal' | 'quiz' | 'approval' | 'discussion' | 'survey';
+type LessonType =
+  | 'reading'
+  | 'video'
+  | 'meeting'
+  | 'submission'
+  | 'assignment'
+  | 'goal'
+  | 'quiz'
+  | 'approval'
+  | 'discussion'
+  | 'survey';
 
 type FilterMode = 'all' | 'remaining';
 
@@ -34,6 +44,8 @@ interface LessonData {
   duration: number;
   points: number;
   completed: boolean;
+  dripLocked?: boolean;
+  dripMessage?: string;
 }
 
 interface ModuleData {
@@ -44,6 +56,8 @@ interface ModuleData {
   lessons: LessonData[];
   isEvent?: boolean;
   eventConfig?: { date?: string; startTime?: string; endTime?: string };
+  dripLocked?: boolean;
+  dripMessage?: string;
 }
 
 interface LearnerSidebarProps {
@@ -94,7 +108,10 @@ export const LearnerSidebar = memo(function LearnerSidebar({
 
   const { overallProgress, completedLessons, totalLessons } = useMemo(() => {
     const total = modules.reduce((acc, m) => acc + m.lessons.length, 0);
-    const completed = modules.reduce((acc, m) => acc + m.lessons.filter(l => l.completed).length, 0);
+    const completed = modules.reduce(
+      (acc, m) => acc + m.lessons.filter((l) => l.completed).length,
+      0
+    );
     return {
       overallProgress: total > 0 ? Math.round((completed / total) * 100) : 0,
       completedLessons: completed,
@@ -113,29 +130,34 @@ export const LearnerSidebar = memo(function LearnerSidebar({
     }
   }, []);
 
-  const handleBackdropClick = useCallback((e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  }, [onClose]);
+  const handleBackdropClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (e.target === e.currentTarget) {
+        onClose();
+      }
+    },
+    [onClose]
+  );
 
-  const handleModuleKeyDown = useCallback((e: React.KeyboardEvent, moduleId: string) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onToggleModule(moduleId);
-    }
-  }, [onToggleModule]);
+  const handleModuleKeyDown = useCallback(
+    (e: React.KeyboardEvent, moduleId: string) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onToggleModule(moduleId);
+      }
+    },
+    [onToggleModule]
+  );
 
-  const handleLessonKeyDown = useCallback((
-    e: React.KeyboardEvent,
-    moduleIndex: number,
-    lessonIndex: number
-  ) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onSelectLesson(moduleIndex, lessonIndex);
-    }
-  }, [onSelectLesson]);
+  const handleLessonKeyDown = useCallback(
+    (e: React.KeyboardEvent, moduleIndex: number, lessonIndex: number) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onSelectLesson(moduleIndex, lessonIndex);
+      }
+    },
+    [onSelectLesson]
+  );
 
   return (
     <>
@@ -160,11 +182,14 @@ export const LearnerSidebar = memo(function LearnerSidebar({
         <div className="p-4 sm:p-6 border-b border-border flex-shrink-0">
           <div className="flex items-center justify-between mb-4">
             <Link
-              href="/programs"
+              href={`/programs/${programId}`}
               className="flex items-center gap-2 text-sm text-muted-foreground hover:text-accent transition-colors group focus:outline-none focus:text-accent"
             >
-              <ChevronLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" aria-hidden="true" />
-              Back to Programs
+              <ChevronLeft
+                className="w-4 h-4 transition-transform group-hover:-translate-x-1"
+                aria-hidden="true"
+              />
+              Back to Program
             </Link>
             <button
               onClick={onClose}
@@ -175,7 +200,9 @@ export const LearnerSidebar = memo(function LearnerSidebar({
             </button>
           </div>
           <h2 className="text-sidebar-foreground font-semibold mb-1 truncate">{programName}</h2>
-          <p className="text-sm text-muted-foreground">{modules.length} {modules.length === 1 ? 'Module' : 'Modules'}</p>
+          <p className="text-sm text-muted-foreground">
+            {modules.length} {modules.length === 1 ? 'Module' : 'Modules'}
+          </p>
 
           {/* Overall Progress */}
           <div className="mt-4 p-3 bg-muted/30 rounded-lg">
@@ -201,10 +228,10 @@ export const LearnerSidebar = memo(function LearnerSidebar({
 
         {/* Filter Tabs */}
         <div className="flex border-b border-border flex-shrink-0">
-          {([
+          {[
             { mode: 'all' as FilterMode, label: 'All' },
             { mode: 'remaining' as FilterMode, label: 'Remaining' },
-          ]).map((tab) => (
+          ].map((tab) => (
             <button
               key={tab.mode}
               onClick={() => setFilterMode(tab.mode)}
@@ -229,21 +256,23 @@ export const LearnerSidebar = memo(function LearnerSidebar({
           <ul role="list">
             {modules.map((module, moduleIndex) => {
               const isExpanded = expandedModules.has(module.id);
-              const completedLessonsCount = module.lessons.filter(l => l.completed).length;
-              const remainingCount = module.lessons.filter(l => !l.completed).length;
-              const progress = module.lessons.length > 0 ? Math.round((completedLessonsCount / module.lessons.length) * 100) : 0;
+              const completedLessonsCount = module.lessons.filter((l) => l.completed).length;
+              const remainingCount = module.lessons.filter((l) => !l.completed).length;
+              const progress =
+                module.lessons.length > 0
+                  ? Math.round((completedLessonsCount / module.lessons.length) * 100)
+                  : 0;
 
               // In "remaining" mode, hide fully completed modules (events always show)
-              if (filterMode === 'remaining' && remainingCount === 0 && !module.isEvent) return null;
+              if (filterMode === 'remaining' && remainingCount === 0 && !module.isEvent)
+                return null;
 
               // Event rendering
               if (module.isEvent) {
-                const isCurrentModule = moduleIndex === currentModuleIndex && currentLessonIndex === 0;
+                const isCurrentModule =
+                  moduleIndex === currentModuleIndex && currentLessonIndex === 0;
                 return (
-                  <li
-                    key={module.id}
-                    className="border-b border-border"
-                  >
+                  <li key={module.id} className="border-b border-border">
                     <button
                       onClick={() => onSelectLesson(moduleIndex, 0)}
                       className={`w-full p-4 text-left hover:bg-blue-50/50 transition-colors focus:outline-none focus:bg-blue-50/50 ${
@@ -253,15 +282,24 @@ export const LearnerSidebar = memo(function LearnerSidebar({
                     >
                       <div className="flex items-start gap-3">
                         <div className="mt-0.5">
-                          <Calendar className={`w-5 h-5 ${isCurrentModule ? 'text-blue-500' : 'text-blue-400'}`} aria-hidden="true" />
+                          <Calendar
+                            className={`w-5 h-5 ${isCurrentModule ? 'text-blue-500' : 'text-blue-400'}`}
+                            aria-hidden="true"
+                          />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-[10px] font-semibold uppercase tracking-wider text-blue-500 mb-0.5">Event</div>
-                          <div className={`text-sm font-medium truncate ${isCurrentModule ? 'text-blue-600' : 'text-sidebar-foreground'}`}>
+                          <div className="text-[10px] font-semibold uppercase tracking-wider text-blue-500 mb-0.5">
+                            Event
+                          </div>
+                          <div
+                            className={`text-sm font-medium truncate ${isCurrentModule ? 'text-blue-600' : 'text-sidebar-foreground'}`}
+                          >
                             {module.title}
                           </div>
                           {module.eventConfig?.date && (
-                            <div className="text-xs text-muted-foreground mt-0.5">{module.eventConfig.date}</div>
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              {module.eventConfig.date}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -283,16 +321,26 @@ export const LearnerSidebar = memo(function LearnerSidebar({
                     aria-expanded={isExpanded}
                     aria-controls={`module-${module.id}-lessons`}
                     aria-label={`Module ${module.number}: ${module.title}. ${completedLessonsCount} of ${module.lessons.length} lessons completed. ${
-                      module.status === 'locked' ? 'Locked' : module.status === 'completed' ? 'Completed' : 'In progress'
+                      module.status === 'locked'
+                        ? 'Locked'
+                        : module.status === 'completed'
+                          ? 'Completed'
+                          : 'In progress'
                     }`}
                   >
                     <div className="flex items-start gap-3 mb-2">
                       <div className="mt-0.5">{getModuleStatusIcon(module.status)}</div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs text-muted-foreground mb-1">Module {module.number}</div>
-                        <div className="text-sm font-medium text-sidebar-foreground mb-1 truncate">{module.title}</div>
+                        <div className="text-xs text-muted-foreground mb-1">
+                          Module {module.number}
+                        </div>
+                        <div className="text-sm font-medium text-sidebar-foreground mb-1 truncate">
+                          {module.title}
+                        </div>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span>{completedLessonsCount}/{module.lessons.length} complete</span>
+                          <span>
+                            {completedLessonsCount}/{module.lessons.length} complete
+                          </span>
                           <span aria-hidden="true">&bull;</span>
                           <span>{progress}%</span>
                         </div>
@@ -315,6 +363,14 @@ export const LearnerSidebar = memo(function LearnerSidebar({
                         style={{ width: `${progress}%` }}
                       />
                     </div>
+
+                    {/* Drip lock message */}
+                    {module.dripLocked && module.dripMessage && (
+                      <div className="flex items-center gap-1.5 ml-8 mt-1.5 text-xs text-amber-600">
+                        <Clock className="w-3 h-3 shrink-0" />
+                        <span>{module.dripMessage}</span>
+                      </div>
+                    )}
                   </button>
 
                   {/* Expanded Lesson List */}
@@ -330,47 +386,69 @@ export const LearnerSidebar = memo(function LearnerSidebar({
                       // In "remaining" mode, hide completed lessons
                       if (filterMode === 'remaining' && lesson.completed) return null;
 
-                      const LessonIcon = lessonIcons[lesson.type];
+                      const LessonIcon = lesson.dripLocked ? Clock : lessonIcons[lesson.type];
                       const isCurrentLesson =
                         moduleIndex === currentModuleIndex && lessonIndex === currentLessonIndex;
+                      const isDripLocked = !!lesson.dripLocked;
 
                       return (
                         <li key={lesson.id} className="bg-muted/20">
                           <button
-                            onClick={() => onSelectLesson(moduleIndex, lessonIndex)}
-                            onKeyDown={(e) => handleLessonKeyDown(e, moduleIndex, lessonIndex)}
-                            className={`w-full p-3 pl-14 text-left border-t border-border/50 hover:bg-muted/50 transition-all focus:outline-none focus:bg-muted/50 ${
-                              isCurrentLesson ? 'bg-accent/10 border-l-2 border-l-accent' : ''
+                            onClick={() =>
+                              !isDripLocked && onSelectLesson(moduleIndex, lessonIndex)
+                            }
+                            onKeyDown={(e) =>
+                              !isDripLocked && handleLessonKeyDown(e, moduleIndex, lessonIndex)
+                            }
+                            disabled={isDripLocked}
+                            className={`w-full p-3 pl-14 text-left border-t border-border/50 transition-all focus:outline-none ${
+                              isDripLocked
+                                ? 'opacity-50 cursor-not-allowed'
+                                : `hover:bg-muted/50 focus:bg-muted/50 ${isCurrentLesson ? 'bg-accent/10 border-l-2 border-l-accent' : ''}`
                             }`}
                             aria-current={isCurrentLesson ? 'true' : undefined}
                             aria-label={`${lesson.title}. ${lesson.duration} minutes. ${lesson.points} points. ${
-                              lesson.completed ? 'Completed' : 'Not completed'
+                              isDripLocked
+                                ? lesson.dripMessage
+                                : lesson.completed
+                                  ? 'Completed'
+                                  : 'Not completed'
                             }`}
                           >
                             <div className="flex items-center gap-2 mb-1">
                               <LessonIcon
-                                className={`w-3.5 h-3.5 ${isCurrentLesson ? 'text-accent' : 'text-muted-foreground'}`}
+                                className={`w-3.5 h-3.5 ${isDripLocked ? 'text-amber-500' : isCurrentLesson ? 'text-accent' : 'text-muted-foreground'}`}
                                 aria-hidden="true"
                               />
                               <span
                                 className={`text-xs truncate ${
-                                  isCurrentLesson ? 'text-accent font-medium' : 'text-sidebar-foreground'
+                                  isDripLocked
+                                    ? 'text-muted-foreground'
+                                    : isCurrentLesson
+                                      ? 'text-accent font-medium'
+                                      : 'text-sidebar-foreground'
                                 }`}
                               >
                                 {lesson.title}
                               </span>
-                              {lesson.completed && (
+                              {lesson.completed && !isDripLocked && (
                                 <CheckCircle2
                                   className="w-3.5 h-3.5 text-accent ml-auto flex-shrink-0"
                                   aria-hidden="true"
                                 />
                               )}
                             </div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground ml-5">
-                              <span>{lesson.duration} min</span>
-                              <span aria-hidden="true">&bull;</span>
-                              <span>{lesson.points} pts</span>
-                            </div>
+                            {isDripLocked && lesson.dripMessage ? (
+                              <div className="flex items-center gap-1 text-[10px] text-amber-600 ml-5 mt-0.5">
+                                <span>{lesson.dripMessage}</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground ml-5">
+                                <span>{lesson.duration} min</span>
+                                <span aria-hidden="true">&bull;</span>
+                                <span>{lesson.points} pts</span>
+                              </div>
+                            )}
                           </button>
                         </li>
                       );

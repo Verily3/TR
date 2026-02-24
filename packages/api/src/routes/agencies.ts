@@ -1006,7 +1006,7 @@ agenciesRoutes.post(
             dripType: mod.dripType,
             dripValue: mod.dripValue,
             dripDate: mod.dripDate,
-            status: 'draft',
+            status: mod.status || 'active',
           })
           .returning();
 
@@ -1034,7 +1034,7 @@ agenciesRoutes.post(
               dripDate: lesson.dripDate,
               visibleTo: lesson.visibleTo,
               approvalRequired: lesson.approvalRequired,
-              status: 'draft',
+              status: lesson.status || 'active',
             })
             .returning();
 
@@ -1186,7 +1186,7 @@ agenciesRoutes.post(
             dripType: mod.dripType,
             dripValue: mod.dripValue,
             dripDate: mod.dripDate,
-            status: 'draft',
+            status: mod.status || 'active',
           })
           .returning();
 
@@ -1214,7 +1214,7 @@ agenciesRoutes.post(
               dripDate: lesson.dripDate,
               visibleTo: lesson.visibleTo,
               approvalRequired: lesson.approvalRequired,
-              status: 'draft',
+              status: lesson.status || 'active',
             })
             .returning();
 
@@ -1349,7 +1349,7 @@ agenciesRoutes.post(
             dripType: mod.dripType,
             dripValue: mod.dripValue,
             dripDate: mod.dripDate,
-            status: 'draft',
+            status: mod.status || 'active',
           })
           .returning();
 
@@ -1377,7 +1377,7 @@ agenciesRoutes.post(
               dripDate: lesson.dripDate,
               visibleTo: lesson.visibleTo,
               approvalRequired: lesson.approvalRequired,
-              status: 'draft',
+              status: lesson.status || 'active',
             })
             .returning();
 
@@ -1453,6 +1453,7 @@ const agencyModuleSchema = z.object({
     .default('immediate'),
   dripValue: z.number().int().optional(),
   dripDate: z.string().datetime().optional(),
+  status: z.enum(['draft', 'active']).optional(),
 });
 
 const agencyLessonSchema = z.object({
@@ -1477,6 +1478,7 @@ const agencyLessonSchema = z.object({
     })
     .optional(),
   approvalRequired: z.enum(['none', 'mentor', 'facilitator', 'both']).default('none'),
+  status: z.enum(['draft', 'active']).optional(),
 });
 
 const agencyReorderSchema = z.object({
@@ -1593,6 +1595,7 @@ agenciesRoutes.post(
         dripType: body.dripType,
         dripValue: body.dripValue,
         dripDate: body.dripDate ? new Date(body.dripDate) : null,
+        status: body.status || 'active',
       })
       .returning();
 
@@ -1764,6 +1767,7 @@ agenciesRoutes.post(
         dripDate: body.dripDate ? new Date(body.dripDate) : null,
         visibleTo: body.visibleTo || { learner: true, mentor: true, facilitator: true },
         approvalRequired: body.approvalRequired,
+        status: body.status || 'active',
       })
       .returning();
 

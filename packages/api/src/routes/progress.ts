@@ -109,7 +109,7 @@ progressRoutes.get(
       throw new ForbiddenError('You do not have access to view this enrollment');
     }
 
-    // Get all lessons for the program
+    // Get all lessons for the program (include status for draft filtering)
     const allLessons = await db
       .select({
         id: lessons.id,
@@ -117,6 +117,7 @@ progressRoutes.get(
         title: lessons.title,
         contentType: lessons.contentType,
         points: lessons.points,
+        status: lessons.status,
       })
       .from(lessons)
       .innerJoin(modules, eq(lessons.moduleId, modules.id))
@@ -143,13 +144,20 @@ progressRoutes.get(
       };
     });
 
-    // Calculate totals
-    const totalLessons = allLessons.length;
-    const completedLessons = lessonsWithProgress.filter(
-      (l) => l.status === 'completed'
-    ).length;
-    const totalPoints = allLessons.reduce((sum, l) => sum + l.points, 0);
-    const earnedPoints = lessonsWithProgress.reduce((sum, l) => sum + l.pointsEarned, 0);
+    // Filter draft lessons for non-builder users
+    const isBuilder = user.permissions?.includes(PERMISSIONS.PROGRAMS_MANAGE);
+    const filteredLessons = isBuilder
+      ? lessonsWithProgress
+      : lessonsWithProgress.filter((l) => {
+          const dbLesson = allLessons.find((al) => al.id === l.id);
+          return dbLesson?.status === 'active';
+        });
+
+    // Calculate totals from filtered set
+    const totalLessons = filteredLessons.length;
+    const completedLessons = filteredLessons.filter((l) => l.status === 'completed').length;
+    const totalPoints = filteredLessons.reduce((sum, l) => sum + l.points, 0);
+    const earnedPoints = filteredLessons.reduce((sum, l) => sum + l.pointsEarned, 0);
 
     return c.json({
       data: {
@@ -161,7 +169,7 @@ progressRoutes.get(
           pointsEarned: earnedPoints,
           totalPoints,
         },
-        lessons: lessonsWithProgress,
+        lessons: filteredLessons,
       },
     });
   }
@@ -207,11 +215,7 @@ progressRoutes.put(
       .innerJoin(modules, eq(lessons.moduleId, modules.id))
       .innerJoin(programs, eq(modules.programId, programs.id))
       .where(
-        and(
-          eq(lessons.id, lessonId),
-          eq(programs.id, programId),
-          eq(programs.tenantId, tenant.id)
-        )
+        and(eq(lessons.id, lessonId), eq(programs.id, programId), eq(programs.tenantId, tenant.id))
       )
       .limit(1);
 
@@ -221,9 +225,7 @@ progressRoutes.put(
 
     // Check if lesson requires approval before completion
     if (lesson.lessons.approvalRequired && lesson.lessons.approvalRequired !== 'none') {
-      throw new BadRequestError(
-        'This lesson requires approval. Use the submit endpoint instead.'
-      );
+      throw new BadRequestError('This lesson requires approval. Use the submit endpoint instead.');
     }
 
     // Upsert progress
@@ -277,9 +279,7 @@ progressRoutes.post(
     const [enrollment] = await db
       .select()
       .from(enrollments)
-      .where(
-        and(eq(enrollments.programId, programId), eq(enrollments.userId, user.id))
-      )
+      .where(and(eq(enrollments.programId, programId), eq(enrollments.userId, user.id)))
       .limit(1);
 
     if (!enrollment) {
@@ -476,11 +476,7 @@ progressRoutes.post(
       .innerJoin(modules, eq(lessons.moduleId, modules.id))
       .innerJoin(programs, eq(modules.programId, programs.id))
       .where(
-        and(
-          eq(lessons.id, lessonId),
-          eq(programs.id, programId),
-          eq(programs.tenantId, tenant.id)
-        )
+        and(eq(lessons.id, lessonId), eq(programs.id, programId), eq(programs.tenantId, tenant.id))
       )
       .limit(1);
 
@@ -742,7 +738,10 @@ progressRoutes.get(
       .select({
         goalResponseId: goalReviews.goalResponseId,
         progressPercentage: goalReviews.progressPercentage,
-        rowNum: sql<number>`ROW_NUMBER() OVER (PARTITION BY ${goalReviews.goalResponseId} ORDER BY ${goalReviews.reviewDate} DESC)`.as('row_num'),
+        rowNum:
+          sql<number>`ROW_NUMBER() OVER (PARTITION BY ${goalReviews.goalResponseId} ORDER BY ${goalReviews.reviewDate} DESC)`.as(
+            'row_num'
+          ),
       })
       .from(goalReviews)
       .as('latest_review');
@@ -766,10 +765,7 @@ progressRoutes.get(
       .from(goalResponses)
       .leftJoin(
         latestReviewSq,
-        and(
-          eq(latestReviewSq.goalResponseId, goalResponses.id),
-          eq(latestReviewSq.rowNum, 1)
-        )
+        and(eq(latestReviewSq.goalResponseId, goalResponses.id), eq(latestReviewSq.rowNum, 1))
       )
       .where(eq(goalResponses.enrollmentId, enrollmentId));
 
@@ -800,12 +796,7 @@ progressRoutes.get(
     const [enrollment] = await db
       .select()
       .from(enrollments)
-      .where(
-        and(
-          eq(enrollments.programId, programId),
-          eq(enrollments.userId, user.id)
-        )
-      )
+      .where(and(eq(enrollments.programId, programId), eq(enrollments.userId, user.id)))
       .limit(1);
 
     if (!enrollment) {
@@ -844,12 +835,7 @@ progressRoutes.get(
     const [enrollment] = await db
       .select()
       .from(enrollments)
-      .where(
-        and(
-          eq(enrollments.programId, programId),
-          eq(enrollments.userId, user.id)
-        )
-      )
+      .where(and(eq(enrollments.programId, programId), eq(enrollments.userId, user.id)))
       .limit(1);
 
     if (!enrollment) {
@@ -895,12 +881,7 @@ progressRoutes.post(
     const [enrollment] = await db
       .select()
       .from(enrollments)
-      .where(
-        and(
-          eq(enrollments.programId, programId),
-          eq(enrollments.userId, user.id)
-        )
-      )
+      .where(and(eq(enrollments.programId, programId), eq(enrollments.userId, user.id)))
       .limit(1);
 
     if (!enrollment) {
@@ -936,13 +917,16 @@ progressRoutes.post(
       .where(eq(users.id, user.id))
       .limit(1);
 
-    return c.json({
-      data: {
-        ...post,
-        authorFirstName: author?.firstName ?? null,
-        authorLastName: author?.lastName ?? null,
+    return c.json(
+      {
+        data: {
+          ...post,
+          authorFirstName: author?.firstName ?? null,
+          authorLastName: author?.lastName ?? null,
+        },
       },
-    }, 201);
+      201
+    );
   }
 );
 
@@ -1023,9 +1007,7 @@ progressRoutes.put(
 
     // Check if task requires approval
     if (task.task.approvalRequired !== 'none') {
-      throw new BadRequestError(
-        'This task requires approval. Use the submit endpoint instead.'
-      );
+      throw new BadRequestError('This task requires approval. Use the submit endpoint instead.');
     }
 
     // Upsert task progress
@@ -1284,11 +1266,7 @@ progressRoutes.post(
     // If approved, check if task is fully approved
     if (status === 'approved') {
       // Get the task to check approvalRequired
-      const [task] = await db
-        .select()
-        .from(lessonTasks)
-        .where(eq(lessonTasks.id, taskId))
-        .limit(1);
+      const [task] = await db.select().from(lessonTasks).where(eq(lessonTasks.id, taskId)).limit(1);
 
       if (task) {
         let fullyApproved = true;
@@ -1317,10 +1295,7 @@ progressRoutes.post(
               updatedAt: new Date(),
             })
             .where(
-              and(
-                eq(taskProgress.taskId, taskId),
-                eq(taskProgress.enrollmentId, enrollmentId)
-              )
+              and(eq(taskProgress.taskId, taskId), eq(taskProgress.enrollmentId, enrollmentId))
             );
 
           // Check if all tasks for the parent lesson are now completed
@@ -1448,10 +1423,7 @@ async function checkLessonTaskCompletion(
     })
     .from(taskProgress)
     .where(
-      and(
-        eq(taskProgress.enrollmentId, enrollmentId),
-        sql`${taskProgress.taskId} IN ${taskIds}`
-      )
+      and(eq(taskProgress.enrollmentId, enrollmentId), sql`${taskProgress.taskId} IN ${taskIds}`)
     );
 
   const allCompleted = Number(completedCount) >= allLessonTasks.length;
@@ -1503,8 +1475,7 @@ async function updateEnrollmentProgress(enrollmentId: string) {
     .from(lessonProgress)
     .where(eq(lessonProgress.enrollmentId, enrollmentId));
 
-  const percentage =
-    Number(total) > 0 ? Math.round((Number(completed) / Number(total)) * 100) : 0;
+  const percentage = Number(total) > 0 ? Math.round((Number(completed) / Number(total)) * 100) : 0;
 
   // Fetch current enrollment to detect milestone crossings
   const [enrollment] = await db
@@ -1540,7 +1511,12 @@ async function updateEnrollmentProgress(enrollmentId: string) {
       .limit(1);
 
     const [program] = await db
-      .select({ id: programs.id, name: programs.name, agencyId: programs.agencyId, config: programs.config })
+      .select({
+        id: programs.id,
+        name: programs.name,
+        agencyId: programs.agencyId,
+        config: programs.config,
+      })
       .from(programs)
       .where(eq(programs.id, enrollment.programId))
       .limit(1);
@@ -1579,9 +1555,10 @@ async function updateEnrollmentProgress(enrollmentId: string) {
             userId: user.id,
             type: 'achievement',
             title: `You've reached ${m}% in ${program.name}!`,
-            message: m === 100
-              ? `Congratulations! You've completed ${program.name}.`
-              : `Keep it up — you're ${m}% of the way through ${program.name}.`,
+            message:
+              m === 100
+                ? `Congratulations! You've completed ${program.name}.`
+                : `Keep it up — you're ${m}% of the way through ${program.name}.`,
             actionUrl: `/programs/${program.id}`,
             actionLabel: m === 100 ? 'View Certificate' : 'Continue Learning',
             priority: m === 100 ? 'high' : 'medium',

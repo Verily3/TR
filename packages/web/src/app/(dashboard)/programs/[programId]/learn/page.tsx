@@ -15,7 +15,19 @@ import {
 } from '@/hooks/api/usePrograms';
 import { useTenants } from '@/hooks/api/useTenants';
 import { getEmbedUrl, getVideoProvider } from '@/lib/video-utils';
-import type { ContentType, LessonContent, LessonProgressStatus, ApprovalRequired, EnrollmentRole, DiscussionPost, EventConfig, LessonTask, TaskWithProgress } from '@/types/programs';
+import { evaluateModuleDrip, evaluateLessonDrip, formatDripMessage } from '@/lib/drip-utils';
+import type { DripContext } from '@/lib/drip-utils';
+import type {
+  ContentType,
+  LessonContent,
+  LessonProgressStatus,
+  ApprovalRequired,
+  EnrollmentRole,
+  DiscussionPost,
+  EventConfig,
+  LessonTask,
+  TaskWithProgress,
+} from '@/types/programs';
 import {
   Award,
   CheckCircle2,
@@ -47,7 +59,15 @@ import {
 // Types & Constants
 // ============================================
 
-type LessonType = 'reading' | 'video' | 'submission' | 'assignment' | 'goal' | 'quiz' | 'discussion' | 'survey';
+type LessonType =
+  | 'reading'
+  | 'video'
+  | 'submission'
+  | 'assignment'
+  | 'goal'
+  | 'quiz'
+  | 'discussion'
+  | 'survey';
 
 interface LessonData {
   id: string;
@@ -60,6 +80,8 @@ interface LessonData {
   content: LessonContent;
   approvalRequired: ApprovalRequired;
   tasks: LessonTask[];
+  dripLocked: boolean;
+  dripMessage: string;
 }
 
 interface ModuleData {
@@ -70,6 +92,9 @@ interface ModuleData {
   lessons: LessonData[];
   isEvent?: boolean;
   eventConfig?: EventConfig;
+  dripLocked: boolean;
+  dripUnlockDate: Date | null;
+  dripMessage: string;
 }
 
 // Resolve role-specific content based on enrollment role
@@ -148,11 +173,7 @@ function LessonContentRenderer({
   switch (lessonType) {
     case 'reading':
       return (
-        <ReadingContent
-          moduleNumber={moduleNumber}
-          moduleTitle={moduleTitle}
-          content={content}
-        />
+        <ReadingContent moduleNumber={moduleNumber} moduleTitle={moduleTitle} content={content} />
       );
     case 'video':
       return <VideoContent content={content} durationMinutes={durationMinutes} />;
@@ -181,12 +202,7 @@ function LessonContentRenderer({
         />
       );
     case 'goal':
-      return (
-        <GoalContent
-          content={content}
-          lessonTitle={lessonTitle}
-        />
-      );
+      return <GoalContent content={content} lessonTitle={lessonTitle} />;
     case 'quiz':
       return (
         <QuizContent
@@ -266,11 +282,7 @@ export default function ModuleViewLMS() {
   const { data: program, isLoading } = useProgram(activeTenantId || undefined, programId);
 
   // Get user's enrollment
-  const { data: myEnrollment } = useMyEnrollment(
-    activeTenantId || undefined,
-    programId,
-    user?.id
-  );
+  const { data: myEnrollment } = useMyEnrollment(activeTenantId || undefined, programId, user?.id);
 
   // Get progress data
   const { data: progressData, refetch: refetchProgress } = useLearnerProgress(
@@ -293,15 +305,17 @@ export default function ModuleViewLMS() {
   // User's enrollment role for visibility filtering (previewRole overrides for builder preview)
   const userRole = queryPreviewRole || (myEnrollment?.role as EnrollmentRole | undefined);
 
-
-  // Transform API data to ModuleData format
+  // Transform API data to ModuleData format (with drip scheduling + sequential locking)
   const modulesData: ModuleData[] = useMemo(() => {
     if (!program?.modules) return [];
 
-    // Create progress map
-    const lessonProgressMap = new Map<string, LessonProgressStatus>();
+    // Create progress map storing both status and completedAt
+    const lessonProgressMap = new Map<
+      string,
+      { status: LessonProgressStatus; completedAt: string | null }
+    >();
     progressData?.lessons?.forEach((lesson) => {
-      lessonProgressMap.set(lesson.id, lesson.status);
+      lessonProgressMap.set(lesson.id, { status: lesson.status, completedAt: lesson.completedAt });
     });
 
     let foundInProgress = false;
@@ -309,100 +323,201 @@ export default function ModuleViewLMS() {
     const isPreview = !!queryPreviewRole || !myEnrollment;
     const isSequential = !isPreview && program.config?.sequentialAccess !== false;
 
-    return program.modules
-      .filter((m) => m.depth === 0) // Only top-level modules
-      .sort((a, b) => a.order - b.order)
-      .map((module, index) => {
-        const isEvent = module.type === 'event';
-
-        // Events don't have lessons — they render event content directly
-        if (isEvent) {
-          return {
-            id: module.id,
-            number: index + 1,
-            title: module.title,
-            status: 'in-progress' as const,
-            lessons: [],
-            isEvent: true,
-            eventConfig: module.eventConfig || undefined,
-          };
-        }
-
-        const allLessons = (module.lessons || []).sort((a, b) => a.order - b.order);
-
-        // Filter lessons by role visibility
-        const lessons = allLessons.filter((l) => {
-          if (!userRole) return true; // Show all if no enrollment role (admin viewing)
-          const vis = l.visibleTo;
-          if (!vis) return true; // No visibility settings = visible to all
-          return vis[userRole] !== false;
-        });
-
-        const lessonsCompleted = lessons.filter(
-          (l) => lessonProgressMap.get(l.id) === 'completed'
-        ).length;
-        const totalLessons = lessons.length;
-
-        // Determine module status
-        let status: 'completed' | 'in-progress' | 'locked' = 'locked';
-        if (lessonsCompleted === totalLessons && totalLessons > 0) {
-          status = 'completed';
-        } else if (lessonsCompleted > 0) {
-          status = 'in-progress';
-          foundInProgress = true;
-        } else if (!foundInProgress && index === 0) {
-          status = 'in-progress';
-          foundInProgress = true;
-        } else if (!isSequential) {
-          status = 'in-progress';
-        } else {
-          // Sequential: check if previous modules are complete
-          const allPrevComplete = program.modules
-            .filter((m) => m.depth === 0 && m.order < module.order)
-            .every((m) => {
-              const prevLessons = m.lessons || [];
-              return prevLessons.every((l) => lessonProgressMap.get(l.id) === 'completed');
-            });
-
-          if (allPrevComplete && !foundInProgress) {
-            status = 'in-progress';
-            foundInProgress = true;
+    // Build drip context (null in preview mode — disables drip evaluation)
+    const dripCtx: DripContext | null =
+      !isPreview && myEnrollment
+        ? {
+            enrollmentDate: new Date(myEnrollment.enrolledAt || myEnrollment.createdAt),
+            now: new Date(),
+            programStartDate: program.startDate ? new Date(program.startDate) : null,
           }
-        }
+        : null;
 
+    const sortedModules = program.modules
+      .filter((m) => m.depth === 0) // Only top-level modules
+      .filter((m) => m.status === 'active') // Always hide draft modules (even in preview)
+      .sort((a, b) => a.order - b.order);
+
+    return sortedModules.map((module, index) => {
+      const isEvent = module.type === 'event';
+
+      // Events don't have lessons — they render event content directly
+      if (isEvent) {
         return {
           id: module.id,
           number: index + 1,
           title: module.title,
-          status,
-          lessons: lessons.map((l) => {
-            const rawContent = (l.content as LessonContent) || {};
-            const resolved = resolveContent(rawContent, userRole);
-            return {
-              id: l.id,
-              type: contentTypeToLessonType(l.contentType, resolved),
-              contentType: l.contentType,
-              title: l.title,
-              duration: l.durationMinutes || 15,
-              points: l.points,
-              completed: lessonProgressMap.get(l.id) === 'completed',
-              content: resolved,
-              approvalRequired: l.approvalRequired || 'none',
-              tasks: l.tasks || [],
-            };
-          }),
+          status: 'in-progress' as const,
+          lessons: [],
+          isEvent: true,
+          eventConfig: module.eventConfig || undefined,
+          dripLocked: false,
+          dripUnlockDate: null,
+          dripMessage: '',
+        };
+      }
+
+      const allLessons = (module.lessons || []).sort((a, b) => a.order - b.order);
+
+      // Filter lessons: hide draft lessons from non-preview users, then apply role visibility
+      const lessons = allLessons.filter((l) => {
+        // Always hide draft lessons (even in preview — preview only bypasses locking/drip)
+        if (l.status !== 'active') return false;
+        if (!userRole) return true; // Show all if no enrollment role (admin viewing)
+        const vis = l.visibleTo;
+        if (!vis) return true; // No visibility settings = visible to all
+        return vis[userRole] !== false;
+      });
+
+      const lessonsCompleted = lessons.filter(
+        (l) => lessonProgressMap.get(l.id)?.status === 'completed'
+      ).length;
+      const totalLessons = lessons.length;
+
+      // Determine module status (sequential locking)
+      let status: 'completed' | 'in-progress' | 'locked' = 'locked';
+      if (lessonsCompleted === totalLessons && totalLessons > 0) {
+        status = 'completed';
+      } else if (lessonsCompleted > 0) {
+        status = 'in-progress';
+        foundInProgress = true;
+      } else if (!foundInProgress && index === 0) {
+        status = 'in-progress';
+        foundInProgress = true;
+      } else if (!isSequential) {
+        status = 'in-progress';
+      } else {
+        // Sequential: check if previous modules are complete (only consider active content)
+        const allPrevComplete = sortedModules
+          .filter((m) => m.order < module.order)
+          .every((m) => {
+            const prevLessons = (m.lessons || []).filter((l) => l.status === 'active');
+            return prevLessons.every((l) => lessonProgressMap.get(l.id)?.status === 'completed');
+          });
+
+        if (allPrevComplete && !foundInProgress) {
+          status = 'in-progress';
+          foundInProgress = true;
+        }
+      }
+
+      // --- Drip scheduling layer (on top of sequential locking) ---
+      let dripLocked = false;
+      let dripUnlockDate: Date | null = null;
+      let dripMessage = '';
+
+      if (dripCtx && module.dripType !== 'immediate') {
+        // Find previous module's latest lesson completedAt
+        let prevModuleCompletedAt: Date | null = null;
+        if (index > 0) {
+          const prevModule = sortedModules[index - 1];
+          const prevLessons = (prevModule.lessons || []).filter((l) => l.status === 'active');
+          const completedDates = prevLessons
+            .map((l) => lessonProgressMap.get(l.id)?.completedAt)
+            .filter((d): d is string => !!d)
+            .map((d) => new Date(d));
+          if (completedDates.length === prevLessons.length && completedDates.length > 0) {
+            prevModuleCompletedAt = new Date(Math.max(...completedDates.map((d) => d.getTime())));
+          }
+        }
+
+        const dripResult = evaluateModuleDrip(
+          { dripType: module.dripType, dripValue: module.dripValue, dripDate: module.dripDate },
+          dripCtx,
+          prevModuleCompletedAt
+        );
+
+        if (!dripResult.available) {
+          dripLocked = true;
+          dripUnlockDate = dripResult.unlockDate;
+          dripMessage = formatDripMessage(dripResult.unlockDate, dripCtx.now);
+          status = 'locked';
+        }
+      }
+
+      // --- Build lesson data with drip evaluation ---
+      const lessonData = lessons.map((l, lessonIdx) => {
+        const rawContent = (l.content as LessonContent) || {};
+        const resolved = resolveContent(rawContent, userRole);
+
+        let lessonDripLocked = false;
+        let lessonDripMessage = '';
+
+        // Only evaluate lesson drip if module is accessible and not in preview
+        if (dripCtx && !dripLocked && status !== 'locked' && l.dripType !== 'immediate') {
+          // For sequential: check if previous lesson is completed
+          const prevLessonCompletedAt =
+            lessonIdx > 0
+              ? (() => {
+                  const prevLesson = lessons[lessonIdx - 1];
+                  const prog = lessonProgressMap.get(prevLesson.id);
+                  return prog?.completedAt ? new Date(prog.completedAt) : null;
+                })()
+              : new Date(0); // First lesson: pass a date so sequential doesn't block it
+
+          const lessonDripResult = evaluateLessonDrip(
+            { dripType: l.dripType, dripValue: l.dripValue, dripDate: l.dripDate },
+            dripCtx,
+            dripUnlockDate,
+            prevLessonCompletedAt
+          );
+
+          if (!lessonDripResult.available) {
+            lessonDripLocked = true;
+            lessonDripMessage = formatDripMessage(lessonDripResult.unlockDate, dripCtx.now);
+          }
+        }
+
+        return {
+          id: l.id,
+          type: contentTypeToLessonType(l.contentType, resolved),
+          contentType: l.contentType,
+          title: l.title,
+          duration: l.durationMinutes || 15,
+          points: l.points,
+          completed: lessonProgressMap.get(l.id)?.status === 'completed',
+          content: resolved,
+          approvalRequired: l.approvalRequired || 'none',
+          tasks: l.tasks || [],
+          dripLocked: lessonDripLocked,
+          dripMessage: lessonDripMessage,
         };
       });
-  }, [program?.modules, program?.config?.sequentialAccess, progressData?.lessons, userRole, myEnrollment, queryPreviewRole]);
+
+      return {
+        id: module.id,
+        number: index + 1,
+        title: module.title,
+        status,
+        lessons: lessonData,
+        dripLocked,
+        dripUnlockDate,
+        dripMessage,
+      };
+    });
+  }, [
+    program?.modules,
+    program?.config?.sequentialAccess,
+    program?.startDate,
+    progressData?.lessons,
+    userRole,
+    myEnrollment,
+    queryPreviewRole,
+  ]);
 
   // Find the first incomplete lesson and set initial state (only once)
   useEffect(() => {
     if (modulesData.length > 0 && !initializedRef.current) {
       initializedRef.current = true;
 
-      // Find the first in-progress module
-      const inProgressIndex = modulesData.findIndex((m) => m.status === 'in-progress');
-      const moduleIdx = inProgressIndex >= 0 ? inProgressIndex : 0;
+      // Find the first in-progress module that has lessons
+      const inProgressIndex = modulesData.findIndex(
+        (m) => m.status === 'in-progress' && (m.lessons.length > 0 || m.isEvent)
+      );
+      // Fallback: first module with lessons (skip empty modules whose lessons were all filtered)
+      const firstWithLessons = modulesData.findIndex((m) => m.lessons.length > 0 || m.isEvent);
+      const moduleIdx =
+        inProgressIndex >= 0 ? inProgressIndex : firstWithLessons >= 0 ? firstWithLessons : 0;
       const module = modulesData[moduleIdx];
 
       // Find the first incomplete lesson in that module
@@ -429,20 +544,26 @@ export default function ModuleViewLMS() {
   );
   const createDiscussionMutation = useCreateDiscussionPost(activeTenantId || undefined, programId);
 
-  const handleSubmitDiscussion = useCallback((content: string) => {
-    if (!currentLesson) return;
-    createDiscussionMutation.mutate({ lessonId: currentLesson.id, content });
-  }, [currentLesson, createDiscussionMutation]);
+  const handleSubmitDiscussion = useCallback(
+    (content: string) => {
+      if (!currentLesson) return;
+      createDiscussionMutation.mutate({ lessonId: currentLesson.id, content });
+    },
+    [currentLesson, createDiscussionMutation]
+  );
 
-  const handleCompleteTask = useCallback(async (taskId: string) => {
-    try {
-      await completeTaskMutation.mutateAsync({ taskId });
-      await refetchTaskProgress();
-      await refetchProgress();
-    } catch {
-      // Error handled by mutation state
-    }
-  }, [completeTaskMutation, refetchTaskProgress, refetchProgress]);
+  const handleCompleteTask = useCallback(
+    async (taskId: string) => {
+      try {
+        await completeTaskMutation.mutateAsync({ taskId });
+        await refetchTaskProgress();
+        await refetchProgress();
+      } catch {
+        // Error handled by mutation state
+      }
+    },
+    [completeTaskMutation, refetchTaskProgress, refetchProgress]
+  );
 
   // Close sidebar on navigation (mobile)
   useEffect(() => {
@@ -461,22 +582,35 @@ export default function ModuleViewLMS() {
     });
   }, []);
 
-  const selectLesson = useCallback((moduleIndex: number, lessonIndex: number) => {
-    const module = modulesData[moduleIndex];
-    if (!module || module.status === 'locked') return;
-    setCurrentModuleIndex(moduleIndex);
-    setCurrentLessonIndex(lessonIndex);
-    setExpandedModules((prev) => new Set([...prev, module.id]));
-  }, [modulesData]);
+  const selectLesson = useCallback(
+    (moduleIndex: number, lessonIndex: number) => {
+      const module = modulesData[moduleIndex];
+      if (!module || module.status === 'locked') return;
+      const lesson = module.lessons[lessonIndex];
+      if (lesson?.dripLocked) return;
+      setCurrentModuleIndex(moduleIndex);
+      setCurrentLessonIndex(lessonIndex);
+      setExpandedModules((prev) => new Set([...prev, module.id]));
+    },
+    [modulesData]
+  );
 
   const goToPrevious = useCallback(() => {
     if (currentLessonIndex > 0) {
       setCurrentLessonIndex(currentLessonIndex - 1);
-    } else if (currentModuleIndex > 0) {
-      const prevModule = modulesData[currentModuleIndex - 1];
-      if (prevModule && prevModule.status !== 'locked') {
-        setCurrentModuleIndex(currentModuleIndex - 1);
-        setCurrentLessonIndex(prevModule.lessons.length - 1);
+    } else {
+      // Find previous module that has content (skip empty modules)
+      for (let i = currentModuleIndex - 1; i >= 0; i--) {
+        const prevModule = modulesData[i];
+        if (
+          prevModule &&
+          prevModule.status !== 'locked' &&
+          (prevModule.lessons.length > 0 || prevModule.isEvent)
+        ) {
+          setCurrentModuleIndex(i);
+          setCurrentLessonIndex(Math.max(0, prevModule.lessons.length - 1));
+          break;
+        }
       }
     }
   }, [currentLessonIndex, currentModuleIndex, modulesData]);
@@ -484,12 +618,23 @@ export default function ModuleViewLMS() {
   const goToNext = useCallback(() => {
     if (!currentModule) return;
     if (currentLessonIndex < currentModule.lessons.length - 1) {
-      setCurrentLessonIndex(currentLessonIndex + 1);
-    } else if (currentModuleIndex < modulesData.length - 1) {
-      const nextModule = modulesData[currentModuleIndex + 1];
-      if (nextModule && nextModule.status !== 'locked') {
-        setCurrentModuleIndex(currentModuleIndex + 1);
-        setCurrentLessonIndex(0);
+      const nextLesson = currentModule.lessons[currentLessonIndex + 1];
+      if (!nextLesson?.dripLocked) {
+        setCurrentLessonIndex(currentLessonIndex + 1);
+      }
+    } else {
+      // Find next module that has content (skip empty modules)
+      for (let i = currentModuleIndex + 1; i < modulesData.length; i++) {
+        const nextModule = modulesData[i];
+        if (
+          nextModule &&
+          nextModule.status !== 'locked' &&
+          (nextModule.lessons.length > 0 || nextModule.isEvent)
+        ) {
+          setCurrentModuleIndex(i);
+          setCurrentLessonIndex(0);
+          break;
+        }
       }
     }
   }, [currentLessonIndex, currentModule, currentModuleIndex, modulesData]);
@@ -554,7 +699,10 @@ export default function ModuleViewLMS() {
   if (isAgencyUser && tenantsLoading) {
     return (
       <div className="flex h-screen items-center justify-center" role="status">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent" aria-hidden="true"></div>
+        <div
+          className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"
+          aria-hidden="true"
+        ></div>
         <span className="sr-only">Loading...</span>
       </div>
     );
@@ -563,7 +711,10 @@ export default function ModuleViewLMS() {
   if (!activeTenantId || isLoading) {
     return (
       <div className="flex h-screen items-center justify-center" role="status">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent" aria-hidden="true"></div>
+        <div
+          className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"
+          aria-hidden="true"
+        ></div>
         <span className="sr-only">Loading lesson content...</span>
       </div>
     );
@@ -600,8 +751,19 @@ export default function ModuleViewLMS() {
   const isEventView = currentModule.isEvent;
   const hasTasks = currentLesson?.tasks && currentLesson.tasks.length > 0;
 
-  // Safety check: non-event modules need a current lesson
+  // Safety check: non-event modules need a current lesson — auto-advance to next module with content
   if (!isEventView && !currentLesson) {
+    const nextModuleWithContent = modulesData.findIndex(
+      (m, i) =>
+        i > currentModuleIndex && (m.lessons.length > 0 || m.isEvent) && m.status !== 'locked'
+    );
+    if (nextModuleWithContent >= 0) {
+      // Auto-advance in next tick to avoid render-during-render
+      setTimeout(() => {
+        setCurrentModuleIndex(nextModuleWithContent);
+        setCurrentLessonIndex(0);
+      }, 0);
+    }
     return (
       <div className="flex h-screen items-center justify-center" role="status">
         <div className="text-center">
@@ -670,7 +832,8 @@ export default function ModuleViewLMS() {
                   <div className="text-xs text-blue-600 font-medium mb-0.5">Program Event</div>
                 ) : (
                   <div className="text-xs text-muted-foreground mb-0.5">
-                    Module {currentModule?.number} &bull; Lesson {currentLessonIndex + 1} of {currentModule?.lessons.length}
+                    Module {currentModule?.number} &bull; Lesson {currentLessonIndex + 1} of{' '}
+                    {currentModule?.lessons.length}
                   </div>
                 )}
                 <h1 className="text-sm sm:text-base font-semibold text-sidebar-foreground truncate">
@@ -686,8 +849,13 @@ export default function ModuleViewLMS() {
                   role="status"
                   aria-label={`${currentLesson?.points} points available for this lesson`}
                 >
-                  <Award className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-accent-foreground" aria-hidden="true" />
-                  <span className="text-xs sm:text-sm font-medium text-accent-foreground">{currentLesson?.points} points</span>
+                  <Award
+                    className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-accent-foreground"
+                    aria-hidden="true"
+                  />
+                  <span className="text-xs sm:text-sm font-medium text-accent-foreground">
+                    {currentLesson?.points} points
+                  </span>
                 </div>
 
                 {/* Completed Badge */}
@@ -711,10 +879,7 @@ export default function ModuleViewLMS() {
           <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
             {/* Event Content */}
             {isEventView && currentModule.eventConfig && (
-              <EventContent
-                title={currentModule.title}
-                eventConfig={currentModule.eventConfig}
-              />
+              <EventContent title={currentModule.title} eventConfig={currentModule.eventConfig} />
             )}
 
             {/* Lesson Content */}
@@ -754,13 +919,20 @@ export default function ModuleViewLMS() {
             {!isEventView && !hasTasks && currentLesson?.content?.taskTitle && (
               <div className="mt-8 p-5 sm:p-6 bg-gradient-to-br from-accent/5 to-accent/10 border border-accent/30 rounded-xl">
                 <div className="flex items-start gap-3 sm:gap-4">
-                  <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center flex-shrink-0" aria-hidden="true">
+                  <div
+                    className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center flex-shrink-0"
+                    aria-hidden="true"
+                  >
                     <ClipboardCheck className="w-5 h-5 text-accent" />
                   </div>
                   <div className="flex-1">
-                    <h4 className="text-sidebar-foreground font-semibold mb-1">{currentLesson.content.taskTitle}</h4>
+                    <h4 className="text-sidebar-foreground font-semibold mb-1">
+                      {currentLesson.content.taskTitle}
+                    </h4>
                     {currentLesson.content.taskDescription && (
-                      <p className="text-muted-foreground text-sm">{currentLesson.content.taskDescription}</p>
+                      <p className="text-muted-foreground text-sm">
+                        {currentLesson.content.taskDescription}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -770,7 +942,9 @@ export default function ModuleViewLMS() {
             {/* Resources Section */}
             {currentLesson?.content?.resources && currentLesson.content.resources.length > 0 && (
               <div className="mt-8">
-                <h4 className="text-base font-semibold text-sidebar-foreground mb-3">Resources &amp; Attachments</h4>
+                <h4 className="text-base font-semibold text-sidebar-foreground mb-3">
+                  Resources &amp; Attachments
+                </h4>
                 <div className="space-y-2">
                   {currentLesson.content.resources.map((resource, index) => {
                     // Video resources render as inline embeds, not download links
@@ -778,7 +952,10 @@ export default function ModuleViewLMS() {
                       const embedUrl = getEmbedUrl(resource.url);
                       const provider = getVideoProvider(resource.url);
                       return (
-                        <div key={index} className="rounded-xl overflow-hidden border border-border">
+                        <div
+                          key={index}
+                          className="rounded-xl overflow-hidden border border-border"
+                        >
                           {embedUrl && provider ? (
                             <>
                               <div className="aspect-video bg-black">
@@ -798,7 +975,9 @@ export default function ModuleViewLMS() {
                                   <p className="text-sm font-medium text-sidebar-foreground truncate">
                                     {resource.title || 'Video'}
                                   </p>
-                                  <p className="text-xs text-muted-foreground capitalize">{provider}</p>
+                                  <p className="text-xs text-muted-foreground capitalize">
+                                    {provider}
+                                  </p>
                                 </div>
                               </div>
                             </>
@@ -835,14 +1014,18 @@ export default function ModuleViewLMS() {
                         rel="noopener noreferrer"
                         className="flex items-center gap-3 p-3 sm:p-4 bg-card border border-border rounded-xl hover:border-accent/30 hover:shadow-sm transition-all group"
                       >
-                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${colorClass}`}>
+                        <div
+                          className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${colorClass}`}
+                        >
                           <ResourceIcon className="w-4 h-4" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-sidebar-foreground truncate group-hover:text-accent transition-colors">
                             {resource.title || resource.url}
                           </p>
-                          <p className="text-xs text-muted-foreground capitalize">{resource.type || 'link'}</p>
+                          <p className="text-xs text-muted-foreground capitalize">
+                            {resource.type || 'link'}
+                          </p>
                         </div>
                         <ExternalLink className="w-4 h-4 text-muted-foreground group-hover:text-accent transition-colors flex-shrink-0" />
                       </a>
@@ -865,13 +1048,17 @@ export default function ModuleViewLMS() {
                 className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 text-sm text-muted-foreground hover:text-sidebar-foreground transition-colors disabled:opacity-50 disabled:cursor-not-allowed group focus:outline-none focus:text-sidebar-foreground"
                 aria-label="Go to previous lesson"
               >
-                <ChevronLeft className="w-4 h-4 transition-transform group-hover:-translate-x-1" aria-hidden="true" />
+                <ChevronLeft
+                  className="w-4 h-4 transition-transform group-hover:-translate-x-1"
+                  aria-hidden="true"
+                />
                 <span className="hidden sm:inline">Previous</span>
               </button>
 
               {/* Lesson Counter */}
               <div className="text-xs sm:text-sm text-muted-foreground" role="status">
-                <span className="hidden sm:inline">Lesson </span>{currentLessonIndex + 1} of {currentModule?.lessons.length}
+                <span className="hidden sm:inline">Lesson </span>
+                {currentLessonIndex + 1} of {currentModule?.lessons.length}
               </div>
 
               {/* Next / Mark Complete Button */}
@@ -883,7 +1070,10 @@ export default function ModuleViewLMS() {
                   aria-label="Go to next lesson"
                 >
                   <span>Next</span>
-                  <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+                  <ChevronRight
+                    className="w-4 h-4 transition-transform group-hover:translate-x-1"
+                    aria-hidden="true"
+                  />
                 </button>
               ) : hasTasks ? (
                 <div className="flex items-center gap-1.5 px-3 sm:px-5 py-2 sm:py-2.5 text-sm text-muted-foreground">
@@ -897,7 +1087,10 @@ export default function ModuleViewLMS() {
                 >
                   <span className="hidden sm:inline">Mark Complete &amp; Continue</span>
                   <span className="sm:hidden">Complete</span>
-                  <ChevronRight className="w-4 h-4 transition-transform group-hover:translate-x-1" aria-hidden="true" />
+                  <ChevronRight
+                    className="w-4 h-4 transition-transform group-hover:translate-x-1"
+                    aria-hidden="true"
+                  />
                 </button>
               )}
             </nav>

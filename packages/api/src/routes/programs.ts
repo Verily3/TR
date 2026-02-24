@@ -118,6 +118,7 @@ const createModuleSchema = z.object({
     .default('immediate'),
   dripValue: z.number().int().optional(),
   dripDate: z.string().datetime().optional(),
+  status: z.enum(['draft', 'active']).optional(),
 });
 
 const updateModuleSchema = createModuleSchema.partial();
@@ -145,6 +146,7 @@ const createLessonSchema = z.object({
     })
     .optional(),
   approvalRequired: z.enum(['none', 'mentor', 'facilitator', 'both']).default('none'),
+  status: z.enum(['draft', 'active']).optional(),
 });
 
 const updateLessonSchema = createLessonSchema.partial();
@@ -507,10 +509,20 @@ programsRoutes.get(
       .from(enrollments)
       .where(eq(enrollments.programId, programId));
 
+    // Filter draft content for non-builder users
+    const user = c.get('user');
+    const isBuilder = user.permissions?.includes(PERMISSIONS.PROGRAMS_MANAGE);
+    const visibleModules = isBuilder
+      ? programModules
+      : programModules.filter((m) => m.status === 'active');
+    const visibleLessons = isBuilder
+      ? moduleLessons
+      : moduleLessons.filter((l) => l.status === 'active');
+
     // Organize lessons by module, with tasks nested in lessons
-    const modulesWithLessons = programModules.map((mod) => ({
+    const modulesWithLessons = visibleModules.map((mod) => ({
       ...mod,
-      lessons: moduleLessons
+      lessons: visibleLessons
         .filter((l) => l.moduleId === mod.id)
         .map((l) => ({
           ...l,
@@ -976,7 +988,7 @@ programsRoutes.post(
           dripType: mod.dripType,
           dripValue: mod.dripValue,
           dripDate: mod.dripDate,
-          status: 'draft',
+          status: mod.status || 'active',
         })
         .returning();
 
@@ -1005,7 +1017,7 @@ programsRoutes.post(
             dripDate: lesson.dripDate,
             visibleTo: lesson.visibleTo,
             approvalRequired: lesson.approvalRequired,
-            status: 'draft',
+            status: lesson.status || 'active',
           })
           .returning();
 
@@ -1115,6 +1127,7 @@ programsRoutes.post(
         dripType: body.dripType,
         dripValue: body.dripValue,
         dripDate: body.dripDate ? new Date(body.dripDate) : null,
+        status: body.status || 'active',
       })
       .returning();
 
@@ -1291,6 +1304,7 @@ programsRoutes.post(
         dripDate: body.dripDate ? new Date(body.dripDate) : null,
         visibleTo: body.visibleTo || { learner: true, mentor: true, facilitator: true },
         approvalRequired: body.approvalRequired,
+        status: body.status || 'active',
       })
       .returning();
 

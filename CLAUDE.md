@@ -258,10 +258,21 @@ Located in `packages/web/src/components/programs/`:
 >
 > "Reading", "Video", and "Key Concepts" all create a `lesson` DB record. "Most Useful Idea" and "How You Used This Idea" both create `text_form`. "Assignment" and "Food for Thought" both create `assignment`. The add-menu label becomes the lesson title.
 
+**Content Visibility**:
+
+- Module and lesson `status` field: `'draft'` (hidden) or `'active'` (visible)
+- DB default is `'draft'`, but all API create handlers set `'active'` by default
+- API-level filtering: non-builder users (no `PROGRAMS_MANAGE` permission) only receive `active` content
+- Frontend filtering: learn page always filters drafts (even in preview mode); preview only bypasses sequential + drip locking
+- Toggle UI in CurriculumTab: Eye/EyeOff icons per module and lesson
+
 **Drip Scheduling**:
 
 - Module-level: `immediate`, `days_after_enrollment`, `days_after_previous`, `on_date`
 - Lesson-level: `immediate`, `sequential`, `days_after_module_start`, `on_date`
+- Enforcement: `packages/web/src/lib/drip-utils.ts` — pure evaluation functions called in learn page `useMemo`
+- LearnerSidebar shows amber lock indicators with unlock date messages
+- Skipped in preview mode (builders need to navigate freely)
 
 **Goal Responses** (for `goal` content type):
 
@@ -455,14 +466,16 @@ NEXT_PUBLIC_API_URL=http://localhost:3002
     - Left sidebar (w-80) with course outline, expandable modules/lessons (max-h-[2000px] to accommodate long lesson lists)
     - 6 DB content types rendered: reading/video/key_concepts (lesson), submission (text_form), assignment/food_for_thought, goal, quiz, survey
     - Video resources render as inline iframes (YouTube/Vimeo); other resources open as external links
-    - Preview mode (`?previewRole=learner`) bypasses sequential module locking
+    - Preview mode (`?previewRole=learner`) bypasses sequential + drip locking but respects draft visibility
+    - Content visibility: draft modules/lessons always hidden from learner view; new content defaults to active
     - Top navigation bar (breadcrumb, points badge, completed badge)
     - Bottom navigation bar (Previous/Next, lesson counter)
     - Completion modal for marking lessons done
 - **Program Builder Features:**
   - 6 DB content types (`lesson`, `quiz`, `assignment`, `text_form`, `goal`, `survey`); 11-entry grouped add menu (see Programs Module Architecture above)
   - Video resources in builder show inline iframe preview (YouTube/Vimeo via `getEmbedUrl`)
-  - Drip scheduling (module and lesson level)
+  - Drip scheduling (module and lesson level) — enforced on learner LMS view via `drip-utils.ts`
+  - Content visibility toggles (draft/active) — API-level + frontend filtering
   - Goal responses and reviews API
   - Progress tracking with completion marking
   - Module/lesson CRUD, reorder, duplicate
@@ -652,6 +665,18 @@ NEXT_PUBLIC_API_URL=http://localhost:3002
   - `packages/web/src/components/ui/rich-text-editor.tsx` — Tiptap with Bold, Italic, Underline, Strike, Heading, BulletList, OrderedList, Code Block, HR, inline link popover
   - Used for: lesson `introduction`, `mainContent`, `keyTakeaway`; assignment `introduction` + `instructions`; goal `introduction`; text_form `introduction`
   - Learner side: `isHtmlContent()` guard + `dangerouslySetInnerHTML` with Tailwind prose classes in ReadingContent, AssignmentContent, GoalContent, SubmissionContent
+
+- **Content Visibility & Drip Scheduling Enforcement (2026-02-24):**
+  - Visibility toggles: `status` field on modules/lessons (`draft`/`active`); Zod schemas updated in all 4 create schemas
+  - API-level draft filtering: `programs.ts` GET /:programId + `progress.ts` GET /progress — non-builder users only see `active` content
+  - Drip scheduling enforcement: `packages/web/src/lib/drip-utils.ts` — pure evaluator functions (`evaluateModuleDrip`, `evaluateLessonDrip`, `formatDripMessage`)
+  - LearnerSidebar: amber lock indicators with Clock icon + unlock date messages for drip-locked content
+  - Learn page: drip evaluation integrated into useMemo; navigation guards block drip-locked lessons
+  - Preview mode respects draft visibility (hidden content stays hidden) but bypasses sequential + drip locking
+  - New modules/lessons default to `status: 'active'` in all API create handlers (programs.ts + agencies.ts)
+  - Deep-copy operations (duplicate, use-template, assign-to-client) preserve source status instead of hardcoding `draft`
+  - Learn page navigation: initialization skips empty modules; goToNext/goToPrevious skip modules with no visible lessons
+  - LearnerSidebar "Back to Program" navigates to program detail page instead of programs list
 
 ### In Progress
 

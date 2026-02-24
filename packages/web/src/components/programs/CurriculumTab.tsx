@@ -18,6 +18,8 @@ import {
   Save,
   Trash2,
   Eye,
+  EyeOff,
+  Clock,
   Sparkles,
   Info,
   GraduationCap,
@@ -321,6 +323,7 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
   const [showAddLessonMenu, setShowAddLessonMenu] = useState(false);
   const [addLessonMenuPos, setAddLessonMenuPos] = useState({ top: 0, left: 0 });
   const addLessonBtnRef = useRef<HTMLButtonElement>(null);
+  const selectedLessonRef = useRef<HTMLDivElement>(null);
   const [isCreatingLesson, setIsCreatingLesson] = useState(false);
 
   // Mobile sidebar & action bar
@@ -402,6 +405,17 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
       setExpandedModules(expanded);
     }
   }, [program?.modules]);
+
+  // Scroll selected lesson into view in the tree sidebar
+  useEffect(() => {
+    if (selectedLesson && selectedLessonRef.current) {
+      // Small delay to let the module expand animation complete
+      const timer = setTimeout(() => {
+        selectedLessonRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [selectedLesson?.id]);
 
   // Sync selected lesson with program data after mutations
   useEffect(() => {
@@ -535,6 +549,7 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
         setSelectedLesson(lesson);
         setSelectedLessonModuleId(moduleId);
         setSelectedModuleId(null);
+        setExpandedModules((prev) => ({ ...prev, [moduleId]: true }));
         setSidebarOpen(false);
       });
     };
@@ -779,6 +794,67 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
       ? `/api/agencies/me/programs/${program.id}/modules/${moduleId}/lessons/reorder`
       : `/api/tenants/${tenantId}/programs/${program.id}/modules/${moduleId}/lessons/reorder`;
     await doReorder(basePath, items, 'lessons');
+  };
+
+  // ---- Availability & Due Date handlers ----
+
+  const handleToggleModuleAvailability = (moduleId: string, currentStatus: string) => {
+    const newStatus = currentStatus === 'active' ? 'draft' : 'active';
+    updateModule.mutate(
+      { moduleId, input: { status: newStatus as 'draft' | 'active' } },
+      { onError: () => setErrorMessage('Failed to update module visibility') }
+    );
+  };
+
+  const handleToggleLessonAvailability = async (
+    e: React.MouseEvent,
+    lessonId: string,
+    moduleId: string,
+    currentStatus: string
+  ) => {
+    e.stopPropagation();
+    const newStatus = currentStatus === 'active' ? 'draft' : 'active';
+    const basePath = isAgencyContext
+      ? `/api/agencies/me/programs/${program.id}/modules/${moduleId}/lessons/${lessonId}`
+      : `/api/tenants/${tenantId}/programs/${program.id}/modules/${moduleId}/lessons/${lessonId}`;
+    try {
+      await api.put(basePath, { status: newStatus });
+      queryClient.invalidateQueries({
+        queryKey: isAgencyContext
+          ? ['agencyProgram', program.id]
+          : ['program', tenantId, program.id],
+      });
+    } catch {
+      setErrorMessage('Failed to update lesson availability');
+    }
+  };
+
+  const handleLessonDueDayBlur = async (lessonId: string, moduleId: string, value: string) => {
+    const days = value.trim() === '' ? null : parseInt(value, 10);
+    if (days !== null && (isNaN(days) || days < 0)) return;
+    const basePath = isAgencyContext
+      ? `/api/agencies/me/programs/${program.id}/modules/${moduleId}/lessons/${lessonId}`
+      : `/api/tenants/${tenantId}/programs/${program.id}/modules/${moduleId}/lessons/${lessonId}`;
+    try {
+      await api.put(basePath, {
+        dripType: days ? 'days_after_module_start' : 'immediate',
+        dripValue: days ?? undefined,
+      });
+      queryClient.invalidateQueries({
+        queryKey: isAgencyContext
+          ? ['agencyProgram', program.id]
+          : ['program', tenantId, program.id],
+      });
+    } catch {
+      setErrorMessage('Failed to update lesson due date');
+    }
+  };
+
+  const computeDueDate = (daysOffset: number): string | null => {
+    if (!program.startDate) return null;
+    const date = new Date(program.startDate);
+    date.setDate(date.getDate() + daysOffset);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
   // ---- Role-specific content helpers ----
@@ -1583,15 +1659,18 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               );
               const modPoints = (mod.lessons || []).reduce((s, l) => s + (l.points || 0), 0);
               const moduleNum = isEvent ? 0 : moduleItems.findIndex((m) => m.id === mod.id) + 1;
+              const isModHidden = mod.status !== 'active';
 
               return (
                 <div
                   key={mod.id}
-                  className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-gray-300 transition-colors group/card"
+                  className={`bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-gray-300 transition-all group/card ${
+                    isModHidden ? 'opacity-50' : ''
+                  }`}
                 >
                   {/* Module Header */}
                   <div
-                    className={`flex items-center gap-3 px-4 py-3.5 ${
+                    className={`flex items-center gap-3 px-4 py-3.5 bg-gray-50/80 ${
                       isEvent ? 'border-l-[3px] border-blue-400' : 'border-l-[3px] border-red-500'
                     }`}
                   >
@@ -1629,6 +1708,22 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                         )}
                       </div>
                     </button>
+
+                    {/* Availability toggle */}
+                    <div
+                      className="flex items-center gap-1.5 shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span
+                        className={`text-[10px] font-medium ${isModHidden ? 'text-gray-400' : 'text-green-600'}`}
+                      >
+                        {isModHidden ? 'Hidden' : 'Visible'}
+                      </span>
+                      <ToggleSwitch
+                        enabled={!isModHidden}
+                        onChange={() => handleToggleModuleAvailability(mod.id, mod.status)}
+                      />
+                    </div>
 
                     {/* Reorder + Action buttons */}
                     <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover/card:opacity-100 transition-opacity">
@@ -1672,28 +1767,89 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                       {sortedLessonsForMod.slice(0, 5).map((lesson, lessonIdx) => {
                         const display = getLessonDisplay(lesson);
                         const TypeIcon = display.icon;
+                        const isLessonHidden = lesson.status !== 'active';
+                        const dueDays = lesson.dripValue;
+                        const dueDate = dueDays ? computeDueDate(dueDays) : null;
                         return (
                           <div
                             key={lesson.id}
-                            className="flex items-center group/lesson hover:bg-gray-50 transition-colors"
+                            className={`flex items-center group/lesson hover:bg-gray-50/80 transition-all ${
+                              isLessonHidden ? 'opacity-50' : ''
+                            }`}
                           >
-                            <button
-                              onClick={() => handleSelectLesson(lesson, mod.id)}
-                              className="flex-1 flex items-center gap-2.5 pl-14 pr-2 py-2 text-left min-w-0"
-                            >
+                            <div className="flex-1 flex items-center gap-2.5 pl-14 pr-2 py-2 min-w-0">
                               <TypeIcon className={`w-3.5 h-3.5 shrink-0 ${display.color}`} />
-                              <span className="text-sm text-gray-700 truncate flex-1">
+                              <button
+                                onClick={() => handleSelectLesson(lesson, mod.id)}
+                                className="text-sm text-gray-700 truncate text-left hover:text-red-600 hover:underline transition-colors"
+                              >
                                 {lesson.title}
-                              </span>
-                              {lesson.status === 'draft' && (
+                              </button>
+                              {isLessonHidden && (
                                 <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full shrink-0">
-                                  Draft
+                                  Hidden
                                 </span>
                               )}
-                              <span className="text-xs text-gray-400 shrink-0">
-                                {lesson.points} pts
-                              </span>
-                            </button>
+                            </div>
+                            {/* Due date input */}
+                            <div
+                              className="flex items-center gap-1 shrink-0"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Clock className="w-3 h-3 text-gray-300" />
+                              <input
+                                type="number"
+                                min={0}
+                                defaultValue={dueDays ?? ''}
+                                placeholder="Day"
+                                onBlur={(e) =>
+                                  handleLessonDueDayBlur(lesson.id, mod.id, e.target.value)
+                                }
+                                className="w-14 px-1.5 py-0.5 text-xs text-gray-600 border border-gray-200 rounded focus:border-red-400 focus:ring-1 focus:ring-red-400 outline-none text-center bg-gray-50"
+                                title="Due day (from program start)"
+                              />
+                              {dueDate && (
+                                <span className="text-[10px] text-gray-400 whitespace-nowrap">
+                                  {dueDate}
+                                </span>
+                              )}
+                            </div>
+                            {/* Availability toggle */}
+                            <div
+                              className="flex items-center shrink-0 ml-2"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                onClick={(e) =>
+                                  handleToggleLessonAvailability(
+                                    e,
+                                    lesson.id,
+                                    mod.id,
+                                    lesson.status
+                                  )
+                                }
+                                className={`p-1 rounded transition-colors ${
+                                  isLessonHidden
+                                    ? 'text-gray-300 hover:text-gray-500'
+                                    : 'text-green-500 hover:text-green-700'
+                                }`}
+                                title={
+                                  isLessonHidden
+                                    ? 'Hidden from learners — click to show'
+                                    : 'Visible to learners — click to hide'
+                                }
+                              >
+                                {isLessonHidden ? (
+                                  <EyeOff className="w-3.5 h-3.5" />
+                                ) : (
+                                  <Eye className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
+                            {/* Points */}
+                            <span className="text-xs text-gray-400 shrink-0 ml-1 mr-1">
+                              {lesson.points} pts
+                            </span>
                             {/* Lesson reorder buttons */}
                             <div className="flex items-center gap-0.5 pr-4 opacity-0 group-hover/lesson:opacity-100 transition-opacity">
                               <button
@@ -1988,8 +2144,10 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               <div key={mod.id} className="border-l-[3px] border-red-500">
                 {/* Module Header */}
                 <div
-                  className={`group/mod flex items-center gap-2 px-3 py-3 bg-gray-50/80 transition-colors cursor-pointer ${
-                    isModSelected ? 'bg-red-50' : 'hover:bg-gray-100/80'
+                  className={`group/mod flex items-center gap-2 px-3 py-3 transition-colors cursor-pointer ${
+                    isModSelected
+                      ? 'bg-red-50/80 border-b border-red-100'
+                      : 'bg-gray-100/90 hover:bg-gray-100 border-b border-gray-200/60'
                   }`}
                 >
                   <span
@@ -2071,8 +2229,11 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                       return (
                         <div
                           key={lesson.id}
-                          className={`group/lesson flex items-center gap-2.5 pl-12 pr-3 py-2 transition-colors ${
-                            isLessonSelected ? 'bg-red-50' : 'hover:bg-gray-50'
+                          ref={isLessonSelected ? selectedLessonRef : undefined}
+                          className={`group/lesson flex items-center gap-2.5 pr-3 py-2 transition-colors ${
+                            isLessonSelected
+                              ? 'bg-red-50 border-l-2 border-l-red-500 pl-[46px]'
+                              : 'hover:bg-gray-50/80 border-l-2 border-l-transparent pl-[46px]'
                           }`}
                         >
                           <button
@@ -2089,13 +2250,14 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                                 >
                                   {lesson.title}
                                 </p>
-                                {lesson.status === 'draft' && (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full shrink-0">
-                                    Draft
-                                  </span>
+                                {lesson.status !== 'active' && (
+                                  <EyeOff className="w-3 h-3 text-gray-400 shrink-0" />
                                 )}
                               </div>
-                              <p className="text-xs text-gray-400">{lesson.points} pts</p>
+                              <p className="text-xs text-gray-400">
+                                {lesson.points} pts
+                                {lesson.dripValue ? ` · Day ${lesson.dripValue}` : ''}
+                              </p>
                             </div>
                           </button>
                           {/* Reorder buttons */}
@@ -2918,7 +3080,7 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               {/* Module Summary */}
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h3 className="text-base font-semibold text-gray-900 mb-4">Module Summary</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                   <div className="text-center py-3 border border-gray-200 rounded-lg">
                     <div className="text-xl font-semibold text-gray-900">
                       {(selectedModule.lessons || []).length}
@@ -2936,6 +3098,19 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                       {selectedModule.status === 'active' ? 'Published' : 'Draft'}
                     </div>
                     <div className="text-xs text-gray-500">Status</div>
+                  </div>
+                  <div className="flex flex-col items-center justify-center py-3 border border-gray-200 rounded-lg gap-1.5">
+                    <ToggleSwitch
+                      enabled={selectedModule.status === 'active'}
+                      onChange={() =>
+                        handleToggleModuleAvailability(selectedModule.id, selectedModule.status)
+                      }
+                    />
+                    <div
+                      className={`text-xs font-medium ${selectedModule.status === 'active' ? 'text-green-600' : 'text-gray-400'}`}
+                    >
+                      {selectedModule.status === 'active' ? 'Visible' : 'Hidden'}
+                    </div>
                   </div>
                 </div>
               </div>

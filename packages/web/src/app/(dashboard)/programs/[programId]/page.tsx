@@ -170,9 +170,10 @@ export default function ProgramDetailPage() {
 
     return program.modules
       .filter((m) => m.depth === 0) // Only top-level modules
+      .filter((m) => m.status === 'active') // Hide draft modules from learners
       .sort((a, b) => a.order - b.order)
       .map((module, index) => {
-        const lessons = module.lessons || [];
+        const lessons = (module.lessons || []).filter((l) => l.status === 'active'); // Hide draft lessons
         const lessonsCompleted = lessons.filter(
           (l) => lessonProgressMap.get(l.id) === 'completed'
         ).length;
@@ -197,9 +198,9 @@ export default function ProgramDetailPage() {
         } else {
           // Sequential: check if previous module is complete
           const prevModulesComplete = program.modules
-            .filter((m) => m.depth === 0 && m.order < module.order)
+            .filter((m) => m.depth === 0 && m.status === 'active' && m.order < module.order)
             .every((m) => {
-              const prevLessons = m.lessons || [];
+              const prevLessons = (m.lessons || []).filter((l) => l.status === 'active');
               return prevLessons.every((l) => lessonProgressMap.get(l.id) === 'completed');
             });
 
