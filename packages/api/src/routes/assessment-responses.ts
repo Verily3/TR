@@ -353,6 +353,7 @@ publicAssessmentRoutes.get('/:accessToken', async (c) => {
         name: assessment.name,
         description: assessment.description,
         status: assessment.status,
+        closeDate: assessment.closeDate,
         subjectName,
       },
       template,
@@ -387,11 +388,7 @@ publicAssessmentRoutes.post(
       throw new NotFoundError('Invalid or expired access token');
     }
 
-    if (invitation.status === 'completed') {
-      throw new BadRequestError('Response already submitted');
-    }
-
-    // Verify assessment is open
+    // Verify assessment is open (allow resubmission while open)
     const [assessment] = await db
       .select({ status: assessments.status })
       .from(assessments)

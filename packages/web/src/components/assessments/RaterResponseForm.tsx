@@ -32,6 +32,7 @@ interface RaterResponseFormProps {
   requireComments: boolean;
   showCompetencyNames?: boolean;
   initialData?: Partial<ResponseData>;
+  isUpdate?: boolean;
   onSaveDraft?: (data: ResponseData) => void;
   onSubmit: (data: ResponseData) => void;
   isSubmitting?: boolean;
@@ -51,6 +52,7 @@ export function RaterResponseForm({
   requireComments,
   showCompetencyNames = false,
   initialData,
+  isUpdate = false,
   onSaveDraft,
   onSubmit,
   isSubmitting,
@@ -315,7 +317,7 @@ export function RaterResponseForm({
               ) : (
                 <Send className="w-4 h-4" />
               )}
-              Submit Response
+              {isUpdate ? 'Update Response' : 'Submit Response'}
             </button>
           ) : (
             <button
