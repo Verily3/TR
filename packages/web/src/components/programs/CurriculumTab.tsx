@@ -34,6 +34,7 @@ import {
   Brain,
   Layers,
   ClipboardCheck,
+  Menu,
 } from 'lucide-react';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { getEmbedUrl, getVideoProvider } from '@/lib/video-utils';
@@ -276,6 +277,11 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
   const addLessonBtnRef = useRef<HTMLButtonElement>(null);
   const [isCreatingLesson, setIsCreatingLesson] = useState(false);
 
+  // Mobile sidebar & action bar
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showAddDropdown, setShowAddDropdown] = useState(false);
+  const [showMobileFab, setShowMobileFab] = useState(false);
+
   // Mutation hooks — use agency or tenant variants based on context
   const tenantCreateModule = useCreateModule(tenantId, program.id);
   const tenantUpdateModule = useUpdateModule(tenantId, program.id);
@@ -405,12 +411,14 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
     setSelectedLesson(null);
     setSelectedLessonModuleId(null);
     setExpandedModules((prev) => ({ ...prev, [moduleId]: true }));
+    setSidebarOpen(false); // auto-close on mobile
   };
 
   const handleSelectLesson = (lesson: Lesson, moduleId: string) => {
     setSelectedLesson(lesson);
     setSelectedLessonModuleId(moduleId);
     setSelectedModuleId(null);
+    setSidebarOpen(false); // auto-close on mobile
   };
 
   const handleBackToOverview = () => {
@@ -1246,34 +1254,154 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
   // ============================================
 
   return (
-    <div className="flex h-[calc(100vh-220px)] min-h-[500px] border border-gray-200 rounded-xl overflow-hidden bg-white">
+    <div className="flex h-[calc(100vh-220px)] min-h-[500px] border border-gray-200 rounded-xl overflow-hidden bg-white relative">
+      {/* ======== MOBILE SIDEBAR BACKDROP ======== */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* ======== LEFT SIDEBAR ======== */}
-      <div className="w-72 border-r border-gray-200 flex flex-col bg-white shrink-0">
-        {/* Back to Overview */}
-        <button
-          onClick={handleBackToOverview}
-          className="flex items-center gap-2 px-4 py-3 text-sm text-gray-500 hover:text-gray-700 transition-colors border-b border-gray-100"
-        >
-          <ChevronRight className="w-3.5 h-3.5 rotate-180" />
-          Back to Overview
-        </button>
+      <div
+        className={`
+          fixed inset-y-0 left-0 z-50 w-80 lg:relative lg:inset-auto lg:z-auto lg:w-72
+          border-r border-gray-200 flex flex-col bg-white shrink-0
+          transform transition-transform duration-300 ease-in-out
+          lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        `}
+      >
+        {/* Back to Overview + Mobile Close */}
+        <div className="flex items-center justify-between border-b border-gray-100">
+          <button
+            onClick={handleBackToOverview}
+            className="flex items-center gap-2 px-4 py-3 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+          >
+            <ChevronRight className="w-3.5 h-3.5 rotate-180" />
+            Back to Overview
+          </button>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="lg:hidden p-2 mr-2 text-gray-400 hover:text-gray-700 rounded-lg transition-colors"
+            aria-label="Close sidebar"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
 
         {/* Stats */}
-        <div className="flex gap-3 px-4 py-4 border-b border-gray-100">
-          <div className="flex-1 text-center border border-gray-200 rounded-lg py-3">
-            <div className="text-xl font-semibold text-gray-900">{totalModules}</div>
+        <div className="flex gap-3 px-4 py-3 border-b border-gray-100">
+          <div className="flex-1 text-center border border-gray-200 rounded-lg py-2">
+            <div className="text-lg font-semibold text-gray-900">{totalModules}</div>
             <div className="text-xs text-gray-500">Modules</div>
           </div>
-          <div className="flex-1 text-center border border-gray-200 rounded-lg py-3">
-            <div className="text-xl font-semibold text-gray-900">{totalLessons}</div>
+          <div className="flex-1 text-center border border-gray-200 rounded-lg py-2">
+            <div className="text-lg font-semibold text-gray-900">{totalLessons}</div>
             <div className="text-xs text-gray-500">Lessons</div>
           </div>
           {totalEvents > 0 && (
-            <div className="flex-1 text-center border border-gray-200 rounded-lg py-3">
-              <div className="text-xl font-semibold text-gray-900">{totalEvents}</div>
+            <div className="flex-1 text-center border border-gray-200 rounded-lg py-2">
+              <div className="text-lg font-semibold text-gray-900">{totalEvents}</div>
               <div className="text-xs text-gray-500">Events</div>
             </div>
           )}
+        </div>
+
+        {/* ===== STICKY ACTION BAR ===== */}
+        <div className="px-3 py-2.5 border-b border-gray-100 bg-white">
+          <div className="flex items-center gap-1.5">
+            {/* Primary: Add Module */}
+            <button
+              onClick={handleAddModule}
+              disabled={createModule.isPending}
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+            >
+              <Plus className="w-4 h-4" />
+              {createModule.isPending ? 'Adding...' : 'Add Module'}
+            </button>
+            {/* Dropdown trigger: more add options */}
+            <div className="relative">
+              <button
+                onClick={() => setShowAddDropdown((prev) => !prev)}
+                className="px-2.5 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                aria-label="More add options"
+                aria-expanded={showAddDropdown}
+              >
+                <ChevronDown
+                  className={`w-4 h-4 transition-transform ${showAddDropdown ? 'rotate-180' : ''}`}
+                />
+              </button>
+              {showAddDropdown && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowAddDropdown(false)} />
+                  <div className="absolute left-0 top-full mt-1 w-60 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 max-h-80 overflow-y-auto">
+                    {/* Structure section */}
+                    <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                      Structure
+                    </div>
+                    <button
+                      onClick={() => {
+                        handleAddModule();
+                        setShowAddDropdown(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <FolderOpen className="w-4 h-4 text-red-500" />
+                      Add Module
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleAddEvent();
+                        setShowAddDropdown(false);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <Calendar className="w-4 h-4 text-blue-500" />
+                      Add Event
+                    </button>
+                    <div className="my-1.5 border-t border-gray-100" />
+
+                    {/* Lesson types — only when a module is selected */}
+                    {selectedModuleId && moduleItems.some((m) => m.id === selectedModuleId) ? (
+                      <>
+                        {(['Content', 'Reflection', 'Activity'] as const).map((group) => {
+                          const items = ADD_MENU_CONFIG.filter((c) => c.group === group);
+                          return (
+                            <div key={group}>
+                              <div className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                                {group}
+                              </div>
+                              {items.map((item) => {
+                                const TypeIcon = item.icon;
+                                return (
+                                  <button
+                                    key={item.key}
+                                    onClick={() => {
+                                      handleAddLesson(item.key);
+                                      setShowAddDropdown(false);
+                                    }}
+                                    className="w-full flex items-center gap-2.5 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                  >
+                                    <TypeIcon className={`w-3.5 h-3.5 ${item.color}`} />
+                                    {item.label}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                      </>
+                    ) : (
+                      <p className="px-3 py-2 text-xs text-gray-400 italic">
+                        Select a module to add lessons
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Module Tree */}
@@ -1416,7 +1544,7 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                           setShowAddLessonMenu((prev) => !(prev && selectedModuleId === mod.id));
                         }}
                         disabled={isCreatingLesson}
-                        className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-red-600 transition-colors disabled:opacity-50"
+                        className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         Add lesson
@@ -1465,354 +1593,348 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
           })}
         </div>
 
-        {/* Add Module / Event Buttons */}
-        <div className="p-4 border-t border-gray-100 space-y-2">
-          <button
-            onClick={handleAddModule}
-            disabled={createModule.isPending}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
-          >
-            <Plus className="w-4 h-4" />
-            {createModule.isPending ? 'Adding...' : 'Add Module'}
-          </button>
-          <button
-            onClick={handleAddEvent}
-            disabled={createModule.isPending}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-blue-200 rounded-lg text-sm text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50"
-          >
-            <Calendar className="w-4 h-4" />
-            Add Event
-          </button>
-        </div>
+        {/* Bottom buttons removed — actions now in sticky action bar at top */}
       </div>
 
       {/* ======== RIGHT PANEL ======== */}
-      <div className="flex-1 overflow-y-auto">
-        {/* --- Edit Lesson View --- */}
-        {selectedLesson ? (
-          <div className="p-6 space-y-6">
-            {/* Back link */}
-            <button
-              onClick={handleBackToProgram}
-              className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
-            >
-              <ChevronRight className="w-3.5 h-3.5 rotate-180" />
-              Back to Program
-            </button>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Mobile toolbar */}
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 lg:hidden">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors -ml-2"
+            aria-label="Open curriculum sidebar"
+          >
+            <Menu className="w-5 h-5 text-gray-600" />
+          </button>
+          <span className="text-sm font-medium text-gray-700 truncate">
+            {selectedLesson?.title ||
+              (selectedModuleId
+                ? sortedModules.find((m) => m.id === selectedModuleId)?.title
+                : 'Structure & Content')}
+          </span>
+        </div>
 
-            {/* Header */}
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
-                  {(() => {
-                    const { icon: TypeIcon } = getLessonDisplay(selectedLesson);
-                    return <TypeIcon className="w-5 h-5 text-red-600" />;
-                  })()}
+        <div className="flex-1 overflow-y-auto">
+          {/* --- Edit Lesson View --- */}
+          {selectedLesson ? (
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+              {/* Back link */}
+              <button
+                onClick={handleBackToProgram}
+                className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+              >
+                <ChevronRight className="w-3.5 h-3.5 rotate-180" />
+                Back to Program
+              </button>
+
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center shrink-0">
+                    {(() => {
+                      const { icon: TypeIcon } = getLessonDisplay(selectedLesson);
+                      return <TypeIcon className="w-5 h-5 text-red-600" />;
+                    })()}
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Edit Lesson</h2>
+                    <p className="text-sm text-gray-500">
+                      Configure lesson content and role-specific settings
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Edit Lesson</h2>
-                  <p className="text-sm text-gray-500">
-                    Configure lesson content and role-specific settings
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {/* Preview with role selector */}
-                <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {/* Preview with role selector */}
+                  <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => {
+                        const params = new URLSearchParams();
+                        if (tenantId) params.set('tenantId', tenantId);
+                        if (previewRole) params.set('previewRole', previewRole);
+                        const qs = params.toString();
+                        window.open(`/programs/${program.id}/learn${qs ? `?${qs}` : ''}`, '_blank');
+                      }}
+                      className="inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    >
+                      <Eye className="w-4 h-4" />
+                      Preview
+                    </button>
+                    <select
+                      value={previewRole}
+                      onChange={(e) => setPreviewRole(e.target.value as EnrollmentRole)}
+                      className="border-l border-gray-200 px-2 py-2 text-xs text-gray-600 bg-gray-50 hover:bg-gray-100 outline-none cursor-pointer"
+                      title="Preview as role"
+                    >
+                      <option value="learner">as Learner</option>
+                      <option value="mentor">as Mentor</option>
+                      <option value="facilitator">as Facilitator</option>
+                    </select>
+                  </div>
                   <button
-                    onClick={() => {
-                      const params = new URLSearchParams();
-                      if (tenantId) params.set('tenantId', tenantId);
-                      if (previewRole) params.set('previewRole', previewRole);
-                      const qs = params.toString();
-                      window.open(`/programs/${program.id}/learn${qs ? `?${qs}` : ''}`, '_blank');
-                    }}
-                    className="inline-flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                    onClick={handleSaveLesson}
+                    disabled={updateLesson.isPending}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
                   >
-                    <Eye className="w-4 h-4" />
-                    Preview
+                    <Save className="w-4 h-4" />
+                    {updateLesson.isPending ? 'Saving...' : 'Save Lesson'}
                   </button>
-                  <select
-                    value={previewRole}
-                    onChange={(e) => setPreviewRole(e.target.value as EnrollmentRole)}
-                    className="border-l border-gray-200 px-2 py-2 text-xs text-gray-600 bg-gray-50 hover:bg-gray-100 outline-none cursor-pointer"
-                    title="Preview as role"
+                  <button
+                    onClick={handleDeleteLesson}
+                    disabled={deleteLesson.isPending}
+                    className="inline-flex items-center gap-2 px-4 py-2 border border-red-200 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors disabled:opacity-50"
                   >
-                    <option value="learner">as Learner</option>
-                    <option value="mentor">as Mentor</option>
-                    <option value="facilitator">as Facilitator</option>
-                  </select>
+                    <Trash2 className="w-4 h-4" />
+                    {deleteLesson.isPending ? 'Deleting...' : 'Delete Lesson'}
+                  </button>
                 </div>
-                <button
-                  onClick={handleSaveLesson}
-                  disabled={updateLesson.isPending}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
-                >
-                  <Save className="w-4 h-4" />
-                  {updateLesson.isPending ? 'Saving...' : 'Save Lesson'}
-                </button>
-                <button
-                  onClick={handleDeleteLesson}
-                  disabled={deleteLesson.isPending}
-                  className="inline-flex items-center gap-2 px-4 py-2 border border-red-200 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors disabled:opacity-50"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  {deleteLesson.isPending ? 'Deleting...' : 'Delete Lesson'}
-                </button>
               </div>
-            </div>
 
-            {/* Lesson Settings Card */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="text-base font-semibold text-gray-900 mb-4">Lesson Settings</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Lesson Title
-                  </label>
-                  <input
-                    type="text"
-                    value={editTitle}
-                    onChange={(e) => setEditTitle(e.target.value)}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
-                    placeholder="Lesson title..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Lesson Type
-                  </label>
-                  <select
-                    value={editContentType}
-                    onChange={(e) => setEditContentType(e.target.value as ContentType)}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
-                  >
-                    {Object.entries(CONTENT_TYPE_CONFIG).map(([key, config]) => (
-                      <option key={key} value={key}>
-                        {key === 'lesson' && selectedLesson
-                          ? getLessonDisplay(selectedLesson).label
-                          : config!.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Points</label>
-                  <input
-                    type="number"
-                    value={editPoints}
-                    onChange={(e) =>
-                      setEditPoints(e.target.value === '' ? '' : Number(e.target.value))
-                    }
-                    min={0}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Estimated Duration
-                  </label>
-                  <div className="relative">
+              {/* Lesson Settings Card */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h3 className="text-base font-semibold text-gray-900 mb-4">Lesson Settings</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Lesson Title
+                    </label>
+                    <input
+                      type="text"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
+                      placeholder="Lesson title..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Lesson Type
+                    </label>
+                    <select
+                      value={editContentType}
+                      onChange={(e) => setEditContentType(e.target.value as ContentType)}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
+                    >
+                      {Object.entries(CONTENT_TYPE_CONFIG).map(([key, config]) => (
+                        <option key={key} value={key}>
+                          {key === 'lesson' && selectedLesson
+                            ? getLessonDisplay(selectedLesson).label
+                            : config!.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">Points</label>
                     <input
                       type="number"
-                      value={editDuration}
+                      value={editPoints}
                       onChange={(e) =>
-                        setEditDuration(e.target.value === '' ? '' : Number(e.target.value))
+                        setEditPoints(e.target.value === '' ? '' : Number(e.target.value))
                       }
                       min={0}
-                      className="w-full px-4 py-2.5 pr-12 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
                       placeholder="0"
                     />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400">
-                      min
-                    </span>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Estimated Duration
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={editDuration}
+                        onChange={(e) =>
+                          setEditDuration(e.target.value === '' ? '' : Number(e.target.value))
+                        }
+                        min={0}
+                        className="w-full px-4 py-2.5 pr-12 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
+                        placeholder="0"
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-gray-400">
+                        min
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Approval Required Card */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <ShieldCheck className="w-5 h-5 text-gray-500" />
-                <h3 className="text-base font-semibold text-gray-900">Approval Workflow</h3>
+              {/* Approval Required Card */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <ShieldCheck className="w-5 h-5 text-gray-500" />
+                  <h3 className="text-base font-semibold text-gray-900">Approval Workflow</h3>
+                </div>
+                <p className="text-sm text-gray-500 mb-4">
+                  Require mentor or facilitator approval before this lesson is marked as complete.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  {(
+                    [
+                      {
+                        value: 'none',
+                        label: 'No Approval',
+                        desc: 'Learner completes on their own',
+                      },
+                      {
+                        value: 'mentor',
+                        label: 'Mentor Approval',
+                        desc: 'Mentor must approve completion',
+                      },
+                      {
+                        value: 'facilitator',
+                        label: 'Facilitator Approval',
+                        desc: 'Facilitator must approve completion',
+                      },
+                      {
+                        value: 'both',
+                        label: 'Both Required',
+                        desc: 'Both mentor and facilitator must approve',
+                      },
+                    ] as { value: ApprovalRequired; label: string; desc: string }[]
+                  ).map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setEditApprovalRequired(opt.value)}
+                      className={`flex items-start gap-3 p-3 border-2 rounded-lg text-left transition-colors ${
+                        editApprovalRequired === opt.value
+                          ? 'border-red-500 bg-red-50/50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <div
+                        className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                          editApprovalRequired === opt.value ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                      >
+                        {editApprovalRequired === opt.value && (
+                          <div className="w-2 h-2 rounded-full bg-red-500" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{opt.label}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{opt.desc}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               </div>
-              <p className="text-sm text-gray-500 mb-4">
-                Require mentor or facilitator approval before this lesson is marked as complete.
-              </p>
-              <div className="grid grid-cols-2 gap-3">
-                {(
-                  [
-                    { value: 'none', label: 'No Approval', desc: 'Learner completes on their own' },
-                    {
-                      value: 'mentor',
-                      label: 'Mentor Approval',
-                      desc: 'Mentor must approve completion',
-                    },
-                    {
-                      value: 'facilitator',
-                      label: 'Facilitator Approval',
-                      desc: 'Facilitator must approve completion',
-                    },
-                    {
-                      value: 'both',
-                      label: 'Both Required',
-                      desc: 'Both mentor and facilitator must approve',
-                    },
-                  ] as { value: ApprovalRequired; label: string; desc: string }[]
-                ).map((opt) => (
+
+              {/* Content Mode Card */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <h3 className="text-base font-semibold text-gray-900">Content Mode</h3>
+                  <Info className="w-4 h-4 text-gray-400" />
+                </div>
+                <div className="grid grid-cols-2 gap-4 mb-4">
                   <button
-                    key={opt.value}
-                    onClick={() => setEditApprovalRequired(opt.value)}
-                    className={`flex items-start gap-3 p-3 border-2 rounded-lg text-left transition-colors ${
-                      editApprovalRequired === opt.value
+                    onClick={() => handleContentModeChange('shared')}
+                    className={`flex items-start gap-3 p-4 border-2 rounded-lg text-left transition-colors ${
+                      contentMode === 'shared'
                         ? 'border-red-500 bg-red-50/50'
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
                     <div
                       className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                        editApprovalRequired === opt.value ? 'border-red-500' : 'border-gray-300'
+                        contentMode === 'shared' ? 'border-red-500' : 'border-gray-300'
                       }`}
                     >
-                      {editApprovalRequired === opt.value && (
+                      {contentMode === 'shared' && (
                         <div className="w-2 h-2 rounded-full bg-red-500" />
                       )}
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-900">{opt.label}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{opt.desc}</p>
+                      <p className="text-sm font-medium text-gray-900">Shared Content</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        All roles (Learners, Mentors, Facilitators) see the same lesson content
+                      </p>
                     </div>
                   </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Content Mode Card */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <h3 className="text-base font-semibold text-gray-900">Content Mode</h3>
-                <Info className="w-4 h-4 text-gray-400" />
-              </div>
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                <button
-                  onClick={() => handleContentModeChange('shared')}
-                  className={`flex items-start gap-3 p-4 border-2 rounded-lg text-left transition-colors ${
-                    contentMode === 'shared'
-                      ? 'border-red-500 bg-red-50/50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div
-                    className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                      contentMode === 'shared' ? 'border-red-500' : 'border-gray-300'
+                  <button
+                    onClick={() => handleContentModeChange('role-specific')}
+                    className={`flex items-start gap-3 p-4 border-2 rounded-lg text-left transition-colors ${
+                      contentMode === 'role-specific'
+                        ? 'border-red-500 bg-red-50/50'
+                        : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
-                    {contentMode === 'shared' && (
-                      <div className="w-2 h-2 rounded-full bg-red-500" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Shared Content</p>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      All roles (Learners, Mentors, Facilitators) see the same lesson content
-                    </p>
-                  </div>
-                </button>
-                <button
-                  onClick={() => handleContentModeChange('role-specific')}
-                  className={`flex items-start gap-3 p-4 border-2 rounded-lg text-left transition-colors ${
-                    contentMode === 'role-specific'
-                      ? 'border-red-500 bg-red-50/50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div
-                    className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                      contentMode === 'role-specific' ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                  >
-                    {contentMode === 'role-specific' && (
-                      <div className="w-2 h-2 rounded-full bg-red-500" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Role-Specific Content</p>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      Customize lesson content separately for each role (ideal for mentor meetings,
-                      facilitated sessions)
-                    </p>
-                  </div>
-                </button>
-              </div>
-              {contentMode === 'role-specific' ? (
-                <div className="flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
-                  <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5 shrink-0" />
-                  <p className="text-xs text-yellow-800">
-                    <span className="font-medium">Role-Specific Mode Active:</span> You&apos;re now
-                    customizing content for each role. Use the tabs below to edit content for
-                    Learners, Mentors, and Facilitators separately.
-                  </p>
-                </div>
-              ) : (
-                <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg px-4 py-3">
-                  <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
-                  <p className="text-xs text-blue-800">
-                    <span className="font-medium">Best Practice:</span> Most lessons use shared
-                    content (readings, videos, assignments). Use role-specific only when different
-                    participants need completely different materials.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Role Tabs Card (only in role-specific mode) */}
-            {contentMode === 'role-specific' && (
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                {/* Role tabs */}
-                <div className="flex items-center gap-1 border-b border-gray-200 mb-4">
-                  {[
-                    {
-                      role: 'learner' as EnrollmentRole,
-                      label: 'Learner Content',
-                      icon: GraduationCap,
-                    },
-                    { role: 'mentor' as EnrollmentRole, label: 'Mentor Content', icon: Users },
-                    {
-                      role: 'facilitator' as EnrollmentRole,
-                      label: 'Facilitator Content',
-                      icon: ShieldCheck,
-                    },
-                  ].map((tab) => (
-                    <button
-                      key={tab.role}
-                      onClick={() => handleRoleTabChange(tab.role)}
-                      className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
-                        activeRoleTab === tab.role
-                          ? 'border-red-500 text-red-600'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    <div
+                      className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                        contentMode === 'role-specific' ? 'border-red-500' : 'border-gray-300'
                       }`}
                     >
-                      <tab.icon className="w-4 h-4" />
-                      {tab.label}
-                    </button>
-                  ))}
+                      {contentMode === 'role-specific' && (
+                        <div className="w-2 h-2 rounded-full bg-red-500" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Role-Specific Content</p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Customize lesson content separately for each role (ideal for mentor
+                        meetings, facilitated sessions)
+                      </p>
+                    </div>
+                  </button>
                 </div>
-                {/* Copy buttons */}
-                {activeRoleTab !== 'learner' && (
-                  <div className="flex items-center gap-2">
-                    {activeRoleTab === 'mentor' && (
+                {contentMode === 'role-specific' ? (
+                  <div className="flex items-start gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
+                    <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5 shrink-0" />
+                    <p className="text-xs text-yellow-800">
+                      <span className="font-medium">Role-Specific Mode Active:</span> You&apos;re
+                      now customizing content for each role. Use the tabs below to edit content for
+                      Learners, Mentors, and Facilitators separately.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 rounded-lg px-4 py-3">
+                    <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                    <p className="text-xs text-blue-800">
+                      <span className="font-medium">Best Practice:</span> Most lessons use shared
+                      content (readings, videos, assignments). Use role-specific only when different
+                      participants need completely different materials.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Role Tabs Card (only in role-specific mode) */}
+              {contentMode === 'role-specific' && (
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                  {/* Role tabs */}
+                  <div className="flex items-center gap-1 border-b border-gray-200 mb-4">
+                    {[
+                      {
+                        role: 'learner' as EnrollmentRole,
+                        label: 'Learner Content',
+                        icon: GraduationCap,
+                      },
+                      { role: 'mentor' as EnrollmentRole, label: 'Mentor Content', icon: Users },
+                      {
+                        role: 'facilitator' as EnrollmentRole,
+                        label: 'Facilitator Content',
+                        icon: ShieldCheck,
+                      },
+                    ].map((tab) => (
                       <button
-                        onClick={() => handleCopyFromRole('learner')}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+                        key={tab.role}
+                        onClick={() => handleRoleTabChange(tab.role)}
+                        className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                          activeRoleTab === tab.role
+                            ? 'border-red-500 text-red-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        }`}
                       >
-                        <Copy className="w-3.5 h-3.5" />
-                        Copy from Learner
+                        <tab.icon className="w-4 h-4" />
+                        {tab.label}
                       </button>
-                    )}
-                    {activeRoleTab === 'facilitator' && (
-                      <>
+                    ))}
+                  </div>
+                  {/* Copy buttons */}
+                  {activeRoleTab !== 'learner' && (
+                    <div className="flex items-center gap-2">
+                      {activeRoleTab === 'mentor' && (
                         <button
                           onClick={() => handleCopyFromRole('learner')}
                           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
@@ -1820,373 +1942,479 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
                           <Copy className="w-3.5 h-3.5" />
                           Copy from Learner
                         </button>
-                        <button
-                          onClick={() => handleCopyFromRole('mentor')}
-                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                          Copy from Mentor
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Lesson Content Card */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-base font-semibold text-gray-900">
-                  {contentMode === 'role-specific'
-                    ? `${activeRoleTab.charAt(0).toUpperCase() + activeRoleTab.slice(1)} Content`
-                    : 'Lesson Content'}
-                </h3>
-                {contentMode === 'shared' && (
-                  <span className="text-xs text-gray-400">Shared across all roles</span>
-                )}
-              </div>
-              {renderLessonContent()}
-            </div>
-
-            {/* Resources / Attachments Card */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <Link className="w-5 h-5 text-gray-500" />
-                  <h3 className="text-base font-semibold text-gray-900">
-                    Resources &amp; Attachments
-                  </h3>
-                </div>
-                <button
-                  onClick={() => {
-                    const resources = editContent.resources || [];
-                    setEditContent({
-                      ...editContent,
-                      resources: [...resources, { title: '', url: '', type: 'link' as const }],
-                    });
-                  }}
-                  className="text-sm text-red-600 hover:text-red-700 font-medium"
-                >
-                  + Add Resource
-                </button>
-              </div>
-              <p className="text-sm text-gray-500 mb-4">
-                Add downloadable files, links, or reference materials for this lesson.
-              </p>
-              {(editContent.resources || []).length > 0 ? (
-                <div className="space-y-3">
-                  {(editContent.resources || []).map((res, i) => (
-                    <div
-                      key={i}
-                      className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100"
-                    >
-                      <div className="flex-1 space-y-2">
-                        <input
-                          type="text"
-                          value={res.title}
-                          onChange={(e) => {
-                            const resources = [...(editContent.resources || [])];
-                            resources[i] = { ...resources[i], title: e.target.value };
-                            setEditContent({ ...editContent, resources });
-                          }}
-                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-white"
-                          placeholder="Resource title..."
-                        />
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={res.url}
-                            onChange={(e) => {
-                              const resources = [...(editContent.resources || [])];
-                              resources[i] = { ...resources[i], url: e.target.value };
-                              setEditContent({ ...editContent, resources });
-                            }}
-                            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-white"
-                            placeholder="URL or file link..."
-                          />
-                          <select
-                            value={res.type || 'link'}
-                            onChange={(e) => {
-                              const resources = [...(editContent.resources || [])];
-                              resources[i] = {
-                                ...resources[i],
-                                type: e.target.value as
-                                  | 'pdf'
-                                  | 'doc'
-                                  | 'video'
-                                  | 'link'
-                                  | 'spreadsheet',
-                              };
-                              setEditContent({ ...editContent, resources });
-                            }}
-                            className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-white w-32"
+                      )}
+                      {activeRoleTab === 'facilitator' && (
+                        <>
+                          <button
+                            onClick={() => handleCopyFromRole('learner')}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
                           >
-                            <option value="link">Link</option>
-                            <option value="pdf">PDF</option>
-                            <option value="doc">Document</option>
-                            <option value="video">Video</option>
-                            <option value="spreadsheet">Spreadsheet</option>
-                          </select>
-                        </div>
-                        {/* Video preview for video-type resources */}
-                        {res.type === 'video' &&
-                          res.url &&
-                          (() => {
-                            const embedUrl = getEmbedUrl(res.url);
-                            const provider = getVideoProvider(res.url);
-                            if (embedUrl && provider) {
-                              return (
-                                <div className="mt-2 rounded-lg overflow-hidden border border-gray-200">
-                                  <div className="aspect-video bg-black">
-                                    <iframe
-                                      src={embedUrl}
-                                      className="w-full h-full"
-                                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                      allowFullScreen
-                                      title={res.title || 'Video preview'}
-                                    />
-                                  </div>
-                                  <div className="px-3 py-1.5 bg-gray-50 border-t border-gray-200 flex items-center gap-2">
-                                    <Video className="w-3.5 h-3.5 text-gray-400" />
-                                    <span className="text-xs text-gray-500 capitalize">
-                                      {provider}
-                                    </span>
-                                  </div>
-                                </div>
-                              );
-                            }
-                            if (res.url) {
-                              return (
-                                <p className="text-xs text-amber-600 mt-1.5">
-                                  Could not recognize video URL. Paste a YouTube or Vimeo link.
-                                </p>
-                              );
-                            }
-                            return null;
-                          })()}
-                      </div>
-                      <button
-                        onClick={() => {
-                          setEditContent({
-                            ...editContent,
-                            resources: (editContent.resources || []).filter((_, idx) => idx !== i),
-                          });
-                        }}
-                        className="p-1.5 text-gray-400 hover:text-red-600 transition-colors mt-1"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                            <Copy className="w-3.5 h-3.5" />
+                            Copy from Learner
+                          </button>
+                          <button
+                            onClick={() => handleCopyFromRole('mentor')}
+                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                            Copy from Mentor
+                          </button>
+                        </>
+                      )}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-6 text-sm text-gray-400 border border-dashed border-gray-200 rounded-lg">
-                  No resources added yet. Click &quot;+ Add Resource&quot; to attach worksheets,
-                  links, or files.
+                  )}
                 </div>
               )}
-            </div>
 
-            {/* Tasks Section */}
-            <TaskEditor
-              tasks={selectedLesson.tasks || []}
-              onCreateTask={(input: CreateTaskInput) => createTask.mutate(input)}
-              onUpdateTask={(taskId: string, input: UpdateTaskInput) =>
-                updateTask.mutate({ taskId, input })
-              }
-              onDeleteTask={(taskId: string) => deleteTask.mutate(taskId)}
-              isCreating={createTask.isPending}
-            />
-
-            {/* Lesson Visibility Card */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <div className="flex items-center gap-2 mb-5">
-                <h3 className="text-base font-semibold text-gray-900">Lesson Visibility</h3>
-                <Info className="w-4 h-4 text-gray-400" />
+              {/* Lesson Content Card */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-base font-semibold text-gray-900">
+                    {contentMode === 'role-specific'
+                      ? `${activeRoleTab.charAt(0).toUpperCase() + activeRoleTab.slice(1)} Content`
+                      : 'Lesson Content'}
+                  </h3>
+                  {contentMode === 'shared' && (
+                    <span className="text-xs text-gray-400">Shared across all roles</span>
+                  )}
+                </div>
+                {renderLessonContent()}
               </div>
 
-              <div className="space-y-4">
-                {/* Visible to Learners */}
-                <div className="flex items-center justify-between py-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
-                      <GraduationCap className="w-4 h-4 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Visible to Learners</p>
-                      <p className="text-xs text-gray-500">
-                        Learners will see this lesson in their program
-                      </p>
-                    </div>
+              {/* Resources / Attachments Card */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Link className="w-5 h-5 text-gray-500" />
+                    <h3 className="text-base font-semibold text-gray-900">
+                      Resources &amp; Attachments
+                    </h3>
                   </div>
-                  <ToggleSwitch
-                    enabled={editVisibleTo.learner}
-                    onChange={(v) => setEditVisibleTo({ ...editVisibleTo, learner: v })}
-                  />
+                  <button
+                    onClick={() => {
+                      const resources = editContent.resources || [];
+                      setEditContent({
+                        ...editContent,
+                        resources: [...resources, { title: '', url: '', type: 'link' as const }],
+                      });
+                    }}
+                    className="text-sm text-red-600 hover:text-red-700 font-medium"
+                  >
+                    + Add Resource
+                  </button>
                 </div>
-
-                {/* Visible to Mentors */}
-                <div className="flex items-center justify-between py-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-purple-50 rounded-lg flex items-center justify-center">
-                      <Users className="w-4 h-4 text-purple-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Visible to Mentors</p>
-                      <p className="text-xs text-gray-500">
-                        Mentors will see this lesson for coaching preparation
-                      </p>
-                    </div>
-                  </div>
-                  <ToggleSwitch
-                    enabled={editVisibleTo.mentor}
-                    onChange={(v) => setEditVisibleTo({ ...editVisibleTo, mentor: v })}
-                  />
-                </div>
-
-                {/* Visible to Facilitators */}
-                <div className="flex items-center justify-between py-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-orange-50 rounded-lg flex items-center justify-center">
-                      <Users className="w-4 h-4 text-orange-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Visible to Facilitators</p>
-                      <p className="text-xs text-gray-500">
-                        Facilitators will see this lesson for session planning
-                      </p>
-                    </div>
-                  </div>
-                  <ToggleSwitch
-                    enabled={editVisibleTo.facilitator}
-                    onChange={(v) => setEditVisibleTo({ ...editVisibleTo, facilitator: v })}
-                  />
-                </div>
-              </div>
-
-              {/* Best Practice */}
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <p className="text-xs text-gray-500 italic">
-                  <span className="font-medium">Best Practice:</span> Most lessons are visible to
-                  all roles. Hide lessons from specific roles only when the content is truly
-                  irrelevant (e.g., hide learner prep materials from facilitators).
+                <p className="text-sm text-gray-500 mb-4">
+                  Add downloadable files, links, or reference materials for this lesson.
                 </p>
+                {(editContent.resources || []).length > 0 ? (
+                  <div className="space-y-3">
+                    {(editContent.resources || []).map((res, i) => (
+                      <div
+                        key={i}
+                        className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100"
+                      >
+                        <div className="flex-1 space-y-2">
+                          <input
+                            type="text"
+                            value={res.title}
+                            onChange={(e) => {
+                              const resources = [...(editContent.resources || [])];
+                              resources[i] = { ...resources[i], title: e.target.value };
+                              setEditContent({ ...editContent, resources });
+                            }}
+                            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-white"
+                            placeholder="Resource title..."
+                          />
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={res.url}
+                              onChange={(e) => {
+                                const resources = [...(editContent.resources || [])];
+                                resources[i] = { ...resources[i], url: e.target.value };
+                                setEditContent({ ...editContent, resources });
+                              }}
+                              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-white"
+                              placeholder="URL or file link..."
+                            />
+                            <select
+                              value={res.type || 'link'}
+                              onChange={(e) => {
+                                const resources = [...(editContent.resources || [])];
+                                resources[i] = {
+                                  ...resources[i],
+                                  type: e.target.value as
+                                    | 'pdf'
+                                    | 'doc'
+                                    | 'video'
+                                    | 'link'
+                                    | 'spreadsheet',
+                                };
+                                setEditContent({ ...editContent, resources });
+                              }}
+                              className="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-white w-32"
+                            >
+                              <option value="link">Link</option>
+                              <option value="pdf">PDF</option>
+                              <option value="doc">Document</option>
+                              <option value="video">Video</option>
+                              <option value="spreadsheet">Spreadsheet</option>
+                            </select>
+                          </div>
+                          {/* Video preview for video-type resources */}
+                          {res.type === 'video' &&
+                            res.url &&
+                            (() => {
+                              const embedUrl = getEmbedUrl(res.url);
+                              const provider = getVideoProvider(res.url);
+                              if (embedUrl && provider) {
+                                return (
+                                  <div className="mt-2 rounded-lg overflow-hidden border border-gray-200">
+                                    <div className="aspect-video bg-black">
+                                      <iframe
+                                        src={embedUrl}
+                                        className="w-full h-full"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowFullScreen
+                                        title={res.title || 'Video preview'}
+                                      />
+                                    </div>
+                                    <div className="px-3 py-1.5 bg-gray-50 border-t border-gray-200 flex items-center gap-2">
+                                      <Video className="w-3.5 h-3.5 text-gray-400" />
+                                      <span className="text-xs text-gray-500 capitalize">
+                                        {provider}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              if (res.url) {
+                                return (
+                                  <p className="text-xs text-amber-600 mt-1.5">
+                                    Could not recognize video URL. Paste a YouTube or Vimeo link.
+                                  </p>
+                                );
+                              }
+                              return null;
+                            })()}
+                        </div>
+                        <button
+                          onClick={() => {
+                            setEditContent({
+                              ...editContent,
+                              resources: (editContent.resources || []).filter(
+                                (_, idx) => idx !== i
+                              ),
+                            });
+                          }}
+                          className="p-1.5 text-gray-400 hover:text-red-600 transition-colors mt-1"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-sm text-gray-400 border border-dashed border-gray-200 rounded-lg">
+                    No resources added yet. Click &quot;+ Add Resource&quot; to attach worksheets,
+                    links, or files.
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
-        ) : selectedModule?.type === 'event' ? (
-          /* --- Event Editor View --- */
-          <EventEditor
-            event={selectedModule}
-            onSave={handleSaveEvent}
-            onDelete={handleDeleteEvent}
-            isSaving={updateModule.isPending}
-            isDeleting={deleteModule.isPending}
-          />
-        ) : selectedModule ? (
-          /* --- Module Settings View --- */
-          <div className="p-6 space-y-6">
-            {/* Header with actions */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
-                  <FolderOpen className="w-5 h-5 text-red-600" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900">Module Settings</h2>
-                  <p className="text-sm text-gray-500">Configure module details and structure</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleSaveModuleSettings}
-                  disabled={updateModule.isPending}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
-                >
-                  <Save className="w-3.5 h-3.5" />
-                  {updateModule.isPending ? 'Saving...' : 'Save'}
-                </button>
-                <button
-                  onClick={handleDeleteModule}
-                  disabled={deleteModule.isPending}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 border border-red-200 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors disabled:opacity-50"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
 
-            {/* Module Information */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="text-base font-semibold text-gray-900 mb-4">Module Information</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Module Title
-                  </label>
-                  <input
-                    type="text"
-                    value={editModuleTitle}
-                    onChange={(e) => setEditModuleTitle(e.target.value)}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
-                    placeholder="Module title..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Description
-                  </label>
-                  <textarea
-                    value={editModuleDescription}
-                    onChange={(e) => setEditModuleDescription(e.target.value)}
-                    rows={3}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none resize-none bg-gray-50"
-                    placeholder="Describe this module..."
-                  />
-                </div>
-              </div>
-            </div>
+              {/* Tasks Section */}
+              <TaskEditor
+                tasks={selectedLesson.tasks || []}
+                onCreateTask={(input: CreateTaskInput) => createTask.mutate(input)}
+                onUpdateTask={(taskId: string, input: UpdateTaskInput) =>
+                  updateTask.mutate({ taskId, input })
+                }
+                onDeleteTask={(taskId: string) => deleteTask.mutate(taskId)}
+                isCreating={createTask.isPending}
+              />
 
-            {/* Module Summary */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h3 className="text-base font-semibold text-gray-900 mb-4">Module Summary</h3>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="text-center py-3 border border-gray-200 rounded-lg">
-                  <div className="text-xl font-semibold text-gray-900">
-                    {(selectedModule.lessons || []).length}
-                  </div>
-                  <div className="text-xs text-gray-500">Lessons</div>
+              {/* Lesson Visibility Card */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="flex items-center gap-2 mb-5">
+                  <h3 className="text-base font-semibold text-gray-900">Lesson Visibility</h3>
+                  <Info className="w-4 h-4 text-gray-400" />
                 </div>
-                <div className="text-center py-3 border border-gray-200 rounded-lg">
-                  <div className="text-xl font-semibold text-gray-900">
-                    {getModulePoints(selectedModule)}
+
+                <div className="space-y-4">
+                  {/* Visible to Learners */}
+                  <div className="flex items-center justify-between py-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center">
+                        <GraduationCap className="w-4 h-4 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Visible to Learners</p>
+                        <p className="text-xs text-gray-500">
+                          Learners will see this lesson in their program
+                        </p>
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      enabled={editVisibleTo.learner}
+                      onChange={(v) => setEditVisibleTo({ ...editVisibleTo, learner: v })}
+                    />
                   </div>
-                  <div className="text-xs text-gray-500">Total Points</div>
+
+                  {/* Visible to Mentors */}
+                  <div className="flex items-center justify-between py-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-purple-50 rounded-lg flex items-center justify-center">
+                        <Users className="w-4 h-4 text-purple-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Visible to Mentors</p>
+                        <p className="text-xs text-gray-500">
+                          Mentors will see this lesson for coaching preparation
+                        </p>
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      enabled={editVisibleTo.mentor}
+                      onChange={(v) => setEditVisibleTo({ ...editVisibleTo, mentor: v })}
+                    />
+                  </div>
+
+                  {/* Visible to Facilitators */}
+                  <div className="flex items-center justify-between py-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-orange-50 rounded-lg flex items-center justify-center">
+                        <Users className="w-4 h-4 text-orange-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Visible to Facilitators</p>
+                        <p className="text-xs text-gray-500">
+                          Facilitators will see this lesson for session planning
+                        </p>
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      enabled={editVisibleTo.facilitator}
+                      onChange={(v) => setEditVisibleTo({ ...editVisibleTo, facilitator: v })}
+                    />
+                  </div>
                 </div>
-                <div className="text-center py-3 border border-gray-200 rounded-lg">
-                  <div className="text-xl font-semibold text-gray-900">
-                    {selectedModule.status === 'active' ? 'Published' : 'Draft'}
-                  </div>
-                  <div className="text-xs text-gray-500">Status</div>
+
+                {/* Best Practice */}
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <p className="text-xs text-gray-500 italic">
+                    <span className="font-medium">Best Practice:</span> Most lessons are visible to
+                    all roles. Hide lessons from specific roles only when the content is truly
+                    irrelevant (e.g., hide learner prep materials from facilitators).
+                  </p>
                 </div>
               </div>
             </div>
-          </div>
-        ) : (
-          /* --- Empty State --- */
-          <div className="h-full flex items-center justify-center p-12">
-            <div className="text-center max-w-md">
-              <div className="w-16 h-16 mx-auto mb-4 bg-red-50 rounded-full flex items-center justify-center">
-                <Sparkles className="w-8 h-8 text-red-500" />
+          ) : selectedModule?.type === 'event' ? (
+            /* --- Event Editor View --- */
+            <EventEditor
+              event={selectedModule}
+              onSave={handleSaveEvent}
+              onDelete={handleDeleteEvent}
+              isSaving={updateModule.isPending}
+              isDeleting={deleteModule.isPending}
+            />
+          ) : selectedModule ? (
+            /* --- Module Settings View --- */
+            <div className="p-6 space-y-6">
+              {/* Header with actions */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-red-50 rounded-lg flex items-center justify-center">
+                    <FolderOpen className="w-5 h-5 text-red-600" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Module Settings</h2>
+                    <p className="text-sm text-gray-500">Configure module details and structure</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSaveModuleSettings}
+                    disabled={updateModule.isPending}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    {updateModule.isPending ? 'Saving...' : 'Save'}
+                  </button>
+                  <button
+                    onClick={handleDeleteModule}
+                    disabled={deleteModule.isPending}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 border border-red-200 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Structure & Content</h3>
-              <p className="text-sm text-gray-500 mb-4">
-                Select a module from the left panel to configure its settings, or click a lesson to
-                edit its content.
-              </p>
+
+              {/* Module Information */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h3 className="text-base font-semibold text-gray-900 mb-4">Module Information</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Module Title
+                    </label>
+                    <input
+                      type="text"
+                      value={editModuleTitle}
+                      onChange={(e) => setEditModuleTitle(e.target.value)}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none bg-gray-50"
+                      placeholder="Module title..."
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                      Description
+                    </label>
+                    <textarea
+                      value={editModuleDescription}
+                      onChange={(e) => setEditModuleDescription(e.target.value)}
+                      rows={3}
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none resize-none bg-gray-50"
+                      placeholder="Describe this module..."
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Module Summary */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h3 className="text-base font-semibold text-gray-900 mb-4">Module Summary</h3>
+                <div className="grid grid-cols-3 sm:grid-cols-3 gap-4">
+                  <div className="text-center py-3 border border-gray-200 rounded-lg">
+                    <div className="text-xl font-semibold text-gray-900">
+                      {(selectedModule.lessons || []).length}
+                    </div>
+                    <div className="text-xs text-gray-500">Lessons</div>
+                  </div>
+                  <div className="text-center py-3 border border-gray-200 rounded-lg">
+                    <div className="text-xl font-semibold text-gray-900">
+                      {getModulePoints(selectedModule)}
+                    </div>
+                    <div className="text-xs text-gray-500">Total Points</div>
+                  </div>
+                  <div className="text-center py-3 border border-gray-200 rounded-lg">
+                    <div className="text-xl font-semibold text-gray-900">
+                      {selectedModule.status === 'active' ? 'Published' : 'Draft'}
+                    </div>
+                    <div className="text-xs text-gray-500">Status</div>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            /* --- Empty State --- */
+            <div className="h-full flex items-center justify-center p-8 sm:p-12">
+              <div className="text-center max-w-md">
+                <div className="w-16 h-16 mx-auto mb-4 bg-red-50 rounded-full flex items-center justify-center">
+                  <Sparkles className="w-8 h-8 text-red-500" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Structure & Content</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  Select a module from the left panel to configure its settings, or click a lesson
+                  to edit its content.
+                </p>
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="lg:hidden inline-flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  <Menu className="w-4 h-4" />
+                  Open Sidebar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ======== MOBILE FAB ======== */}
+        <div className="fixed bottom-6 right-6 z-30 lg:hidden">
+          <button
+            onClick={() => setShowMobileFab((prev) => !prev)}
+            className="w-14 h-14 bg-red-600 text-white rounded-full shadow-lg hover:bg-red-700 transition-all flex items-center justify-center active:scale-95"
+            aria-label="Add content"
+          >
+            <Plus
+              className={`w-6 h-6 transition-transform duration-200 ${showMobileFab ? 'rotate-45' : ''}`}
+            />
+          </button>
+        </div>
+
+        {/* Mobile FAB Bottom Sheet */}
+        {showMobileFab && (
+          <>
+            <div
+              className="fixed inset-0 bg-black/30 z-40 lg:hidden"
+              onClick={() => setShowMobileFab(false)}
+            />
+            <div
+              className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-2xl shadow-2xl max-h-[70vh] overflow-y-auto lg:hidden"
+              style={{ animation: 'slideUp 0.3s ease-out' }}
+            >
+              <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mt-3 mb-2" />
+              <div className="px-4 pb-6 pt-2">
+                <h3 className="text-base font-semibold text-gray-900 mb-3">Add Content</h3>
+                <div className="space-y-1">
+                  <button
+                    onClick={() => {
+                      handleAddModule();
+                      setShowMobileFab(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <FolderOpen className="w-5 h-5 text-red-500" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Add Module</p>
+                      <p className="text-xs text-gray-500">Create a new content module</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleAddEvent();
+                      setShowMobileFab(false);
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <Calendar className="w-5 h-5 text-blue-500" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Add Event</p>
+                      <p className="text-xs text-gray-500">Schedule a live event</p>
+                    </div>
+                  </button>
+                  {selectedModuleId && moduleItems.some((m) => m.id === selectedModuleId) && (
+                    <>
+                      <div className="my-2 border-t border-gray-100" />
+                      <p className="text-xs font-medium text-gray-400 uppercase px-3 mb-1">
+                        Add Lesson to &ldquo;
+                        {sortedModules.find((m) => m.id === selectedModuleId)?.title}&rdquo;
+                      </p>
+                      {ADD_MENU_CONFIG.map((item) => {
+                        const TypeIcon = item.icon;
+                        return (
+                          <button
+                            key={item.key}
+                            onClick={() => {
+                              handleAddLesson(item.key);
+                              setShowMobileFab(false);
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors"
+                          >
+                            <TypeIcon className={`w-4 h-4 ${item.color}`} />
+                            <span className="text-sm text-gray-700">{item.label}</span>
+                            <span className="text-[10px] text-gray-400 ml-auto">{item.group}</span>
+                          </button>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>
