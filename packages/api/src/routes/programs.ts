@@ -1123,6 +1123,31 @@ programsRoutes.post(
 );
 
 /**
+ * PUT /api/tenants/:tenantId/programs/:programId/modules/reorder
+ * Reorder modules
+ * NOTE: Must be registered BEFORE the :moduleId wildcard route
+ */
+programsRoutes.put(
+  '/:programId/modules/reorder',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', reorderSchema),
+  async (c) => {
+    const { programId } = c.req.param();
+    const { items } = c.req.valid('json');
+
+    for (const item of items) {
+      await db
+        .update(modules)
+        .set({ order: item.order, updatedAt: new Date() })
+        .where(and(eq(modules.id, item.id), eq(modules.programId, programId)));
+    }
+
+    return c.json({ data: { success: true } });
+  }
+);
+
+/**
  * PUT /api/tenants/:tenantId/programs/:programId/modules/:moduleId
  * Update a module
  */
@@ -1205,30 +1230,6 @@ programsRoutes.delete(
   }
 );
 
-/**
- * PUT /api/tenants/:tenantId/programs/:programId/modules/reorder
- * Reorder modules
- */
-programsRoutes.put(
-  '/:programId/modules/reorder',
-  requireTenantAccess(),
-  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
-  zValidator('json', reorderSchema),
-  async (c) => {
-    const { programId } = c.req.param();
-    const { items } = c.req.valid('json');
-
-    for (const item of items) {
-      await db
-        .update(modules)
-        .set({ order: item.order, updatedAt: new Date() })
-        .where(and(eq(modules.id, item.id), eq(modules.programId, programId)));
-    }
-
-    return c.json({ data: { success: true } });
-  }
-);
-
 // ============================================
 // LESSON ROUTES
 // ============================================
@@ -1294,6 +1295,31 @@ programsRoutes.post(
       .returning();
 
     return c.json({ data: lesson }, 201);
+  }
+);
+
+/**
+ * PUT /api/tenants/:tenantId/programs/:programId/modules/:moduleId/lessons/reorder
+ * Reorder lessons within a module
+ * NOTE: Must be registered BEFORE the :lessonId wildcard route
+ */
+programsRoutes.put(
+  '/:programId/modules/:moduleId/lessons/reorder',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', reorderSchema),
+  async (c) => {
+    const { moduleId } = c.req.param();
+    const { items } = c.req.valid('json');
+
+    for (const item of items) {
+      await db
+        .update(lessons)
+        .set({ order: item.order, updatedAt: new Date() })
+        .where(and(eq(lessons.id, item.id), eq(lessons.moduleId, moduleId)));
+    }
+
+    return c.json({ data: { success: true } });
   }
 );
 
@@ -1381,30 +1407,6 @@ programsRoutes.delete(
   }
 );
 
-/**
- * PUT /api/tenants/:tenantId/programs/:programId/modules/:moduleId/lessons/reorder
- * Reorder lessons within a module
- */
-programsRoutes.put(
-  '/:programId/modules/:moduleId/lessons/reorder',
-  requireTenantAccess(),
-  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
-  zValidator('json', reorderSchema),
-  async (c) => {
-    const { moduleId } = c.req.param();
-    const { items } = c.req.valid('json');
-
-    for (const item of items) {
-      await db
-        .update(lessons)
-        .set({ order: item.order, updatedAt: new Date() })
-        .where(and(eq(lessons.id, item.id), eq(lessons.moduleId, moduleId)));
-    }
-
-    return c.json({ data: { success: true } });
-  }
-);
-
 // ============================================
 // TASK ROUTES (within lessons)
 // ============================================
@@ -1466,6 +1468,31 @@ programsRoutes.post(
       .returning();
 
     return c.json({ data: task }, 201);
+  }
+);
+
+/**
+ * PUT /api/tenants/:tenantId/programs/:programId/lessons/:lessonId/tasks/reorder
+ * Reorder tasks within a lesson
+ * NOTE: Must be registered BEFORE the :taskId wildcard route
+ */
+programsRoutes.put(
+  '/:programId/lessons/:lessonId/tasks/reorder',
+  requireTenantAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', reorderSchema),
+  async (c) => {
+    const { lessonId } = c.req.param();
+    const { items } = c.req.valid('json');
+
+    for (const item of items) {
+      await db
+        .update(lessonTasks)
+        .set({ order: item.order, updatedAt: new Date() })
+        .where(and(eq(lessonTasks.id, item.id), eq(lessonTasks.lessonId, lessonId)));
+    }
+
+    return c.json({ data: { success: true } });
   }
 );
 
@@ -1552,30 +1579,6 @@ programsRoutes.delete(
     }
 
     await db.delete(lessonTasks).where(eq(lessonTasks.id, taskId));
-
-    return c.json({ data: { success: true } });
-  }
-);
-
-/**
- * PUT /api/tenants/:tenantId/programs/:programId/lessons/:lessonId/tasks/reorder
- * Reorder tasks within a lesson
- */
-programsRoutes.put(
-  '/:programId/lessons/:lessonId/tasks/reorder',
-  requireTenantAccess(),
-  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
-  zValidator('json', reorderSchema),
-  async (c) => {
-    const { lessonId } = c.req.param();
-    const { items } = c.req.valid('json');
-
-    for (const item of items) {
-      await db
-        .update(lessonTasks)
-        .set({ order: item.order, updatedAt: new Date() })
-        .where(and(eq(lessonTasks.id, item.id), eq(lessonTasks.lessonId, lessonId)));
-    }
 
     return c.json({ data: { success: true } });
   }

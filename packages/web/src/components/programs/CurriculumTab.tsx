@@ -732,26 +732,9 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
 
   // ---- Reorder handlers ----
 
-  const doReorder = async (
-    basePath: string,
-    items: { id: string; order: number }[],
-    label: string
-  ) => {
+  const doReorder = async (path: string, items: { id: string; order: number }[], label: string) => {
     try {
-      const resp = await fetch(`${process.env.NEXT_PUBLIC_API_URL || ''}${basePath}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('accessToken') || ''}`,
-        },
-        body: JSON.stringify({ items }),
-      });
-      if (!resp.ok) {
-        const body = await resp.text();
-        console.error(`Reorder ${label} failed (${resp.status}):`, body);
-        setErrorMessage(`Reorder failed (${resp.status}): ${body.slice(0, 120)}`);
-        return;
-      }
+      await api.put(path, { items });
       if (isAgencyContext) {
         queryClient.invalidateQueries({ queryKey: ['agencyProgram', program.id] });
       } else {

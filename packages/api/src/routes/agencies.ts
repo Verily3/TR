@@ -1601,6 +1601,31 @@ agenciesRoutes.post(
 );
 
 /**
+ * PUT /api/agencies/me/programs/:programId/modules/reorder
+ * Reorder modules in an agency program
+ * NOTE: Must be registered BEFORE the :moduleId wildcard route
+ */
+agenciesRoutes.put(
+  '/me/programs/:programId/modules/reorder',
+  requireAgencyAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', agencyReorderSchema),
+  async (c) => {
+    const { programId } = c.req.param();
+    const { items } = c.req.valid('json');
+
+    for (const item of items) {
+      await db
+        .update(modules)
+        .set({ order: item.order, updatedAt: new Date() })
+        .where(and(eq(modules.id, item.id), eq(modules.programId, programId)));
+    }
+
+    return c.json({ data: { success: true } });
+  }
+);
+
+/**
  * PUT /api/agencies/me/programs/:programId/modules/:moduleId
  * Update a module in an agency program
  */
@@ -1680,30 +1705,6 @@ agenciesRoutes.delete(
   }
 );
 
-/**
- * PUT /api/agencies/me/programs/:programId/modules/reorder
- * Reorder modules in an agency program
- */
-agenciesRoutes.put(
-  '/me/programs/:programId/modules/reorder',
-  requireAgencyAccess(),
-  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
-  zValidator('json', agencyReorderSchema),
-  async (c) => {
-    const { programId } = c.req.param();
-    const { items } = c.req.valid('json');
-
-    for (const item of items) {
-      await db
-        .update(modules)
-        .set({ order: item.order, updatedAt: new Date() })
-        .where(and(eq(modules.id, item.id), eq(modules.programId, programId)));
-    }
-
-    return c.json({ data: { success: true } });
-  }
-);
-
 // ============================================
 // AGENCY PROGRAM LESSON ROUTES
 // ============================================
@@ -1767,6 +1768,31 @@ agenciesRoutes.post(
       .returning();
 
     return c.json({ data: lesson }, 201);
+  }
+);
+
+/**
+ * PUT /api/agencies/me/programs/:programId/modules/:moduleId/lessons/reorder
+ * Reorder lessons in an agency program module
+ * NOTE: Must be registered BEFORE the :lessonId wildcard route
+ */
+agenciesRoutes.put(
+  '/me/programs/:programId/modules/:moduleId/lessons/reorder',
+  requireAgencyAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', agencyReorderSchema),
+  async (c) => {
+    const { moduleId } = c.req.param();
+    const { items } = c.req.valid('json');
+
+    for (const item of items) {
+      await db
+        .update(lessons)
+        .set({ order: item.order, updatedAt: new Date() })
+        .where(and(eq(lessons.id, item.id), eq(lessons.moduleId, moduleId)));
+    }
+
+    return c.json({ data: { success: true } });
   }
 );
 
@@ -1852,30 +1878,6 @@ agenciesRoutes.delete(
   }
 );
 
-/**
- * PUT /api/agencies/me/programs/:programId/modules/:moduleId/lessons/reorder
- * Reorder lessons in an agency program module
- */
-agenciesRoutes.put(
-  '/me/programs/:programId/modules/:moduleId/lessons/reorder',
-  requireAgencyAccess(),
-  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
-  zValidator('json', agencyReorderSchema),
-  async (c) => {
-    const { moduleId } = c.req.param();
-    const { items } = c.req.valid('json');
-
-    for (const item of items) {
-      await db
-        .update(lessons)
-        .set({ order: item.order, updatedAt: new Date() })
-        .where(and(eq(lessons.id, item.id), eq(lessons.moduleId, moduleId)));
-    }
-
-    return c.json({ data: { success: true } });
-  }
-);
-
 // ============================================
 // AGENCY PROGRAM TASK ROUTES
 // ============================================
@@ -1940,6 +1942,31 @@ agenciesRoutes.post(
       .returning();
 
     return c.json({ data: task }, 201);
+  }
+);
+
+/**
+ * PUT /api/agencies/me/programs/:programId/lessons/:lessonId/tasks/reorder
+ * Reorder tasks in an agency program lesson
+ * NOTE: Must be registered BEFORE the :taskId wildcard route
+ */
+agenciesRoutes.put(
+  '/me/programs/:programId/lessons/:lessonId/tasks/reorder',
+  requireAgencyAccess(),
+  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
+  zValidator('json', agencyReorderSchema),
+  async (c) => {
+    const { lessonId } = c.req.param();
+    const { items } = c.req.valid('json');
+
+    for (const item of items) {
+      await db
+        .update(lessonTasks)
+        .set({ order: item.order, updatedAt: new Date() })
+        .where(and(eq(lessonTasks.id, item.id), eq(lessonTasks.lessonId, lessonId)));
+    }
+
+    return c.json({ data: { success: true } });
   }
 );
 
@@ -2024,30 +2051,6 @@ agenciesRoutes.delete(
     }
 
     await db.delete(lessonTasks).where(eq(lessonTasks.id, taskId));
-
-    return c.json({ data: { success: true } });
-  }
-);
-
-/**
- * PUT /api/agencies/me/programs/:programId/lessons/:lessonId/tasks/reorder
- * Reorder tasks in an agency program lesson
- */
-agenciesRoutes.put(
-  '/me/programs/:programId/lessons/:lessonId/tasks/reorder',
-  requireAgencyAccess(),
-  requirePermission(PERMISSIONS.PROGRAMS_MANAGE),
-  zValidator('json', agencyReorderSchema),
-  async (c) => {
-    const { lessonId } = c.req.param();
-    const { items } = c.req.valid('json');
-
-    for (const item of items) {
-      await db
-        .update(lessonTasks)
-        .set({ order: item.order, updatedAt: new Date() })
-        .where(and(eq(lessonTasks.id, item.id), eq(lessonTasks.lessonId, lessonId)));
-    }
 
     return c.json({ data: { success: true } });
   }
