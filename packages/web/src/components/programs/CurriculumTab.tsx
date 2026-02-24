@@ -2658,25 +2658,184 @@ export function CurriculumTab({ program, tenantId, isAgencyContext }: Curriculum
               </div>
             </div>
           ) : (
-            /* --- Empty State --- */
-            <div className="h-full flex items-center justify-center p-8 sm:p-12">
-              <div className="text-center max-w-md">
-                <div className="w-16 h-16 mx-auto mb-4 bg-red-50 rounded-full flex items-center justify-center">
-                  <Sparkles className="w-8 h-8 text-red-500" />
+            /* --- Curriculum Overview --- */
+            <div className="p-4 sm:p-6 space-y-6 overflow-y-auto">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Curriculum Overview</h2>
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    Click a module or lesson in the sidebar to edit it
+                  </p>
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Structure & Content</h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  Select a module from the left panel to configure its settings, or click a lesson
-                  to edit its content.
-                </p>
                 <button
                   onClick={() => setSidebarOpen(true)}
-                  className="lg:hidden inline-flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                  className="lg:hidden inline-flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
                 >
                   <Menu className="w-4 h-4" />
-                  Open Sidebar
+                  Sidebar
                 </button>
               </div>
+
+              {/* Stats Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-white border border-gray-200 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <FolderOpen className="w-4 h-4 text-red-500" />
+                    <span className="text-xs text-gray-500 uppercase tracking-wide">Modules</span>
+                  </div>
+                  <div className="text-2xl font-semibold text-gray-900">{totalModules}</div>
+                </div>
+                <div className="bg-white border border-gray-200 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <BookOpen className="w-4 h-4 text-blue-500" />
+                    <span className="text-xs text-gray-500 uppercase tracking-wide">Lessons</span>
+                  </div>
+                  <div className="text-2xl font-semibold text-gray-900">{totalLessons}</div>
+                </div>
+                {totalEvents > 0 && (
+                  <div className="bg-white border border-gray-200 rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <Calendar className="w-4 h-4 text-blue-400" />
+                      <span className="text-xs text-gray-500 uppercase tracking-wide">Events</span>
+                    </div>
+                    <div className="text-2xl font-semibold text-gray-900">{totalEvents}</div>
+                  </div>
+                )}
+                <div className="bg-white border border-gray-200 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    <span className="text-xs text-gray-500 uppercase tracking-wide">Points</span>
+                  </div>
+                  <div className="text-2xl font-semibold text-gray-900">
+                    {sortedModules.reduce(
+                      (sum, m) => sum + (m.lessons || []).reduce((s, l) => s + (l.points || 0), 0),
+                      0
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Program Outline */}
+              {sortedModules.length === 0 ? (
+                <div className="bg-white border border-gray-200 rounded-xl p-12 text-center">
+                  <div className="w-14 h-14 mx-auto mb-4 bg-red-50 rounded-full flex items-center justify-center">
+                    <Plus className="w-7 h-7 text-red-500" />
+                  </div>
+                  <h3 className="text-base font-medium text-gray-900 mb-1">No Modules Yet</h3>
+                  <p className="text-sm text-gray-500 mb-4">
+                    Add your first module to start building the curriculum.
+                  </p>
+                  <button
+                    onClick={handleAddModule}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Module
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {sortedModules.map((mod) => {
+                    const isEvent = mod.type === 'event';
+                    const sortedLessonsForMod = [...(mod.lessons || [])].sort(
+                      (a, b) => a.order - b.order
+                    );
+                    const modPoints = (mod.lessons || []).reduce((s, l) => s + (l.points || 0), 0);
+                    const moduleNum = isEvent
+                      ? 0
+                      : moduleItems.findIndex((m) => m.id === mod.id) + 1;
+
+                    return (
+                      <div
+                        key={mod.id}
+                        className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-gray-300 transition-colors"
+                      >
+                        {/* Module Header */}
+                        <button
+                          onClick={() => handleSelectModule(mod.id)}
+                          className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-gray-50 ${
+                            isEvent
+                              ? 'border-l-[3px] border-blue-400'
+                              : 'border-l-[3px] border-red-500'
+                          }`}
+                        >
+                          {isEvent ? (
+                            <Calendar className="w-5 h-5 text-blue-400 shrink-0" />
+                          ) : (
+                            <span className="w-7 h-7 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-xs font-bold shrink-0">
+                              {moduleNum}
+                            </span>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            {isEvent && (
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-blue-500 leading-none mb-0.5">
+                                Event
+                              </p>
+                            )}
+                            <p className="text-sm font-semibold text-gray-900 truncate">
+                              {mod.title}
+                            </p>
+                            {mod.description && (
+                              <p className="text-xs text-gray-500 truncate mt-0.5">
+                                {mod.description}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            {!isEvent && sortedLessonsForMod.length > 0 && (
+                              <span className="text-xs text-gray-400">
+                                {sortedLessonsForMod.length} lesson
+                                {sortedLessonsForMod.length !== 1 ? 's' : ''} &bull; {modPoints} pts
+                              </span>
+                            )}
+                            {isEvent && mod.eventConfig?.date && (
+                              <span className="text-xs text-gray-400">{mod.eventConfig.date}</span>
+                            )}
+                            <ChevronRight className="w-4 h-4 text-gray-300" />
+                          </div>
+                        </button>
+
+                        {/* Lesson list (non-events only, max 5 shown) */}
+                        {!isEvent && sortedLessonsForMod.length > 0 && (
+                          <div className="border-t border-gray-100">
+                            {sortedLessonsForMod.slice(0, 5).map((lesson) => {
+                              const display = getLessonDisplay(lesson);
+                              const TypeIcon = display.icon;
+                              return (
+                                <button
+                                  key={lesson.id}
+                                  onClick={() => handleSelectLesson(lesson, mod.id)}
+                                  className="w-full flex items-center gap-2.5 pl-14 pr-4 py-2 text-left hover:bg-gray-50 transition-colors"
+                                >
+                                  <TypeIcon className={`w-3.5 h-3.5 shrink-0 ${display.color}`} />
+                                  <span className="text-sm text-gray-700 truncate flex-1">
+                                    {lesson.title}
+                                  </span>
+                                  {lesson.status === 'draft' && (
+                                    <span className="text-[10px] px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full shrink-0">
+                                      Draft
+                                    </span>
+                                  )}
+                                  <span className="text-xs text-gray-400 shrink-0">
+                                    {lesson.points} pts
+                                  </span>
+                                </button>
+                              );
+                            })}
+                            {sortedLessonsForMod.length > 5 && (
+                              <div className="pl-14 pr-4 py-2 text-xs text-gray-400">
+                                +{sortedLessonsForMod.length - 5} more lesson
+                                {sortedLessonsForMod.length - 5 !== 1 ? 's' : ''}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
