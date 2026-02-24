@@ -93,7 +93,6 @@ export default function PublicRespondPage() {
   const subjectName = apiData?.assessment?.subjectName || assessmentName;
   const assessmentStatus = apiData?.assessment?.status;
   const closeDate = apiData?.assessment?.closeDate;
-  const invitationStatus = apiData?.invitation?.status;
   const existingResponse = apiData?.existingResponse;
 
   const hasExistingResponse = !!existingResponse?.responses?.length;
